@@ -450,6 +450,7 @@ class Board(object):
             else:
                 _reg = Register("%s_%d" % (self.circuit, board_val_reg + counter), self, counter,
                                 board_val_reg + counter, major_group=self.major_group, legacy_mode=self.legacy_mode)
+            self.__register_eventable_device(_reg)
             Devices.register_device(REGISTER, _reg)
             counter+=1
 
@@ -1186,6 +1187,12 @@ class Register:
         self.legacy_mode = legacy_mode
         self.valreg = reg
         self.reg_type = reg_type
+        self._cached_value = None
+
+    async def check_new_data(self):
+        old_value = self._cached_value
+        self._cached_value = self.regvalue()
+        return old_value != self._cached_value
 
     def regvalue(self):
         try:
@@ -1212,6 +1219,8 @@ class Register:
 
     @property
     def value(self):
+        if self._cached_value is not None:
+            return self._cached_value
         try:
             if self.regvalue():
                 return self.regvalue()
