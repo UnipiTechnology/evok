@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 import jsonschema
@@ -40,7 +41,6 @@ class MqttHandler:
         self.async_loop = loop
 
     def on_event(self, device):
-        outp = []
         try:
             devices = [device]
             if hasattr(device, 'changeset'):
@@ -49,7 +49,7 @@ class MqttHandler:
                 topic = None
                 try:
                     topic = f"{self.client_id}/{self.KEY_OUT}/{devtype_names[dev.devtype]}/{dev.circuit}"
-                    self.async_loop.add_callback(lambda: self.__client.send_to(topic=topic, data=dev.full()))
+                    asyncio.ensure_future(self.__client.send_to(topic=topic, data=dev.full()))
                 except Exception as E:
                     if topic is None:
                         logger.error(f"Error while generating topic: {E}")
@@ -57,10 +57,9 @@ class MqttHandler:
                         logger.error(f"Error while sending to {topic}: {E}")
         except Exception as e:
             logger.error("Exc: %s", str(e))
-            pass
 
     def start(self):
-        logger.debug("New WebSocket client connected")
+        logger.debug("MQTT handler starting")
         if not ("all" in registered_devents):
             registered_devents["all"] = set()
         registered_devents["all"].add(self)
