@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -5,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 # ── async helpers ─────────────────────────────────────────────────────────────
 
 class AsyncIter:
-    """Turn a plain list into an async iterator (simulates aiomqtt message stream)."""
+    """Async iterator that blocks when the initial list is exhausted, simulating a live
+    MQTT message stream.  Cancelling the consumer task interrupts the wait."""
     def __init__(self, items):
         self._items = list(items)
         self._idx = 0
@@ -15,7 +17,7 @@ class AsyncIter:
 
     async def __anext__(self):
         if self._idx >= len(self._items):
-            raise StopAsyncIteration
+            await asyncio.Event().wait()  # block until task is cancelled
         item = self._items[self._idx]
         self._idx += 1
         return item

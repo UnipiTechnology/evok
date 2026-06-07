@@ -6,7 +6,7 @@ import jsonschema
 from .handlers_base import registered_devents
 from .mqtt_client import MqttClient, ConfigurationStructure
 from .log import logger
-from .devices import devtype_names, Devices
+from .devices import devtype_names, Devices, num_to_devtype_name
 from .schemas import schemas
 from tornado.ioloop import IOLoop
 
@@ -49,7 +49,7 @@ class MqttHandler:
                 topic = None
                 try:
                     topic = f"{self.client_id}/{self.KEY_OUT}/{devtype_names[dev.devtype]}/{dev.circuit}"
-                    asyncio.ensure_future(self.__client.send_to(topic=topic, data=dev.full()))
+                    asyncio.get_running_loop().create_task(self.__client.send_to(topic=topic, data=dev.full()))
                 except Exception as E:
                     if topic is None:
                         logger.error(f"Error while generating topic: {E}")
@@ -69,25 +69,31 @@ class MqttHandler:
         pass
 
     async def on_message(self, topic: str, data: dict):
-        # usage: <client-id>/DEVICE/CIRCUIT
-        #        or
-        #        <client-id>/ALL
+        # topic format: <client-id>/cmd/DEVICE/CIRCUIT
+        #               <client-id>/cmd/ALL
         topic_row = str(topic)
-        topic = topic.split('/')[2:]
-        if len(topic) == 1:
-            if topic[0].upper() == 'ALL':
-                await self.__client.send_to(topic=topic_row, data={"TODO": True})
+        parts = topic.split('/')[2:]
+        if len(parts) == 1:
+            if parts[0].upper() == 'ALL':
+                result = []
+                for devtype_name in num_to_devtype_name.values():
+                    for dev in Devices.by_int(devtype_name):
+                        if hasattr(dev, 'full'):
+                            full = dev.full()
+                            if full is not None:
+                                result.append(full)
+                await self.__client.send_to(topic=topic_row, data=result)
             else:
-                logger.warning(f"Invalid topic: {topic}")
-        elif len(topic) == 2:
+                logger.warning(f"Invalid topic: {parts}")
+        elif len(parts) == 2:
             try:
-                dev, circuit = topic
-                device = Devices.by_name(dev, circuit)
-                schema, example = schemas[dev]
+                dev_type, circuit = parts
+                device = Devices.by_name(dev_type, circuit)
+                schema, example = schemas[dev_type]
                 jsonschema.validate(instance=data, schema=schema)
-                self.async_loop.add_callback(lambda: device.set(**data))
+                await device.set(**data)
             except Exception as E:
                 logger.error(f"{str(type(E).__name__)}: {str(E)}")
         else:
-            logger.warning(f"Invalid topic: {topic}")
+            logger.warning(f"Invalid topic: {parts}")
 

@@ -91,3 +91,62 @@ async def test_on_event_closure_captures_correct_values():
     # If closure bug exists, both would have the same topic
     assert published_topics.count('evok-test/event/di/1_01') == 1
     assert published_topics.count('evok-test/event/ro/2_01') == 1
+
+
+# ── on_message: device set ─────────────────────────────────────────────────────
+
+async def test_on_message_sets_device_value(fake_device):
+    handler, inner = make_handler()
+
+    with patch('evok.handler_mqtt.Devices') as mock_devs, \
+         patch('evok.handler_mqtt.schemas', {'di': ({}, {})}), \
+         patch('evok.handler_mqtt.jsonschema'):
+        mock_devs.by_name.return_value = fake_device
+        await handler.on_message('evok-test/cmd/di/1_01', {'value': 1})
+
+    fake_device.set.assert_awaited_once_with(value=1)
+
+
+async def test_on_message_logs_error_on_unknown_device():
+    handler, inner = make_handler()
+
+    from evok.errors import DeviceNotFound
+    with patch('evok.handler_mqtt.Devices') as mock_devs:
+        mock_devs.by_name.side_effect = DeviceNotFound('not found')
+        # Should not raise — just log
+        await handler.on_message('evok-test/cmd/di/99_99', {'value': 1})
+
+
+# ── on_message: ALL command ────────────────────────────────────────────────────
+
+async def test_on_message_all_returns_all_devices():
+    handler, inner = make_handler()
+    handler._MqttHandler__client.is_connected = True
+
+    di_dev = MagicMock()
+    di_dev.full.return_value = {'dev': 'di', 'circuit': '1_01', 'value': 0}
+
+    with patch('evok.handler_mqtt.Devices') as mock_devs, \
+         patch('evok.handler_mqtt.num_to_devtype_name', {1: 'di'}):
+        mock_devs.by_int.return_value = [di_dev]
+        await handler.on_message('evok-test/cmd/ALL', {})
+
+    await asyncio.sleep(0.05)
+    assert len(inner.published) == 1
+    payload = json.loads(inner.published[0]['payload'])
+    assert isinstance(payload, list)
+    assert {'dev': 'di', 'circuit': '1_01', 'value': 0} in payload
+
+
+async def test_on_message_all_topic_case_insensitive():
+    handler, inner = make_handler()
+    handler._MqttHandler__client.is_connected = True
+
+    with patch('evok.handler_mqtt.Devices') as mock_devs, \
+         patch('evok.handler_mqtt.num_to_devtype_name', {}):
+        mock_devs.by_int.return_value = []
+        # 'all' (lowercase) must also work
+        await handler.on_message('evok-test/cmd/all', {})
+
+    await asyncio.sleep(0.05)
+    assert len(inner.published) == 1

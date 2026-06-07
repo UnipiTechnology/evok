@@ -66,3 +66,71 @@ async def test_run_flushes_pending_messages_on_connect(conf):
     assert any(p['topic'] == 't/pending' for p in inner.published), (
         "Pending message was not flushed after connect"
     )
+
+
+# ── __on_message: callback invocation ─────────────────────────────────────────
+
+async def test_on_message_invokes_callback(conf):
+    callback = AsyncMock()
+    client = MqttClient(conf=conf, callback=callback, topic='t/#', client_id='test')
+
+    msg = MagicMock()
+    msg.topic = 't/in'
+    msg.payload = json.dumps({'v': 42}).encode()
+
+    await client._MqttClient__on_message(msg)
+
+    callback.assert_awaited_once_with('t/in', {'v': 42})
+
+
+async def test_on_message_logs_error_on_invalid_json(conf):
+    callback = AsyncMock()
+    client = MqttClient(conf=conf, callback=callback, topic='t/#', client_id='test')
+
+    msg = MagicMock()
+    msg.topic = 't/in'
+    msg.payload = b'not-valid-json'
+
+    # Must not raise
+    await client._MqttClient__on_message(msg)
+    callback.assert_not_awaited()
+
+
+# ── run: subscribes to correct topic ──────────────────────────────────────────
+
+async def test_run_subscribes_to_configured_topic(conf):
+    inner = FakeMqttInner(messages=[])
+    fake_client = FakeMqttClient(inner)
+
+    client = MqttClient(conf=conf, callback=AsyncMock(), topic='evok/cmd/#', client_id='test')
+    client._MqttClient__client = fake_client
+
+    task = asyncio.create_task(client.run())
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert 'evok/cmd/#' in inner.subscribed
+
+
+async def test_run_delivers_message_to_callback(conf):
+    callback = AsyncMock()
+
+    msg = MagicMock()
+    msg.topic = 'evok/cmd/di/1_01'
+    msg.payload = json.dumps({'value': 1}).encode()
+
+    inner = FakeMqttInner(messages=[msg])
+    fake_client = FakeMqttClient(inner)
+
+    client = MqttClient(conf=conf, callback=callback, topic='evok/cmd/#', client_id='test')
+    client._MqttClient__client = fake_client
+
+    task = asyncio.create_task(client.run())
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    callback.assert_awaited_once_with('evok/cmd/di/1_01', {'value': 1})
