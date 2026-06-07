@@ -1,5 +1,3 @@
-import asyncio
-import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -45,10 +43,8 @@ class FakeMqttClient:
     """Simulates aiomqtt.Client used as async context manager."""
     def __init__(self, inner=None):
         self.inner = inner or FakeMqttInner()
-        self.entered = False
 
     async def __aenter__(self):
-        self.entered = True
         return self.inner
 
     async def __aexit__(self, *args):
@@ -75,11 +71,13 @@ def fake_device_with_changeset():
     dev_a.devtype = 'di'
     dev_a.circuit = '1_01'
     dev_a.full.return_value = {'dev': 'di', 'circuit': '1_01', 'value': 0}
+    dev_a.set = AsyncMock(return_value={'dev': 'di', 'circuit': '1_01', 'value': 1})
 
     dev_b = MagicMock()
     dev_b.devtype = 'ro'
-    dev_b.circuit = '1_01'
-    dev_b.full.return_value = {'dev': 'ro', 'circuit': '1_01', 'value': 1}
+    dev_b.circuit = '2_01'
+    dev_b.full.return_value = {'dev': 'ro', 'circuit': '2_01', 'value': 1}
+    dev_b.set = AsyncMock(return_value={'dev': 'ro', 'circuit': '2_01', 'value': 1})
 
     container = MagicMock()
     container.changeset = [dev_a, dev_b]
