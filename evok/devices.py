@@ -300,6 +300,9 @@ devtype_altnames = {
     'temp': 'sensor'
 }
 
+# Maps each device type string to itself — used by MqttHandler for topic construction.
+devtype_names = {name: name for name in num_to_devtype_name.values()}
+
 Devices = DeviceList(devtype_altnames)
 for _key in num_to_devtype_name.values():
     Devices[_key] = {}
