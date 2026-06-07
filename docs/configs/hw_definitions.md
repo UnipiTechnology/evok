@@ -1,85 +1,62 @@
 # HW definitions
 
-HW definitions is in '/etc/evok/hw_definitions/'. Each file represents one modbus device.
+Hardware definitions specify the communication with Modbus devices. They are located in `/etc/evok/hw_definitions/`, each file represents one Modbus device. The file name is the device code, which may be used to add the device in the Evok configuration. The file is divided into two main parts, `modbus_register_blocks` defines which registers will be used and how often will be read, `modbus_features` breaks them into individual devices.
 
-## File structure
+## modbus_register_blocks
 
-Name of the file is the device code, which is then entered into the Evok configuration.
+Contains a list that defines the Modbus register groups. These registers must be placed consecutively. Each block is read in a separate request. Parameters:
 
-### modbus_register_blocks
+- `start_reg` - first Modbus register address of the block
+- `count` - number of Modbus registers to read
+- `frequency` - denominator of the scanning frequency. The block will be read each [scan_frequency](./evok_configuration.md#modbustcp-modbusrtu)÷`frequency` seconds (division).
+- `type` - Modbus register type, set to `holding` (default) or `input`
 
-Contains a list of modbus register groups. These registers must be placed consecutively. When reading the device, it is read in one command. Each element contains the following parameters:
-
-- start_reg
-- count
-- frequency - represents the number by which the frequency is divided. The actual frequency is then entered separately for each device. Learn more in [Evok configuration](./evok_configuration.md).
-- type - register type, defaults to `holding`.
-
-### modbus_features
-
-Contains a list of devices and their required parameters. Each element contains the following parameters:
-
-- type - device type, supported devices are listed below.
-- count - number of devicesof the type, register addresses incremented based on this number
-
-Other commands depend on the specific type of device.
-
-### Example
-
-```yaml
----
-# This key defines which Modbus registers will be periodically read. Each block (also sometimes referred to as "group") is read once every ["frequency"] read cycles
+```yaml title="Example"
+# This key defines which Modbus registers will be periodically read. Each block (also sometimes referred to as "group") is read once every ["frequency"] read cycles.
 modbus_register_blocks:
-  - board_index : 1
-    start_reg   : 0
-    count       : 10
-    frequency   : 1
-  - board_index : 1
-    start_reg   : 500
-    count       : 8
-    frequency   : 10
-    type        : input
-  - board_index : 1
-    start_reg   : 508
-    count       : 8
-    frequency   : 50
+    - start_reg   : 0
+      count       : 10
+      frequency   : 1
 
-# This defines the devices mapped to the registers above. As custom devices are very unlikely to support any Neuron features, the only devices which should be mapped are "REGISTER"s
-modbus_features:
-  - type        : REGISTER
-    major_group : 1
-    count       : 10
-    start_reg     : 0
-  - type        : REGISTER
-    major_group : 1
-    count       : 16
-    start_reg     : 500
+    - start_reg   : 500
+      count       : 8
+      frequency   : 10
+
+    - start_reg   : 508
+      count       : 8
+      frequency   : 50
+      type        : input
 ```
 
-### Supported device types
+## modbus_features
 
-#### DO (digital output)
+Contains a list that defines devices and their required parameters. Each element contains the following parameters:
 
-##### Parameters
+- `type` - device type, supported devices are listed below.
+- `count` - number of devices of the type, register addresses increment based on this number
+- `reg_type`- Modbus register type, set to `holding` (default) or `input`
 
-- val_reg
-    - Value register address
-    - bitmask
-- pwm_reg
-    - PWM duty register address
-- pwm_ps_reg
-    - PWM prescale register address
-- pwm_c_reg
-    - PWM cycle register address
-- val_coil
-    - DO coil address
-- modes
-    - List of available DO modes
-    - Supported: [Simple, PWM]
+Other parameters depend on the specific type of device.
 
-##### Example
+!!! note
+    All registers addresses are just the starting ones, they get incremented depending on the type.
 
-```yaml
+### DO (digital output)
+
+Allows you to add a digital output for the Modbus device.
+
+- `val_reg` - value register address, each bit will be treated as a separate device
+- `pwm_reg` - PWM duty register address
+- `pwm_ps_reg` - PWM prescale register address
+- `pwm_c_reg` - PWM cycle register address
+- `modes` - list of available DO modes
+    - `Simple` - basic binary mode
+    - `PWM` - output with PWM support
+
+!!! tip
+    More information about PWM can be found on [Unipi KB](https://kb.unipi.technology/en:sw:01-mervis:advanced-modes-of-digital-outputs-hidden).
+
+```yaml title="Example"
   - type        : DO
     count       : 4
     modes       :
@@ -92,53 +69,39 @@ modbus_features:
     pwm_c_reg   : 1018
 ```
 
-#### RO (relay output)
+### RO (relay output)
 
-##### Parameters
+Allows you to add a relay output for the Modbus device.
 
-- val_reg
-    - Value register address
-    - bitmask
-- val_coil
-    - RO coil address
+- `val_coil` - coil register address
+- `val_reg` - value register address, each bit will be treated as a separate device
 
-##### Example
-
-```yaml
+```yaml title="Example"
   - type        : RO
     count       : 5
     val_reg     : 1
     val_coil    : 0
 ```
 
-#### DI (Digital input)
+### DI (digital input)
 
-##### Parameters
+Allows you to add a digital input for the Modbus device.
 
-- val_reg
-    - Value register address
-    - bitmask
-- counter_reg
-    - Counter register address
-    - Double register
-- deboun_reg
-    - Debounce register address
-- modes
-    - List of available DI modes
-    - Supported: [Simple, DirectSwitch]
-- ds_modes
-    - List of available direct switch modes
-    - Supported: [Simple, Inverted, Toggle]
-- direct_reg
-    - Direct switch register address
-- polar_reg
-    - Polarity register address
-- toggle_reg
-    - Toggle register address
+- `val_reg` - value register address, each bit will be treated as a different device
+- `counter_reg` - counter register address, two registers are used for each device
+- `deboun_reg` - debounce register address
+- `modes`- list of available DI modes
+    - Simple - regular mode
+    - DirectSwitch - DI switches RO directly in firmware
+- `ds_modes` - list of available direct switch modes
+    - Simple
+    - Inverted
+    - Toggle
+- `direct_reg` - direct switch register address
+- `polar_reg` - polarity register address
+- `toggle_reg` - toggle register address
 
-##### Example
-
-```yaml
+```yaml title="Example"
   - type        : DI
     count       : 4
     modes       :
@@ -156,25 +119,18 @@ modbus_features:
     toggle_reg  : 1018
 ```
 
-#### AO (analog output)
+### AO (analog output)
 
-##### Parameters
+Allows you to add an analog output for the Modbus device.
 
-- val_reg
-    - Value register address
-- modes
-    - List of available modes
-    - Every mode must define following parameters:
-        - unit
-            - Measure unit
-        - range
-            - Min and max measure values define in array
-- mode_reg
-    - Mode register address
+- `val_reg` - value register address
+- `mode_reg` - mode register address
+- `modes` - list of available modes (names will be available in API), each has to have specified all parameters
+    - `value` - value for mode_reg
+    - `unit` - value unit
+    - `range` - min and max values defined in an array
 
-##### Example
-
-```yaml
+```yaml title="Example"
   - type        : AO
     count       : 4
     modes       :
@@ -186,27 +142,18 @@ modbus_features:
     val_reg     : 2
 ```
 
-#### AI (analog input)
+### AI (analog input)
 
-##### Parameters
+Allows you to add an analog input for the Modbus device.
 
-- val_reg
-    - Value register address
-- mode_reg
-    - Mode register address
-- modes
-    - List of available modes
-    - Every mode must define following parameters:
-        - value
-            - Value in mode_reg
-        - unit
-            - Measure unit
-        - range
-            - Min and max measure values define in array
+- `val_reg` - value register address
+- `mode_reg` - mode register address
+- `modes` - list of available modes (names will be available in API), each has to have specified all parameters
+    - `value` - value for mode_reg
+    - `unit` - value unit
+    - `range` - min and max values defined in an array
 
-##### Example
-
-```yaml
+```yaml title="Example"
 - type        : AI
   count       : 4
   val_reg     : 6
@@ -236,22 +183,16 @@ modbus_features:
       range: [0, 100000]
 ```
 
-#### WD (watchdog)
+### WD (watchdog)
 
-##### Parameters
+Allows you to add a watchdog for the Modbus device.
 
-- val_reg
-    - Value register address
-- timeout_reg
-    - timeout register address
-- nv_save_coil
-    - nv save coil address
-- reset_coil
-    - reset coil address
+- `val_reg` - value register address
+- `timeout_reg` - timeout register address
+- `nv_save_coil` - NV save coil address
+- `reset_coil` - reset coil address
 
-##### Example
-
-```yaml
+```yaml title="Example"
   - type        : WD
     count       : 1
     val_reg     : 6
@@ -260,39 +201,19 @@ modbus_features:
     reset_coil  : 1002
 ```
 
-#### REGISTER (Modbus register)
+### DATA_POINT (data point)
 
-##### Parameters
+If no other type is viable, data point may be used.
 
-- start_reg
-    - Start modbus register address
+- `name` - value name
+- `unit` - value unit
+- `value_reg` - value register address
+- `datatype` - value data type
+    - null
+    - float32
 
-##### Example
-
-```yaml
-  - type        : REGISTER
-    count       : 21
-    start_reg   : 0
-```
-
-#### UNIT_REGISTER (Modbus unit register)
-
-##### Parameters
-
-- name
-    - Value name
-- unit
-    - Value unit
-- value_reg
-    - Value register address
-- datatype
-    - value data type
-    - supported: [null, float32]
-
-##### Example
-
-```yaml
-- type        : UNIT_REGISTER
+```yaml title="Example"
+- type        : DATA_POINT
   name        : "temperature"
   count       : 1
   value_reg   : 0

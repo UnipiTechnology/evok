@@ -31,20 +31,20 @@ DO 1_01 will be called my_relay.
     ```python
     import requests
 
-    def set_alias(host: str, dev_type: str, circuit: str, value: str):
-        url = f"http://{host}/rest/{dev_type}/{circuit}"
+    def set_alias(host: str, port: str, dev_type: str, circuit: str, value: str):
+        url = f"http://{host}:{port}/rest/{dev_type}/{circuit}"
         data = {'alias': str(value)}
         return requests.post(url=url, data=data)
 
     if __name__ == '__main__':
-        ret = set_alias(host='127.0.0.1', dev_type='relay', circuit='1_01', value='my_relay')
+        ret = set_alias(host='127.0.0.1', port='8080', dev_type='relay', circuit='1_01', value='my_relay')
         print(ret.json())
     ```
 
 === "curl"
 
     ```bash
-    curl --request POST --url 'http://127.0.0.1/rest/relay/1_01/' --data 'alias=my_relay'
+    curl --request POST --url 'http://127.0.0.1:8080/rest/relay/1_01/' --data 'alias=my_relay'
     ```
 
 ```rs title="Output"
@@ -60,20 +60,20 @@ Alias of DO 1_01 will be removed.
     ```python
     import requests
 
-    def set_alias(host: str, dev_type: str, circuit: str, value: str):
-        url = f"http://{host}/rest/{dev_type}/{circuit}"
+    def set_alias(host: str, port: str, dev_type: str, circuit: str, value: str):
+        url = f"http://{host}:{port}/rest/{dev_type}/{circuit}"
         data = {'alias': str(value)}
         return requests.post(url=url, data=data)
 
     if __name__ == '__main__':
-        ret = set_alias(host='127.0.0.1', dev_type='relay', circuit='1_01', value='')
+        ret = set_alias(host='127.0.0.1', port='8080', dev_type='relay', circuit='1_01', value='')
         print(ret.json())
     ```
 
 === "curl"
 
     ```bash
-    curl --request POST --url 'http://127.0.0.1/rest/relay/1_01/' --data 'alias='
+    curl --request POST --url 'http://127.0.0.1:8080/rest/relay/1_01/' --data 'alias='
     ```
 
 ```rs title="Output"
@@ -87,20 +87,20 @@ Alias of DO 1_01 will be removed.
     ```python
     import requests
 
-    def save_aliases(host: str, value: bool):
-        url = f"http://{host}/rest/run/alias"
+    def save_aliases(host: str, port: str, value: bool):
+        url = f"http://{host}:{port}/rest/run/alias"
         data = {'save': int(value)}
         return requests.post(url=url, data=data)
 
     if __name__ == '__main__':
-        ret = save_aliases(host='127.0.0.1', value=True)
+        ret = save_aliases(host='127.0.0.1', port='8080', value=True)
         print(ret.json())
     ```
 
 === "curl"
 
     ```bash
-    curl --request POST --url 'http://127.0.0.1/rest/run/alias/' --data 'save=1'
+    curl --request POST --url 'http://127.0.0.1:8080/rest/run/alias/' --data 'save=1'
     ```
 
 ```rs title="Output"
@@ -123,3 +123,7 @@ aliases:
     circuit: '1_01'
     devtype: 0
 ```
+
+
+!!! tip
+    You can learn more about the circuit parameter [here](../circuit.md)

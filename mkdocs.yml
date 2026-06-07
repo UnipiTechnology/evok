@@ -4,6 +4,7 @@ site_author: Unipi technology
 site_description: API of Unipi controllers
 copyright: Copyright &copy; 2014 - 2024 Unipi technology
 repo_url: https://github.com/UniPiTechnology/evok
+edit_uri: edit/main/docs/
 theme:
   icon:
     repo: fontawesome/brands/github
@@ -42,11 +43,12 @@ nav:
     - Aliases: configs/aliases.md
     - HW definitions: configs/hw_definitions.md
   - Available APIs: apis.md
+  - Device circuit: circuit.md
   - API examples:
-      - Bulk: apis/bulk.md
-      - JSON: apis/json.md
       - REST: apis/rest.md
-      - RPC: apis/rpc.md
-      - Webhook: apis/webhook.md
+      - JSON: apis/json.md
       - WebSocket: apis/websocket.md
+      - Bulk: apis/bulk.md
+      - Webhook: apis/webhook.md
+      - RPC: apis/rpc.md
   - Debugging: debugging.md

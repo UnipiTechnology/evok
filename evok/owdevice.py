@@ -1,6 +1,5 @@
 import asyncio
 
-from . import devices
 from .devices import *
 from .log import *
 
@@ -18,10 +17,10 @@ class NotSupportedError(Exception):
 
 
 class MySensor(object):
-    def __init__(self, addr, typ, bus, interval=None, dynamic=True, circuit=None, major_group=1, is_static=False):
+    def __init__(self, addr, sensor_type, bus, interval=None, dynamic=True, circuit=None, major_group=1, is_static=False):
         self.alias = ""
-        self.devtype = devices.SENSOR
-        self.type = typ
+        self.devtype = SENSOR
+        self.type = sensor_type
         self.circuit = circuit if circuit is not None else addr.replace('.', '')
         self.major_group = major_group
         self.address = addr
@@ -47,7 +46,7 @@ class MySensor(object):
         ''' Get live data from sensor without names
             used in rpc only
         '''
-        return (self.value, self.lost, self.readtime, self.interval)
+        return self.value, self.lost, self.readtime, self.interval
 
     async def set(self, interval=None, alias=None):
         if interval is not None:
@@ -86,7 +85,7 @@ class DS18B20(MySensor):  # thermometer
                'lost': self.lost,
                'time': self.readtime,
                'interval': self.interval,
-               'typ': self.type,
+               'type': self.type,
                }
         if self.alias is not None and self.alias != '':
             ret['alias'] = self.alias
@@ -97,7 +96,7 @@ class DS18B20(MySensor):  # thermometer
                'circuit': self.circuit,
                'value': self.value,
                'lost': self.lost,
-               'typ': self.type}
+               'type': self.type}
         if self.alias is not None and self.alias != '':
             ret['alias'] = self.alias
         return ret
@@ -127,7 +126,7 @@ class DS2438(MySensor):  # vdd + vad + thermometer
                'lost': self.lost,
                'time': self.readtime,
                'interval': self.interval,
-               'typ': self.type
+               'type': self.type
                }
         if self.alias is not None and self.alias != '':
             ret['alias'] = self.alias
@@ -141,7 +140,7 @@ class DS2438(MySensor):  # vdd + vad + thermometer
                'temp': getattr(self, 'temperature', None),
                'vis': getattr(self, 'vis', None),
                'lost': self.lost,
-               'typ': self.type
+               'type': self.type
                }
         if self.alias is not None and self.alias != '':
             ret['alias'] = self.alias
@@ -162,9 +161,9 @@ class DS2438(MySensor):  # vdd + vad + thermometer
 
 
 class DS2408(MySensor):
-    def __init__(self, addr, typ, bus, interval=None, is_dynamic_interval=True, circuit=None, major_group=1,
+    def __init__(self, addr, sensor_type, bus, interval=None, is_dynamic_interval=True, circuit=None, major_group=1,
                  is_static=False):
-        self.type = typ
+        self.type = sensor_type
         self.circuit = circuit if circuit != None else addr
         self.address = addr
         self.major_group = major_group
@@ -202,7 +201,7 @@ class DS2408(MySensor):
                'circuit': self.circuit,
                'address': self.address,
                'value': None,
-               'typ': self.type
+               'type': self.type
                }
         if self.alias is not None and self.alias != '':
             ret['alias'] = self.alias
@@ -232,25 +231,24 @@ class DS2408(MySensor):
             self.pios.append(pio)
 
 
-def MySensorFabric(address, typ, bus, interval=None, dynamic=True, circuit=None, major_group=1, is_static=False):
-    if (typ == 'DS18B20') or (typ == 'DS18S20'):
-        return DS18B20(address, typ, bus, interval=interval, circuit=circuit)
-    elif (typ == 'DS2438'):
-        return DS2438(address, typ, bus, interval=interval, circuit=circuit)
-    elif (typ == 'DS2408') or (typ == 'DS2406') or (typ == 'DS2404') or (typ == 'DS2413'):
-        return DS2408(address, typ, bus, interval=interval, circuit=circuit, is_static=is_static)
+def MySensorFabric(address, sensor_type, bus, interval=None, dynamic=True, circuit=None, major_group=1, is_static=False):
+    if (sensor_type == 'DS18B20') or (sensor_type == 'DS18S20'):
+        return DS18B20(address, sensor_type, bus, interval=interval, circuit=circuit)
+    elif sensor_type == 'DS2438':
+        return DS2438(address, sensor_type, bus, interval=interval, circuit=circuit)
+    elif (sensor_type == 'DS2408') or (sensor_type == 'DS2406') or (sensor_type == 'DS2404') or (sensor_type == 'DS2413'):
+        return DS2408(address, sensor_type, bus, interval=interval, circuit=circuit, is_static=is_static)
     else:
-        logger.debug("Unsupported 1wire device %s (%s) detected", typ, address)
+        logger.debug("Unsupported 1wire device %s (%s) detected", sensor_type, address)
         return None
 
 
 class OwBusDriver:
 
-    def __init__(self, circuit, dev_id, interval=60, scan_interval=300, major_group=1,
+    def __init__(self, circuit, interval=60, scan_interval=300, major_group=1,
                  owpower_circuit=None):
         self.bus_driver = self
-        self.dev_id = dev_id
-        self.devtype = devices.OWBUS
+        self.devtype = OWBUS
         self.circuit = circuit
         self.major_group = major_group
         self.scan_interval = scan_interval
@@ -263,7 +261,7 @@ class OwBusDriver:
     def full(self):
         return {'dev': 'owbus',
                 'circuit': self.circuit,
-                'bus': 'via OWFS',
+                'bus': 'OWFS',
                 'scan_interval': self.scan_interval,
                 'interval': self.interval,
                 'do_scan': False,
@@ -303,7 +301,7 @@ class OwBusDriver:
 
     def register_sensor(self, mysensor):
         self.mysensors.append(mysensor)
-        devices.Devices.register_device(devices.SENSOR, mysensor)
+        Devices.register_device(SENSOR, mysensor)
 
     def do_scan(self, invoked_async=False):
         if hasattr(self, 'scanning_scope'):
@@ -312,7 +310,7 @@ class OwBusDriver:
     async def do_reset(self):
         if self.owpower_circuit is not None:
             logger.info("Invoked reset of 1W master")
-            owpower = devices.Devices.by_int(devices.OWPOWER, self.owpower_circuit)
+            owpower = Devices.by_int(OWPOWER, self.owpower_circuit)
             await owpower.set(value=True)
             await asyncio.sleep(0.2)
             await owpower.set(value=False)
@@ -369,13 +367,13 @@ class OwBusDriver:
                 logger.info("%s", msg)
                 if isinstance(msg, event.DeviceLocated):
                     # for f in msg.device.fields:print(f)
-                    typ = await msg.device.get_type()
+                    sensor_type = await msg.device.get_type()
                     address = msg.device.id
                     try:
                         mysensor = next(x for x in self.mysensors if x.address == address)
                         logger.info("Sensor found " + str(mysensor.circuit))
                     except Exception:
-                        mysensor = MySensorFabric(address, typ, self, self.interval)
+                        mysensor = MySensorFabric(address, sensor_type, self, self.interval)
                     if mysensor:
                         mysensor.sens = msg.device
                         mysensor.lost = False

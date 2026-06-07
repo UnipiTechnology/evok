@@ -26,9 +26,10 @@ import time
 import subprocess
 
 
-def raise_if_null(val, register):
-    if val is not None: return val
-    raise ENoCacheRegister(f"No cached value of register {register}")
+def raise_if_null(data, index):
+    if index >= len(data) or data[index] is None:
+        raise ENoCacheRegister(f"No cached value of register '{index}'")
+    return data[index]
 
 
 class ModbusCacheMap(object):
@@ -45,25 +46,25 @@ class ModbusCacheMap(object):
 
     def __get_reg_group(self, index: int, is_input: bool):
         group = None
+        _index = None
         for m_reg_group in self.modbus_reg_map:
             group_is_input = m_reg_group.get('type', None) == 'input'
             if group_is_input is is_input and \
                     ((m_reg_group['start_reg']) <= index < (m_reg_group['count'] + m_reg_group['start_reg'])):
                 group = m_reg_group['values']
-                index -= m_reg_group['start_reg']
+                _index = index - m_reg_group['start_reg']
                 # print(f"index: '{index}' cont: '{count}'\tfind in: '{m_reg_group}'")
                 break
         if group is None:
-            raise ValueError(f"Unknown register {index}!")
-        return group, index
+            raise ValueError(f"get_reg_group: Unknown register {index}!")
+        return group, _index
 
     def get_register(self, count, index, is_input=False):
         try:
-            group, index = self.__get_reg_group(index=index, is_input=is_input)
-            ret = (raise_if_null(group[index + i], index + 1) for i in range(count))
-            return list(ret)
-        except KeyError as E:
-            raise Exception('Unknown register %d' % E.args[0])
+            group, _index = self.__get_reg_group(index=index, is_input=is_input)
+            return [raise_if_null(group, _index + i) for i in range(count)]
+        except (IndexError, KeyError) as E:
+            raise ValueError(f"get_register: get register {index} error: {E}")
 
     async def get_register_async(self, count, index, slave=0, is_input=False):
         group, group_index = self.__get_reg_group(index=index, is_input=is_input)
@@ -99,7 +100,7 @@ class ModbusCacheMap(object):
 
                     # check modbus response
                     if not isinstance(vals, ExceptionResponse) and not isinstance(vals, ModbusIOException) and\
-                       vals is not None:
+                       vals is not None and len(vals.registers) == m_reg_group['count']:
                         # update modbus cache
                         m_reg_group['values'] = vals.registers
 
@@ -109,7 +110,7 @@ class ModbusCacheMap(object):
                                 if await device.check_new_data() is True:
                                     changeset.append(device)
                             except Exception as E:
-                                m = (f"Error while checking new data in device '{devtype_names[device.devtype]}"
+                                m = (f"Error while checking new data in device '{device.devtype}"
                                      f"_{device.circuit}': {E}")
                                 logger.error(m)
                                 if logger.level == logging.DEBUG:
@@ -135,13 +136,12 @@ class ModbusSlave(object):
 
     def __init__(self, client: Union[EvokModbusTcpClient, EvokModbusSerialClient],
                  circuit, evok_config, scan_freq, scan_enabled, hw_dict, slave_id=1,
-                 major_group=1, device_model='unspecified', dev_id=0):
+                 major_group=1, device_model='unspecified'):
         self.alias = ""
         self.devtype = MODBUS_SLAVE
         self.modbus_cache_map = None
         self.eventable_devices = list()
         self.boards = list()
-        self.dev_id = dev_id
         self.hw_dict = hw_dict
         self.modbus_address = slave_id
         self.device_model = device_model
@@ -194,8 +194,7 @@ class ModbusSlave(object):
             if self.device_model not in self.hw_dict.definitions:
                 raise KeyError(f"readboards: Unsupported device model {self.device_model}! (check HW definitions)")
             self.hw_board_dict = self.hw_dict.definitions[self.device_model]
-            board = Board(self.evok_config, self.circuit, self.modbus_address, self, dev_id=self.dev_id,
-                          major_group=self.major_group)
+            board = Board(self.evok_config, self.circuit, self.modbus_address, self)
             await board.parse_definition(self.hw_dict)
             self.boards.append(board)
         except ConnectionException as E:
@@ -203,7 +202,6 @@ class ModbusSlave(object):
             if logger.level == logging.DEBUG:
                 traceback.print_exc()
         except Exception as E:
-            Devices.remove_global_device(self.dev_id)
             logger.exception(str(E))
             pass
 
@@ -244,7 +242,6 @@ class ModbusSlave(object):
     def full(self):
         ret = {'dev': 'modbus_slave',
                'circuit': self.circuit,
-               'glob_dev_id': self.dev_id,
                'last_comm': 0x7fffffff,
                'slave_id': self.modbus_address,
                'modbus_type': self.modbus_type,
@@ -283,10 +280,9 @@ class Proxy(object):
 
 
 class Board(object):
-    def __init__(self, evok_config, circuit, modbus_address, modbus_slave: ModbusSlave, major_group=1, dev_id=0):
+    def __init__(self, evok_config, circuit, modbus_address, modbus_slave: ModbusSlave, major_group=1):
         self.alias = ""
         self.devtype = BOARD
-        self.dev_id = dev_id
         self.evok_config = evok_config
         self.circuit = circuit
         self.legacy_mode = True
@@ -326,16 +322,16 @@ class Board(object):
             if 'start_index' in m_feature:
                 start_index = m_feature['start_index']
             if ('ds_modes' in m_feature) and ('direct_reg' in m_feature) and ('polar_reg' in m_feature) and ('toggle_reg' in m_feature):
-                _inp = Input("%s_%02d" % (self.circuit, counter + 1 + start_index), self, board_val_reg, 0x1 << (counter % 16),
-                             regdebounce=board_deboun_reg + counter, major_group=self.major_group, regcounter=board_counter_reg + (2 * counter), modes=m_feature['modes'],
-                             dev_id=self.dev_id, ds_modes=m_feature['ds_modes'], regmode=m_feature['direct_reg'], regtoggle=m_feature['toggle_reg'],
-                             regpolarity=m_feature['polar_reg'], legacy_mode=self.legacy_mode)
+                _inp = DigitalInput("%s_%02d" % (self.circuit, counter + 1 + start_index), self, board_val_reg, 0x1 << (counter % 16),
+                                    regdebounce=board_deboun_reg + counter, major_group=self.major_group, regcounter=board_counter_reg + (2 * counter), modes=m_feature['modes'],
+                                    ds_modes=m_feature['ds_modes'], regmode=m_feature['direct_reg'], regtoggle=m_feature['toggle_reg'],
+                                    regpolarity=m_feature['polar_reg'], legacy_mode=self.legacy_mode)
             else:
-                _inp = Input("%s_%02d" % (self.circuit, counter + 1 + start_index), self, board_val_reg, 0x1 << (counter % 16),
-                             regdebounce=board_deboun_reg + counter, major_group=self.major_group, regcounter=board_counter_reg + (2 * counter), modes=m_feature['modes'],
-                             dev_id=self.dev_id, legacy_mode=self.legacy_mode)
+                _inp = DigitalInput("%s_%02d" % (self.circuit, counter + 1 + start_index), self, board_val_reg, 0x1 << (counter % 16),
+                                    regdebounce=board_deboun_reg + counter, major_group=self.major_group, regcounter=board_counter_reg + (2 * counter), modes=m_feature['modes'],
+                                    legacy_mode=self.legacy_mode)
             self.__register_eventable_device(_inp)
-            Devices.register_device(INPUT, _inp)
+            Devices.register_device(DI, _inp)
             counter+=1
 
     def parse_feature_ro(self, max_count, m_feature):
@@ -343,9 +339,9 @@ class Board(object):
         while counter < max_count:
             board_val_reg = m_feature['val_reg']
             _r = Relay("%s_%02d" % (self.circuit, counter + 1), self, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
-                       dev_id=self.dev_id, major_group=self.major_group, legacy_mode=self.legacy_mode)
+                      major_group=self.major_group, legacy_mode=self.legacy_mode)
             self.__register_eventable_device(_r)
-            Devices.register_device(RELAY, _r)
+            Devices.register_device(RO, _r)
             counter += 1
 
     def parse_feature_do(self, max_count, m_feature):
@@ -355,40 +351,44 @@ class Board(object):
             # Hard PWM
             if m_feature.get('pwm_reg') and m_feature.get('pwm_ps_reg') and m_feature.get('pwm_c_reg'):
                 if not self.legacy_mode:
-                    _r = Output("%s_%02d" % (self.circuit, counter + 1), self, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
-                                dev_id=self.dev_id, major_group=self.major_group, pwmcyclereg=m_feature['pwm_c_reg'], pwmprescalereg=m_feature['pwm_ps_reg'], digital_only=True,
-                                pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'], legacy_mode=self.legacy_mode)
+                    _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
+                                       major_group=self.major_group, pwmcyclereg=m_feature['pwm_c_reg'], pwmprescalereg=m_feature['pwm_ps_reg'], digital_only=True,
+                                       pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'], legacy_mode=self.legacy_mode)
                 else:
-                    _r = Output("%s_%02d" % (self.circuit, counter + 1), self, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
-                                dev_id=self.dev_id, major_group=self.major_group, pwmcyclereg=m_feature['pwm_c_reg'], pwmprescalereg=m_feature['pwm_ps_reg'], digital_only=True,
-                                pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'], legacy_mode=self.legacy_mode)
+                    _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
+                                       major_group=self.major_group, pwmcyclereg=m_feature['pwm_c_reg'], pwmprescalereg=m_feature['pwm_ps_reg'], digital_only=True,
+                                       pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'], legacy_mode=self.legacy_mode)
             # Soft PWM
             elif m_feature.get('pwm_reg') and m_feature.get('pwm_preset_reg') and m_feature.get('pwm_cpres_reg'):
-                _r = Output("%s_%02d" % (self.circuit, counter + 1), self, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
-                            dev_id=self.dev_id, major_group=self.major_group, pwmpresetreg=m_feature['pwm_preset_reg'],
-                            pwmcustompresc=m_feature['pwm_cpres_reg'], digital_only=True,
-                            pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'], legacy_mode=self.legacy_mode)
+                _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
+                                   major_group=self.major_group, pwmpresetreg=m_feature['pwm_preset_reg'],
+                                   pwmcustompresc=m_feature['pwm_cpres_reg'], digital_only=True,
+                                   pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'], legacy_mode=self.legacy_mode)
             else:
                 raise ValueError(f"Unexpected feature  {m_feature['type']}")
             self.__register_eventable_device(_r)
-            Devices.register_device(OUTPUT, _r)
+            Devices.register_device(DO, _r)
             counter += 1
 
     def parse_feature_led(self, max_count, m_feature):
         counter = 0
         while counter < max_count:
             board_val_reg = m_feature['val_reg']
-            _led = ULED("%s_%02d" % (self.circuit, counter + 1), self, counter, board_val_reg, 0x1 << (counter % 16), m_feature['val_coil'] + counter,
-                        dev_id=self.dev_id, major_group=self.major_group, legacy_mode=self.legacy_mode)
+            _led = ULED("%s_%02d" % (self.circuit, counter + 1), self, counter, board_val_reg, 0x1 << (counter % 16),
+                        m_feature['val_coil'] + counter, major_group=self.major_group, legacy_mode=self.legacy_mode)
             self.__register_eventable_device(_led)
             Devices.register_device(LED, _led)
             counter+=1
 
     def parse_feature_owpower(self, m_feature):
-        _owpower = OwPower(f"{self.circuit}", self, m_feature['val_coil'], dev_id=self.dev_id,
-                           major_group=self.major_group)
+        _owpower = OwPower(f"{self.circuit}", self, m_feature['val_coil'], major_group=self.major_group)
         self.__register_eventable_device(_owpower)
         Devices.register_device(OWPOWER, _owpower)
+
+    def parse_feature_nv_save(self, m_feature):
+        _nv_save = NvSave(f"{self.circuit}", self, m_feature['val_coil'], major_group=self.major_group)
+        self.__register_eventable_device(_nv_save)
+        Devices.register_device(NV_SAVE, _nv_save)
 
     def parse_feature_wd(self, max_count, m_feature):
         counter = 0
@@ -396,7 +396,7 @@ class Board(object):
             board_val_reg = m_feature['val_reg']
             board_timeout_reg = m_feature['timeout_reg']
             _wd = Watchdog("%s_%02d" % (self.circuit, counter + 1), self, counter, board_val_reg + counter, board_timeout_reg + counter,
-                           dev_id=self.dev_id, major_group=self.major_group, nv_save_coil=m_feature['nv_sav_coil'], reset_coil=m_feature['reset_coil'],
+                           major_group=self.major_group, nv_save_coil=m_feature['nv_sav_coil'], reset_coil=m_feature['reset_coil'],
                            legacy_mode=self.legacy_mode)
             self.__register_eventable_device(_wd)
             Devices.register_device(WATCHDOG, _wd)
@@ -409,8 +409,7 @@ class Board(object):
             modes = m_feature['modes']
             reg_mode = m_feature.get('mode_reg', None)
             _ao = AnalogOutput("%s_%02d" % (self.circuit, counter + 1), self, board_val_reg + counter,
-                               dev_id=self.dev_id, major_group=self.major_group, modes=modes,
-                               regmode=reg_mode)
+                               major_group=self.major_group, modes=modes, regmode=reg_mode)
             self.__register_eventable_device(_ao)
             Devices.register_device(AO, _ao)
             counter+=1
@@ -421,8 +420,7 @@ class Board(object):
             board_val_reg = m_feature['val_reg']
             reg_mode = m_feature.get('mode_reg', None)
             _ao = AnalogOutputBrain("%s_%02d" % (self.circuit, counter + 1), self, board_val_reg + counter,
-                                    regmode=reg_mode, reg_res=m_feature['res_val_reg'],
-                                    dev_id=self.dev_id, major_group=self.major_group)
+                                    regmode=reg_mode, reg_res=m_feature['res_val_reg'], major_group=self.major_group)
             self.__register_eventable_device(_ao)
             Devices.register_device(AO, _ao)
             counter+=1
@@ -435,7 +433,7 @@ class Board(object):
             modes = m_feature['modes']
             _ai = AnalogInput(circuit, self, board_val_reg,
                               regmode=m_feature['mode_reg'] + counter if m_feature.get('mode_reg', None) is not None else None,
-                              dev_id=self.dev_id, major_group=self.major_group, modes=modes, legacy_mode=self.legacy_mode)
+                              major_group=self.major_group, modes=modes, legacy_mode=self.legacy_mode)
 
             self.__register_eventable_device(_ai)
             Devices.register_device(AI, _ai)
@@ -446,20 +444,21 @@ class Board(object):
         while counter < max_count:
             board_val_reg = m_feature['start_reg']
             if 'reg_type' in m_feature and m_feature['reg_type'] == 'input':
-                _reg = Register("%s_%d_inp" % (self.circuit, board_val_reg + counter), self, counter, board_val_reg + counter, reg_type='input', dev_id=self.dev_id,
+                _reg = Register("%s_%d_inp" % (self.circuit, board_val_reg + counter), self, counter,
+                                board_val_reg + counter, reg_type='input',
                                 major_group=self.major_group, legacy_mode=self.legacy_mode)
             else:
-                _reg = Register("%s_%d" % (self.circuit, board_val_reg + counter), self, counter, board_val_reg + counter, dev_id=self.dev_id,
-                                major_group=self.major_group, legacy_mode=self.legacy_mode)
+                _reg = Register("%s_%d" % (self.circuit, board_val_reg + counter), self, counter,
+                                board_val_reg + counter, major_group=self.major_group, legacy_mode=self.legacy_mode)
             Devices.register_device(REGISTER, _reg)
             counter+=1
 
-    def parse_feature_unit_register(self, max_count, m_feature):
+    def parse_feature_data_point(self, max_count, m_feature):
         counter = 0
         board_val_reg = m_feature['value_reg']
         while counter < max_count:
 
-            #self, circuit, arm, post, reg, dev_id=0, major_group=0
+            #self, circuit, arm, post, reg, major_group=0
 
             _offset = m_feature.get("offset", 0)
             _factor = m_feature.get("factor", 1)
@@ -468,16 +467,16 @@ class Board(object):
             _valid_mask_reg = m_feature.get('valid_mask_reg')
             _post_write_action = m_feature.get('post_write')
             _datatype = m_feature.get('datatype')
-            _reg_type = m_feature.get("reg_type", "input")
+            _reg_type = m_feature.get("reg_type", None)
 
-            _xgt = UnitRegister("{}_{}".format(self.circuit, board_val_reg + counter), self,
-                                board_val_reg + counter, reg_type=_reg_type,
-                                dev_id=self.dev_id, datatype=_datatype, major_group=self.major_group, offset=_offset, factor=_factor, unit=_unit,
-                                valid_mask=1<<counter, valid_mask_reg=_valid_mask_reg, name=_name,
-                                post_write=_post_write_action)
+            _xgt = DataPoint("{}_{}".format(self.circuit, board_val_reg + counter), self,
+                             board_val_reg + counter, reg_type=_reg_type, datatype=_datatype,
+                             major_group=self.major_group, offset=_offset, factor=_factor, unit=_unit,
+                             valid_mask=1 << counter, valid_mask_reg=_valid_mask_reg, name=_name,
+                             post_write=_post_write_action)
 
             self.__register_eventable_device(_xgt)
-            Devices.register_device(UNIT_REGISTER, _xgt)
+            Devices.register_device(DATA_POINT, _xgt)
             counter+=1
 
     def parse_feature(self, m_feature):
@@ -500,10 +499,12 @@ class Board(object):
             self.parse_feature_ai(max_count, m_feature)
         elif m_feature['type'] == 'REGISTER':
             self.parse_feature_register(max_count, m_feature)
-        elif m_feature['type'] == 'UNIT_REGISTER':
-            self.parse_feature_unit_register(max_count, m_feature)
+        elif m_feature['type'] == 'DATA_POINT':
+            self.parse_feature_data_point(max_count, m_feature)
         elif m_feature['type'] == 'OWPOWER':
             self.parse_feature_owpower(m_feature)
+        elif m_feature['type'] == 'NV_SAVE':
+            self.parse_feature_nv_save(m_feature)
         else:
             logging.warning("Unknown feature: " + str(m_feature['type']) + " at board: " + str(self.major_group))
 
@@ -523,14 +524,13 @@ class Board(object):
         return self.full()
 
 
-class Output:
+class DigitalOutput:
     pending_id = 0
-    def __init__(self, circuit, arm, coil, reg, mask, dev_id=0, major_group=0,
+    def __init__(self, circuit, arm, coil, reg, mask, major_group=0,
                  pwmcyclereg=-1, pwmprescalereg=-1, pwmdutyreg=-1, pwmpresetreg=-1, pwmcustompresc=-1 ,
                  legacy_mode=True, digital_only=False, modes=None):
         self.alias = ""
-        self.devtype = OUTPUT
-        self.dev_id = dev_id
+        self.devtype = DO
         self.circuit = circuit
         self.arm = arm
         self.modes = modes if modes is not None else ['Simple']
@@ -563,13 +563,13 @@ class Output:
         self.forced_changes = False  # force_immediate_state_changes
 
     def full(self, forced_value=None):
-        ret =  {'dev': 'output',
+        ret =  {'dev': 'do',
                 'circuit': self.circuit,
                 'value': self.value,
                 'pending': self.pending_id != 0,
                 'mode': self.mode,
                 'modes': self.modes,
-                'glob_dev_id': self.dev_id}
+                }
         if self.digital_only:
             ret['pwm_freq'] = self.pwm_freq
             ret['pwm_duty'] = self.pwm_duty
@@ -580,7 +580,7 @@ class Output:
         return ret
 
     def simple(self):
-        return {'dev': 'relay',
+        return {'dev': 'do',
                 'circuit': self.circuit,
                 'value': self.value}
 
@@ -633,19 +633,19 @@ class Output:
                 # PWM duty_val handling is almost same for both soft and hard PWM
                 old_duty_val = copy(self.pwm_duty_val)
                 self.pwm_duty_val = (self.arm.modbus_slave.modbus_cache_map.get_register(1, self.pwmdutyreg))[0]
-                if old_duty_val != self.pwm_duty_val :
+                if is_change or old_duty_val != self.pwm_duty_val:
                     is_change = True
                     if self.pwm_duty_val == 0:
                         self.pwm_duty = 0
                         self.mode = 'Simple'  # Mode field is for backward compatibility, will be deprecated soon
                     elif self.pwmpresetreg >=0:
                         self.pwm_duty = self.pwm_duty_val
+                        self.mode = 'PWM'  # Mode field is for backward compatibility, will be deprecated soon
                     else:
                         self.pwm_duty = round((float(self.pwm_duty_val) / float(self.pwm_cycle_val)) * 100, 1)
                         self.mode = 'PWM'  # Mode field is for backward compatibility, will be deprecated soon
 
-
-        else: # This RELAY instance does not support PWM mode (no pwmdutyreg given)
+        else:  # This RELAY instance does not support PWM mode (no pwmdutyreg given)
             self.mode = 'Simple'
 
         old_value = copy(self.value)
@@ -681,17 +681,18 @@ class Output:
                         await self.arm.modbus_slave.client.write_register(self.pwmpresetreg, pwm_preset_val, slave=self.arm.modbus_address)
                     else:
                         pwm_prescaler = round((1000 / pwm_freq) - 1)
+                        if pwm_prescaler < 0:
+                            raise ValueError(f"Frequency out of range!")
                         self.pwm_freq = round(1000 / (1 + pwm_prescaler),1)
                         await self.arm.modbus_slave.client.write_register(self.pwmpresetreg, 2, slave=self.arm.modbus_address)
                         await self.arm.modbus_slave.client.write_register(self.pwmcustompresc, pwm_prescaler, slave=self.arm.modbus_address)
 
-                    other_devs = {dev: dev.pwm_duty for dev in Devices.by_int(RELAY, major_group=self.major_group)}
+                    other_devs = {dev: dev.pwm_duty for dev in Devices.by_int(DO, major_group=self.major_group)}
 
                     for other_dev, other_pwm_duty in other_devs.items():
                         other_dev.pwm_freq = self.pwm_freq
 
                 else:
-
                     tmp_pwm_delay_val = 48000000 / pwm_freq
                     if ((int(tmp_pwm_delay_val) % 50000) == 0) and ((tmp_pwm_delay_val / 50000) < 65535):
                         tmp_pwm_cycle_val = 50000
@@ -708,8 +709,7 @@ class Output:
                     else:
                         tmp_pwm_prescale_val = round(sqrt(tmp_pwm_delay_val))
                         tmp_pwm_cycle_val = round(tmp_pwm_prescale_val)
-
-                    other_devs = {dev: dev.pwm_duty for dev in Devices.by_int(RELAY, major_group=self.major_group)}
+                    other_devs = {dev: float(dev.pwm_duty) for dev in Devices.by_int(DO, major_group=self.major_group)}
 
                     await self.arm.modbus_slave.client.write_register(self.pwmcyclereg, tmp_pwm_cycle_val - 1, slave=self.arm.modbus_address)
                     await self.arm.modbus_slave.client.write_register(self.pwmprescalereg, tmp_pwm_prescale_val - 1, slave=self.arm.modbus_address)
@@ -721,7 +721,7 @@ class Output:
                         other_dev.pwm_prescale_val = tmp_pwm_prescale_val
                         if other_dev.pwm_duty > 0 and other_dev is not self:
                             await other_dev.set(pwm_duty=other_pwm_duty)
-                    self.block_pwm = False
+                self.block_pwm = False
 
             # Set Binary value
             if value is not None:
@@ -750,7 +750,7 @@ class Output:
                 else:
                     tmp_pwm_duty_val = round(float(self.pwm_cycle_val) * pwm_duty / 100.0)
                 if self.value != 0:
-                    self.arm.modbus_slave.client.write_coil(self.coil, 0, slave=self.arm.modbus_address)
+                    await self.arm.modbus_slave.client.write_coil(self.coil, 0, slave=self.arm.modbus_address)
                 await self.arm.modbus_slave.client.write_register(self.pwmdutyreg, tmp_pwm_duty_val, slave=self.arm.modbus_address)
                 self.mode = 'PWM'
 
@@ -779,10 +779,9 @@ class Output:
 
 class Relay:
 
-    def __init__(self, circuit, arm, coil, reg, mask, dev_id=0, major_group=0, legacy_mode=True):
+    def __init__(self, circuit, arm, coil, reg, mask, major_group=0, legacy_mode=True):
         self.alias = ""
-        self.devtype = RELAY
-        self.dev_id = dev_id
+        self.devtype = RO
         self.circuit = circuit
         self.arm = arm
         self.major_group = major_group
@@ -797,10 +796,10 @@ class Relay:
         self.forced_changes = False  # force_immediate_state_changes
 
     def full(self, forced_value=None):
-        ret = {'dev': 'relay',
+        ret = {'dev': 'ro',
                'circuit': self.circuit,
                'value': self.value,
-               'glob_dev_id': self.dev_id}
+               }
         if self.alias != '':
             ret['alias'] = self.alias
         if forced_value is not None:
@@ -808,7 +807,7 @@ class Relay:
         return ret
 
     def simple(self):
-        return {'dev': 'relay',
+        return {'dev': 'ro',
                 'circuit': self.circuit,
                 'value': self.value}
 
@@ -855,10 +854,9 @@ class Relay:
 
 
 class OwPower(object):
-    def __init__(self, circuit, arm, coil, dev_id=0, major_group=0):
+    def __init__(self, circuit, arm, coil, major_group=0):
         self.alias = ""
-        self.devtype = LED
-        self.dev_id = dev_id
+        self.devtype = OWPOWER
         self.circuit = circuit
         self.arm = arm
         self.major_group = major_group
@@ -867,7 +865,7 @@ class OwPower(object):
         self.simple = self.full
 
     def full(self):
-        ret = {'dev': 'owpower', 'circuit': self.circuit, 'value': self.value, 'glob_dev_id': self.dev_id}
+        ret = {'dev': 'owpower', 'circuit': self.circuit, 'value': self.value}
         if self.alias != '':
             ret['alias'] = self.alias
         return ret
@@ -890,11 +888,42 @@ class OwPower(object):
         return self.full()
 
 
+class NvSave(object):
+    def __init__(self, circuit, arm, coil, major_group=0):
+        self.alias = ""
+        self.devtype = NV_SAVE
+        self.circuit = circuit
+        self.arm = arm
+        self.major_group = major_group
+        self.coil = coil
+        self.value = 0
+        self.simple = self.full
+
+    def full(self):
+        ret = {'dev': 'nv_save', 'circuit': self.circuit, 'value': self.value}
+        if self.alias != '':
+            ret['alias'] = self.alias
+        return ret
+
+    async def set(self, value=None, alias=None):
+        """ Sets new on/off status. Disable pending timeouts
+        """
+        if alias is not None:
+            Devices.set_alias(alias, self)
+        if value is not None:
+            value = bool(int(value))
+            self.value = value
+            await self.arm.modbus_slave.client.write_coil(self.coil, 1 if value else 0, slave=self.arm.modbus_address)
+        return self.full()
+
+    def get(self):
+        return self.full()
+
+
 class ULED(object):
-    def __init__(self, circuit, arm, post, reg, mask, coil, dev_id=0, major_group=0, legacy_mode=True):
+    def __init__(self, circuit, arm, post, reg, mask, coil, major_group=0, legacy_mode=True):
         self.alias = ""
         self.devtype = LED
-        self.dev_id = dev_id
         self.circuit = circuit
         self.arm = arm
         self.major_group = major_group
@@ -906,7 +935,7 @@ class ULED(object):
         self.value = None
 
     def full(self):
-        ret = {'dev': 'led', 'circuit': self.circuit, 'value': self.value, 'glob_dev_id': self.dev_id}
+        ret = {'dev': 'led', 'circuit': self.circuit, 'value': self.value}
         if self.alias != '':
             ret['alias'] = self.alias
         return ret
@@ -950,10 +979,10 @@ class ULED(object):
 
 
 class Watchdog(object):
-    def __init__(self, circuit, arm, post, reg, timeout_reg, nv_save_coil=-1, reset_coil=-1, wd_reset_ro_coil=-1, dev_id=0, major_group=0, legacy_mode=True):
+    def __init__(self, circuit, arm, post, reg, timeout_reg, nv_save_coil=-1, reset_coil=-1, wd_reset_ro_coil=-1,
+                 major_group=0, legacy_mode=True):
         self.alias = ""
         self.devtype = WATCHDOG
-        self.dev_id = dev_id
         self.circuit = circuit
         self.arm = arm
         self.major_group = major_group
@@ -980,7 +1009,7 @@ class Watchdog(object):
                'timeout': self.timeout,
                'was_wd_reset': self.was_wd_boot_value,
                'nv_save' :self.nvsavvalue,
-               'glob_dev_id': self.dev_id}
+               }
         if self.alias != '':
             ret['alias'] = self.alias
         return ret
@@ -1046,13 +1075,12 @@ class Watchdog(object):
         return self.full()
 
 
-class UnitRegister():
+class DataPoint:
 
-    def __init__(self, circuit, arm, reg, reg_type="input", dev_id=0, major_group=0, datatype=None, unit=None, offset=0, factor=1, valid_mask_reg=None, valid_mask=None, name=None, post_write=None):
+    def __init__(self, circuit, arm, reg, reg_type=None, major_group=0, datatype=None, unit=None, offset=0, factor=1, valid_mask_reg=None, valid_mask=None, name=None, post_write=None):
         # TODO - valid mask reg
         self.alias = ""
-        self.devtype = UNIT_REGISTER
-        self.dev_id = dev_id
+        self.devtype = DATA_POINT
         self.circuit = circuit
         self.arm = arm
         self.major_group = major_group
@@ -1092,7 +1120,7 @@ class UnitRegister():
             elif self.datatype == "float32":
                 value = self.__parse_float32(self.arm.modbus_slave.modbus_cache_map.get_register(2, self.valreg, is_input=self.is_input))
             else:
-                logger.warning(f"Unit register: Unsupported datatype {self.datatype}")
+                logger.warning(f"Data point: Unsupported datatype {self.datatype}")
                 return None
             if self.factor == 1 and self.offset == 0:  # Reading RAW value - save some CPU time
                 return value
@@ -1110,14 +1138,14 @@ class UnitRegister():
         if alias is not None:
             Devices.set_alias(alias, self)
 
-        raise Exception("Unit_register object is read-only")
+        raise Exception("Data point object is read-only")
 
     def full(self):
 
-        ret = {'dev': 'unit_register',
+        ret = {'dev': 'data_point',
                'circuit': self.circuit,
                'value': self.value,
-               'glob_dev_id': self.dev_id}
+               }
 
         if self.name is not None:
             ret['name'] = self.name
@@ -1133,7 +1161,7 @@ class UnitRegister():
         return ret
 
     def simple(self):
-        return {'dev': 'unit_register',
+        return {'dev': 'data_point',
                 'circuit': self.circuit,
                 'value': self.read_value()}
 
@@ -1149,10 +1177,9 @@ class UnitRegister():
 
 
 class Register:
-    def __init__(self, circuit, arm, post, reg, reg_type="holding", dev_id=0, major_group=0, legacy_mode=True):
+    def __init__(self, circuit, arm, post, reg, reg_type="holding", major_group=0, legacy_mode=True):
         self.alias = ""
         self.devtype = REGISTER
-        self.dev_id = dev_id
         self.circuit = circuit
         self.arm = arm
         self.major_group = major_group
@@ -1173,7 +1200,7 @@ class Register:
         ret = {'dev': 'register',
                'circuit': self.circuit,
                'value': self.regvalue(),
-               'glob_dev_id': self.dev_id}
+               }
         if self.alias != '':
             ret['alias'] = self.alias
         return ret
@@ -1221,12 +1248,11 @@ class Register:
         return self.full()
 
 
-class Input:
+class DigitalInput:
     def __init__(self, circuit, arm, reg, mask, regcounter=None, regdebounce=None, regmode=None, regtoggle=None, regpolarity=None,
-                 dev_id=0, major_group=0, modes=['Simple'], ds_modes=['Simple'], counter_modes=['Enabled', 'Disabled'], legacy_mode=True):
+                 major_group=0, modes=['Simple'], ds_modes=['Simple'], counter_modes=['Enabled', 'Disabled'], legacy_mode=True):
         self.alias = ""
-        self.devtype = INPUT
-        self.dev_id = dev_id
+        self.devtype = DI
         self.circuit = circuit
         self.arm = arm
         self.modes = modes
@@ -1274,7 +1300,7 @@ class Input:
         return old_counter != self.counter or old_value != self.value
 
     def full(self):
-        ret = {'dev': 'input',
+        ret = {'dev': 'di',
                'circuit': self.circuit,
                'value': self.value,
                'debounce': self.debounce,
@@ -1283,7 +1309,7 @@ class Input:
                'counter': self.counter if self.counter_mode == 'Enabled' else 0,
                'mode': self.mode,
                'modes': self.modes,
-               'glob_dev_id': self.dev_id }
+               }
         if self.mode == 'DirectSwitch':
             ret['ds_mode'] = self.ds_mode
             ret['ds_modes'] = self.ds_modes
@@ -1293,12 +1319,12 @@ class Input:
 
     def simple(self):
         if self.counter_mode == 'Enabled':
-            return {'dev': 'input',
+            return {'dev': 'di',
                     'circuit': self.circuit,
                     'value': self.value,
                     'counter': self.counter}
         else:
-            return {'dev': 'input',
+            return {'dev': 'di',
                     'circuit': self.circuit,
                     'value': self.value}
 
@@ -1362,10 +1388,9 @@ class Input:
 
 
 class AnalogOutputBrain:
-    def __init__(self, circuit, arm, reg, regmode=None, reg_res=0, dev_id=0, major_group=0):
+    def __init__(self, circuit, arm, reg, regmode=None, reg_res=0, major_group=0):
         self.alias = ""
         self.devtype = AO
-        self.dev_id = dev_id
         self.circuit = circuit
         self.reg = reg
         self.regmode = regmode
@@ -1431,7 +1456,6 @@ class AnalogOutputBrain:
                'circuit': self.circuit,
                'mode': self.mode,
                'modes': self.modes,
-               'glob_dev_id': self.dev_id,
                'unit': self.unit
         }
 
@@ -1491,10 +1515,9 @@ class AnalogOutputBrain:
 
 
 class AnalogOutput:
-    def __init__(self, circuit, arm, reg, regmode=None, dev_id=0, modes=None, major_group=0):
+    def __init__(self, circuit, arm, reg, regmode=None, modes=None, major_group=0):
         self.alias = ""
         self.devtype = AO
-        self.dev_id = dev_id
         self.circuit = circuit
         self.reg = reg
         self.regvalue = lambda: self.arm.modbus_slave.modbus_cache_map.get_register(1, self.reg)[0]
@@ -1543,7 +1566,6 @@ class AnalogOutput:
                'circuit': self.circuit,
                'mode': self.mode,
                'modes': self.modes,
-               'glob_dev_id':self.dev_id,
                'value': self.value,
                'unit': self.unit_name,
                'range': self.range,
@@ -1592,10 +1614,9 @@ class AnalogInput:
                 "big" : Endian.BIG,
                 "Big" : Endian.BIG,}
 
-    def __init__(self, circuit, arm, reg, regmode=None, dev_id=0, major_group=0, legacy_mode=True, modes=None):
+    def __init__(self, circuit, arm, reg, regmode=None, major_group=0, legacy_mode=True, modes=None):
         self.alias = ""
         self.devtype = AI
-        self.dev_id = dev_id
         self.circuit = circuit
         self.valreg = reg
         self.arm = arm
@@ -1622,14 +1643,13 @@ class AnalogInput:
         for mode, data in self.modes.items():
             if mode_value == data['value']:
                 if data.get("transformation"):
-                    logger.debug("-------- TRANSFORMATION --------")
-                    logger.debug(f"Mode: {data['value']} -> {data['transformation']}")
+                    #logger.debug(f"Mode: {data['value']} -> {data['transformation']}")
                     byteorder = AnalogInput.endian_map[data["transformation"].get("byteorder", "big")]
                     wordorder = AnalogInput.endian_map[data["transformation"].get("wordorder", "little")]
                     datatype = data["transformation"].get("datatype", "float32")
                     decimals = data["transformation"].get("decimals", 3)
                     ratio = data["transformation"].get("ratio", 1)
-                    logger.debug(f"{datatype} {byteorder} {wordorder} {decimals}")
+                    logger.debug(f"Aplying transformation on analog input {self.circuit}: {datatype} {byteorder} {wordorder} {decimals}")
                     if datatype == "float32":
                         self.transformation = lambda registers : round(BinaryPayloadDecoder.fromRegisters(registers,
                                                                                                       byteorder=byteorder,
@@ -1701,7 +1721,6 @@ class AnalogInput:
                'circuit': self.circuit,
                'value': self.value,
                'unit': self.unit_name,
-               'glob_dev_id': self.dev_id,
                'mode': self.mode,
                'modes': self.modes,
                'range': self.range,
@@ -1721,3 +1740,4 @@ class AnalogInput:
     @property
     def voltage(self):
         return self.value
+

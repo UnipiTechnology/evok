@@ -1,8 +1,9 @@
 # Installation guide
 
-To install Evok, you will have to [set up the repositories](#setting-up-repositories) and then [install the package](#installing-and-updating-evok).
+Evok can be installed on Unipi OS or RaspberryPi OS.
+To install Evok, you will have to [prepare the OS](#os-preparation) and then [install the package](#installing-and-updating-evok).
 
-## Setting up repositories
+## OS preparation
 
 This step varies by the platform used, either [Unipi images](#pre-built-unipi-os-images) or [RaspberryPi OS](#raspberrypi-os).
 
@@ -40,7 +41,7 @@ You can proceed to [Installing and updating Evok](#installing-and-updating-evok)
 
 ## Installing and updating Evok
 
-Make sure you have [set up the repositories](#setting-up-repositories) correctly first. This works both for installind and updating.
+Make sure you have [prepared the OS](#os-preparation) correctly first. Following steps work both for installing and updating
 
 ```bash title="Installing & updating Evok"
 sudo apt update
@@ -65,7 +66,7 @@ There are several ways of getting beta version.
 
 ### Switching to the beta repository
 
-To be able use the beta version, you need to have [normal repositories](#setting-up-repositories) already installed. You can switch to the beta version of Evok by adding the repository to the apt sources:
+**To be able use the beta version, you need to have the [OS prepared](#os-preparation) already**. You can switch to the beta version of Evok by adding the repository to the apt sources:
 
 === "Neuron"
 
@@ -96,18 +97,6 @@ To be able use the beta version, you need to have [normal repositories](#setting
     ```
 
 You can proceed to [Installing and updating Evok](#installing-and-updating-evok) section.
-
-### Installing beta OS image
-
-You can install Unipi image with beta repositories from below.
-We recommend updating evok after beta image installation, see [Installing and updating Evok] section.
-
-#### Node-RED beta OS images
-
-- [Neuron](https://kb.unipi.technology/files:software:os-images:neuron-node-red-hidden)
-- [Patron](https://kb.unipi.technology/files:software:os-images:patron-node-red-hidden)
-- [Gate](https://kb.unipi.technology/files:software:os-images:g1-node-red-hidden)
-- [Unipi1](https://kb.unipi.technology/files:software:os-images:unipi1-node-red-hidden)
 
 ## Uninstallation
 

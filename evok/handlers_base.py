@@ -74,19 +74,18 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
         await self.finish()
 
     def _get_all(self):
-        result = list(map(lambda dev: dev.full(), Devices.by_int(INPUT)))
-        result += map(lambda dev: dev.full(), Devices.by_int(RELAY))
-        result += map(lambda dev: dev.full(), Devices.by_int(OUTPUT))
+        result = list(map(lambda dev: dev.full(), Devices.by_int(DI)))
+        result += map(lambda dev: dev.full(), Devices.by_int(RO))
+        result += map(lambda dev: dev.full(), Devices.by_int(DO))
         result += map(lambda dev: dev.full(), Devices.by_int(AI))
         result += map(lambda dev: dev.full(), Devices.by_int(AO))
         result += map(lambda dev: dev.full(), Devices.by_int(SENSOR))
         result += map(lambda dev: dev.full(), Devices.by_int(LED))
         result += map(lambda dev: dev.full(), Devices.by_int(WATCHDOG))
         result += map(lambda dev: dev.full(), Devices.by_int(MODBUS_SLAVE))
-        result += map(lambda dev: dev.full(), Devices.by_int(UART))
         result += map(lambda dev: dev.full(), Devices.by_int(OWPOWER))
         result += map(lambda dev: dev.full(), Devices.by_int(REGISTER))
-        result += map(lambda dev: dev.full(), Devices.by_int(UNIT_REGISTER))
+        result += map(lambda dev: dev.full(), Devices.by_int(DATA_POINT))
         result += map(lambda dev: dev.full(), Devices.by_int(OWBUS))
         result += map(lambda dev: dev.full(), Devices.by_int(DEVICE_INFO))
         return result

@@ -3,3 +3,8 @@ class ModbusSlaveError(Exception):
 
 class ENoCacheRegister(ModbusSlaveError):
     pass
+
+
+class DeviceNotFound(Exception):
+    pass
+

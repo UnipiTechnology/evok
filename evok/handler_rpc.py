@@ -7,7 +7,7 @@ from typing import Awaitable, Optional
 import tornado.ioloop
 
 from tornado_jsonrpc2 import JSONRPCHandler
-from tornado_jsonrpc2.exceptions import MethodNotFound
+from tornado_jsonrpc2.exceptions import MethodNotFound, InvalidParams
 
 from .devices import *
 
@@ -23,23 +23,26 @@ async def create_response(request, backend):
         awaitable = True
 
     try:
-        params = request.params
-    except AttributeError:
-        if awaitable:
-            return await method()
-        else:
-            return method()
+        try:
+            params = request.params
+        except AttributeError:
+            if awaitable:
+                return await method()
+            else:
+                return method()
 
-    if isinstance(params, list):
-        if awaitable:
-            return await method(*params)
-        else:
-            return method(*params)
-    elif isinstance(params, dict):
-        if awaitable:
-            return await method(**params)
-        else:
-            return method(**params)
+        if isinstance(params, list):
+            if awaitable:
+                return await method(*params)
+            else:
+                return method(*params)
+        elif isinstance(params, dict):
+            if awaitable:
+                return await method(**params)
+            else:
+                return method(**params)
+    except DeviceNotFound as e:
+        raise InvalidParams(e)
 
 
 class UserBasicHelper(JSONRPCHandler):
@@ -83,36 +86,36 @@ class RpcHandler(UserBasicHelper):
 
     ###### Input ######
     def input_get(self, circuit):
-        inp = Devices.by_int(INPUT, str(circuit))
+        inp = Devices.by_int(DI, str(circuit))
         return inp.get()
 
     def input_get_value(self, circuit):
-        inp = Devices.by_int(INPUT, str(circuit))
+        inp = Devices.by_int(DI, str(circuit))
         return inp.get_value()
 
     def input_set(self, circuit, debounce):
-        inp = Devices.by_int(INPUT, str(circuit))
+        inp = Devices.by_int(DI, str(circuit))
         return inp.set(debounce=debounce)
 
     ###### Relay ######
     def relay_get(self, circuit):
-        relay = Devices.by_int(RELAY, str(circuit))
+        relay = Devices.by_int(RO, str(circuit))
         return relay.get_state()
 
     async def relay_set(self, circuit, value):
-        relay = Devices.by_int(RELAY, str(circuit))
+        relay = Devices.by_int(RO, str(circuit))
         return await relay.set_state(value)
 
     def output_get(self, circuit):
-        relay = Devices.by_int(OUTPUT, str(circuit))
+        relay = Devices.by_int(DO, str(circuit))
         return relay.get_state()
 
     async def output_set(self, circuit, value):
-        relay = Devices.by_int(OUTPUT, str(circuit))
+        relay = Devices.by_int(DO, str(circuit))
         return await relay.set_state(value)
 
     async def output_set_for_time(self, circuit, value, timeout):
-        relay = Devices.by_int(OUTPUT, str(circuit))
+        relay = Devices.by_int(DO, str(circuit))
         if timeout <= 0:
             raise Exception('Invalid timeout %s' % str(timeout))
         return await relay.set(value, timeout)
@@ -179,19 +182,3 @@ class RpcHandler(UserBasicHelper):
         sens = Devices.by_int(SENSOR, str(circuit))
         return sens.get_value()
 
-    async def pca_set(self, circuit, channel, on, off):
-        pca = Devices.by_int(PCA9685, str(circuit))
-        return await pca.set(channel, on, off)
-
-    async def pca_set_pwm(self, circuit, channel, val):
-        pca = Devices.by_int(PCA9685, str(circuit))
-        return await pca.set_pwm(channel, val)
-
-    ###### EEprom ######
-    async def ee_read_byte(self, circuit, index):
-        ee = Devices.by_int(EE, str(circuit))
-        return await ee.read_byte(index)
-
-    async def ee_write_byte(self, circuit, index, value):
-        ee = Devices.by_int(EE, str(circuit))
-        return await ee.write_byte(index, value)

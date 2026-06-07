@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 dependencies = [
-    'pymodbus == 3.5.4',
+    'pymodbus@git+https://github.com/martyy665/pymodbus@fix-tid-overflow',
     'pyserial == 3.5',
     'tornado == 6.3.3',
     'jsonschema == 2.6.0',

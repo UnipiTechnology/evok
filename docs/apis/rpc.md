@@ -14,13 +14,13 @@ Value of DI 1.01 will be returned.
 import requests
 
 payload = {
-    "method": "input_get",
+    "method": "di_get",
     "params": ["1_01"],
     "jsonrpc": "2.0",
     "id": 0,
 }
 
-url = 'http://127.0.0.1/rpc'
+url = 'http://127.0.0.1:8080/rpc'
 response = requests.post(url, json=payload).json()
 print(response)
 ```
@@ -37,13 +37,13 @@ DO 1.01 will be set to HIGH.
 import requests
 
 payload = {
-    "method": "relay_set",
+    "method": "do_set",
     "params": ["1_01", '1'],
     "jsonrpc": "2.0",
     "id": 0,
 }
 
-url = 'http://127.0.0.1/rpc'
+url = 'http://127.0.0.1:8080/rpc'
 response = requests.post(url, json=payload).json()
 print(response)
 ```
@@ -51,3 +51,6 @@ print(response)
 ```rs title="Output"
 {'jsonrpc': '2.0', 'id': 0, 'result': 1}
 ```
+
+!!! tip
+    You can learn more about the circuit parameter [here](../circuit.md)

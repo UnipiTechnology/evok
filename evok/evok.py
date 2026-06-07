@@ -5,6 +5,7 @@ import contextlib
 
 import os
 import sys
+import traceback
 from importlib.metadata import version, PackageNotFoundError
 
 import jsonschema
@@ -336,7 +337,7 @@ def main():
     webhook_config = evok_config.get_api('webhook')
     if webhook_config.get("enabled", False):
         wh_address = webhook_config.get("address", "http://127.0.0.1:80/index.html")
-        wh_types = webhook_config.get("device_mask", ["input", "sensor", "uart", "watchdog"])
+        wh_types = webhook_config.get("device_mask", ["di", "sensor", "watchdog"])
         wh_complex = webhook_config.get("complex_events", False)
         wh = WebhookHandler(wh_address, wh_types, wh_complex)
         wh.open()
@@ -359,11 +360,11 @@ def main():
 
     alias_task = AliasTask(Devices.aliases, mainLoop)
 
-    for bustype in (I2CBUS, GPIOBUS, OWBUS):
+    for bustype in [OWBUS]:
         for device in Devices.by_int(bustype):
             device.bus_driver.switch_to_async(mainLoop)
 
-    for bustype in (ADCHIP, TCPBUS, SERIALBUS):
+    for bustype in [TCPBUS, SERIALBUS]:
         for device in Devices.by_int(bustype):
             device.switch_to_async(mainLoop)
 
@@ -378,10 +379,6 @@ def main():
 
     # graceful shutdown
     def shutdown():
-        for bus in Devices.by_int(I2CBUS):
-            bus.bus_driver.switch_to_sync()
-        for bus in Devices.by_int(GPIOBUS):
-            bus.bus_driver.switch_to_sync()
         alias_task.cancel()
         logger.info("Shutting down")
         tornado.ioloop.IOLoop.instance().stop()
