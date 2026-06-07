@@ -40,7 +40,11 @@ class FakeMqttInner:
 
 
 class FakeMqttClient:
-    """Simulates aiomqtt.Client used as async context manager."""
+    """Simulates aiomqtt.Client used as async context manager.
+
+    publish() is called directly on the client (not the inner object) by send_to(),
+    so it must be present here and delegate to inner.
+    """
     def __init__(self, inner=None):
         self.inner = inner or FakeMqttInner()
 
@@ -49,6 +53,9 @@ class FakeMqttClient:
 
     async def __aexit__(self, *args):
         pass
+
+    async def publish(self, topic, payload, retain=False):
+        await self.inner.publish(topic, payload, retain=retain)
 
 
 # ── device fixtures ───────────────────────────────────────────────────────────

@@ -1,4 +1,6 @@
 import json
+import logging
+import traceback
 from tornado import websocket
 from .devices import *
 from urllib.parse import urlparse
@@ -55,7 +57,7 @@ class WebsocketHandler(websocket.WebSocketHandler):
             # get FULL state of each IO
             if cmd == "all":
                 result = []
-                devices = [INPUT, RELAY, AI, AO, SENSOR]
+                devices = [DI, RO, AI, AO, SENSOR]
                 if websocket_config.get("all_filtered", False):
                     if (len(self.filter) == 1 and self.filter[0] == "default"):
                         for dev in devices:
@@ -128,8 +130,8 @@ class WebsocketHandler(websocket.WebSocketHandler):
             pass
 
     def on_close(self):
-        if ("all" in registered_ws) and (self in registered_ws["all"]):
-            registered_ws["all"].remove(self)
-            if len(registered_ws["all"]) == 0:
+        if ("all" in registered_devents) and (self in registered_devents["all"]):
+            registered_devents["all"].remove(self)
+            if len(registered_devents["all"]) == 0:
                 for neuron in Devices.by_int(MODBUS_SLAVE):
                     neuron.stop_scanning()

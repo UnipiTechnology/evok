@@ -98,8 +98,9 @@ class MqttClient:
             try:
                 async with self.__client as client:
                     self.is_connected = True
-                    for topic, msg in self.for_send:
-                        await self.send_to(topic, msg)
+                    pending, self.for_send = self.for_send, []
+                    for item in pending:
+                        await self.send_to(item['topic'], item['data'])
                     await client.subscribe(self.topic)
                     async for message in client.messages:
                         await self.__on_message(message)
