@@ -43,10 +43,14 @@ class MqttClient:
         self.callback = callback
         self.topic = topic
         self.is_connected = False
-        self.__client = mqtt.Client(hostname=conf.hostname,
-                                    port=conf.port,
-                                    keepalive=conf.keepalive,
-                                    identifier=client_id)
+        self.__client = mqtt.Client(
+            hostname=conf.hostname,
+            port=conf.port,
+            keepalive=conf.keepalive,
+            identifier=client_id,
+            username=conf.username or None,
+            password=conf.password or None,
+        )
         self.conf = conf
         self.for_send = []
 

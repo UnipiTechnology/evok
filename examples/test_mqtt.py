@@ -45,10 +45,20 @@ ERROR_TIMEOUT = 1.5  # seconds to confirm absence of a message (error-path tests
 
 
 class MqttE2ETest:
-    def __init__(self, broker: str, port: int, client_id: str, circuit: str):
+    def __init__(
+        self,
+        broker: str,
+        port: int,
+        client_id: str,
+        circuit: str,
+        username: str | None = None,
+        password: str | None = None,
+    ):
         self.broker = broker
         self.port = port
         self.client_id = client_id
+        self.username = username or None
+        self.password = password or None
         devtype, circuit_id = circuit.split("/", 1)
         self.devtype = devtype
         self.circuit_id = circuit_id
@@ -66,12 +76,15 @@ class MqttE2ETest:
         print(f"  FAIL  {name}{suffix}")
 
     async def run(self) -> bool:
-        print(f"\nConnecting  broker={self.broker}:{self.port}  client-id={self.client_id!r}")
+        auth_info = f"  user={self.username!r}" if self.username else ""
+        print(f"\nConnecting  broker={self.broker}:{self.port}  client-id={self.client_id!r}{auth_info}")
         try:
             async with aiomqtt.Client(
                 hostname=self.broker,
                 port=self.port,
                 identifier=f"{self.client_id}-e2etest",
+                username=self.username,
+                password=self.password,
             ) as client:
                 print("  Connected\n")
                 await client.subscribe(f"{self.client_id}/event/#")
@@ -110,9 +123,15 @@ class MqttE2ETest:
     # ── helpers ────────────────────────────────────────────────────────────────
 
     async def _recv(
-        self, queue: asyncio.Queue, topic: str, timeout: float = TIMEOUT
+        self,
+        queue: asyncio.Queue,
+        topic: str,
+        timeout: float = TIMEOUT,
+        predicate=None,
     ) -> "dict | list | None":
-        """Return first payload on `topic` within `timeout`, discarding others."""
+        """Return first payload on `topic` satisfying `predicate`, within `timeout`.
+        Messages that match the topic but fail the predicate are skipped — this
+        handles MQTT echo (broker reflects our own publish back to us)."""
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
         while True:
@@ -124,7 +143,8 @@ class MqttE2ETest:
                     queue.get(), timeout=remaining
                 )
                 if recv_topic == topic:
-                    return payload
+                    if predicate is None or predicate(payload):
+                        return payload
             except asyncio.TimeoutError:
                 return None
 
@@ -144,7 +164,8 @@ class MqttE2ETest:
         print("Test 1: ALL command returns device list")
         all_topic = f"{self.client_id}/cmd/ALL"
         await client.publish(all_topic, json.dumps({}))
-        result = await self._recv(queue, all_topic)
+        # Skip the broker echo of our own {} publish; wait for the list response.
+        result = await self._recv(queue, all_topic, predicate=lambda p: isinstance(p, list))
         if result is None:
             self._fail("ALL command", f"no response within {TIMEOUT}s")
         elif not isinstance(result, list):
@@ -187,7 +208,7 @@ class MqttE2ETest:
         # Query ALL and look for this circuit
         all_topic = f"{self.client_id}/cmd/ALL"
         await client.publish(all_topic, json.dumps({}))
-        all_result = await self._recv(queue, all_topic)
+        all_result = await self._recv(queue, all_topic, predicate=lambda p: isinstance(p, list))
         if all_result is None or not isinstance(all_result, list):
             self._fail("state consistency", "ALL returned no valid response")
             return
@@ -259,10 +280,15 @@ def main():
         "--circuit", default="ro/1_01",
         help="output circuit to toggle, type/circuit  [ro/1_01]",
     )
+    parser.add_argument("--username", default=None, help="MQTT broker username")
+    parser.add_argument("--password", default=None, help="MQTT broker password")
     args = parser.parse_args()
 
     success = asyncio.run(
-        MqttE2ETest(args.broker, args.port, args.client_id, args.circuit).run()
+        MqttE2ETest(
+            args.broker, args.port, args.client_id, args.circuit,
+            username=args.username, password=args.password,
+        ).run()
     )
     sys.exit(0 if success else 1)
 
