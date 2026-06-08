@@ -6,14 +6,15 @@ Evok APIs are listening on IP `127.0.0.1` and port `8080` by default. You can ch
 
 **Comparison table:**
 
-| API                         | multiple commands per request | Recommended usage    | Communication  |
-|-----------------------------|-------------------------------|----------------------|----------------|
-| [REST](#rest-doc)           | ❌                             | By hand              | client to Evok |
-| [JSON](#json-doc)           | ❌                             | Automated            | client to Evok |
-| [WebSocket](#websocket-doc) | ❌                             | Real-time automated  | both ways      |
-| [BULK](#bulk-doc)           | ✅                             | Automated            | client to Evok |
-| [Webhook](#webhook-doc)     | N/A                           | Listening to changes | Evok to client |
-| [RPC](#rpc-doc)             | ❌                             | Automated            | client to Evok |
+| API                         | multiple commands per request | Recommended usage         | Communication  |
+|-----------------------------|-------------------------------|---------------------------|----------------|
+| [REST](#rest-doc)           | ❌                             | By hand                   | client to Evok |
+| [JSON](#json-doc)           | ❌                             | Automated                 | client to Evok |
+| [WebSocket](#websocket-doc) | ❌                             | Real-time automated       | both ways      |
+| [BULK](#bulk-doc)           | ✅                             | Automated                 | client to Evok |
+| [Webhook](#webhook-doc)     | N/A                           | Listening to changes      | Evok to client |
+| [RPC](#rpc-doc)             | ❌                             | Automated                 | client to Evok |
+| [MQTT](#mqtt-doc)           | ❌                             | IoT / broker integrations | both ways      |
 
 ## REST ([doc](./apis/rest.md))
 
@@ -38,3 +39,7 @@ The Webhook API provides a mechanism for pushing real-time updates to clients. E
 ## RPC ([doc](./apis/rpc.md))
 
 The RPC (Remote Procedure Call) API is used for invoking procedures, functions or methods across a network.
+
+## MQTT ([doc](./apis/mqtt.md))
+
+The MQTT API integrates Evok with any MQTT broker. Evok publishes device state changes as events and subscribes to a command topic so external clients can read or control devices. It is suitable for IoT integrations, home-automation platforms (Home Assistant, Node-RED, OpenHAB) and any system that already operates an MQTT broker.

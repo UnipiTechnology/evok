@@ -21,6 +21,32 @@ In this section you can configure address and port for API listening. These sett
 - `device_mask` - list of devices to notify on (written as a JSON list, same format as `address`)
 - `complex_events` - Evok will send POST requests with the same data as WebSocket, rather than an empty GET request
 
+### MQTT
+
+- `enabled` - enables the MQTT API (`true` / `false`)
+- `address` - hostname or IP address of the MQTT broker
+- `port` - broker port (default `1883`)
+- `client-id` - unique MQTT client identifier for this Evok instance; used as the topic prefix
+- `username` - broker username (optional, omit or set to empty string for unauthenticated brokers)
+- `password` - broker password (optional)
+- `keepalive` - keep-alive interval in seconds (default `60`)
+- `qos` - MQTT Quality of Service level: `0` at-most-once, `1` at-least-once (default `0`)
+
+```yaml title="MQTT configuration example"
+apis:
+  mqtt:
+    enabled: true
+    address: localhost
+    port: 1883
+    client-id: evok
+    username: evok
+    password: secret
+    keepalive: 60
+    qos: 0
+```
+
+For the full topic structure and code examples see [MQTT API](../apis/mqtt.md).
+
 ## Hardware configuration
 
 The hardware configuration is represented by a device tree with this structure:

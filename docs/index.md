@@ -9,8 +9,9 @@ It provides multiple ways to easily access the I/Os of the devices, including:
 - Bulk request JSON API
 - WebSocket API
 - JSON-RPC API
+- MQTT API
 
-Besides that, Evok also supports sending notifications via webhook.
+Besides that, Evok also supports sending notifications via webhook and MQTT broker.
 
 [evok-web](https://github.com/UniPiTechnology/evok-web-jq) is a simple demo web application using Evok demonstrating its usage and allowing easy control of the devices configured in Evok.
 
