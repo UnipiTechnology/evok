@@ -1,0 +1,48 @@
+{
+  "19b59340b6ece33d": {
+    "request": {
+      "form": null,
+      "json": {
+        "value": 0
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/owpower/1/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "1",
+          "dev": "owpower",
+          "value": 0
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"owpower\", \"circuit\": \"1\", \"value\": 0}}",
+      "status": 200
+    }
+  },
+  "9ef1f3f54fb0ada4": {
+    "request": {
+      "form": null,
+      "json": {
+        "value": 1
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/owpower/1/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "1",
+          "dev": "owpower",
+          "value": 0
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"owpower\", \"circuit\": \"1\", \"value\": 0}}",
+      "status": 200
+    }
+  }
+}

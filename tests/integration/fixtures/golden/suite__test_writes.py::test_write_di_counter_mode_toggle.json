@@ -1,0 +1,72 @@
+{
+  "864bf720aca53b4a": {
+    "request": {
+      "form": null,
+      "json": {
+        "counter_mode": "Disabled"
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/di/2_01/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "2_01",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"di\", \"circuit\": \"2_01\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}}",
+      "status": 200
+    }
+  },
+  "e6b6f7f9154570c7": {
+    "request": {
+      "form": null,
+      "json": {
+        "counter_mode": "Enabled"
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/di/2_01/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "2_01",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"di\", \"circuit\": \"2_01\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}}",
+      "status": 200
+    }
+  }
+}

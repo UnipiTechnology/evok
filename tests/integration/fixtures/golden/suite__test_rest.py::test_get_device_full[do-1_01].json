@@ -1,0 +1,59 @@
+{
+  "5df720a502312613": {
+    "request": {
+      "form": {
+        "value": "0"
+      },
+      "json": null,
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/do/1_01/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "1_01",
+          "dev": "do",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "PWM"
+          ],
+          "pending": false,
+          "pwm_duty": 0,
+          "pwm_freq": 39.0625,
+          "value": 1
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"do\", \"circuit\": \"1_01\", \"value\": 1, \"pending\": false, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_freq\": 39.0625, \"pwm_duty\": 0}}",
+      "status": 200
+    }
+  },
+  "cdf531bf0e802cbe": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/do/1_01/"
+    },
+    "response": {
+      "body": {
+        "circuit": "1_01",
+        "dev": "do",
+        "mode": "Simple",
+        "modes": [
+          "Simple",
+          "PWM"
+        ],
+        "pending": false,
+        "pwm_duty": 0,
+        "pwm_freq": 39.0625,
+        "value": 1
+      },
+      "raw_text": "{\"dev\": \"do\", \"circuit\": \"1_01\", \"value\": 1, \"pending\": false, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_freq\": 39.0625, \"pwm_duty\": 0}",
+      "status": 200
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "12c15cc373c07bf2": {
+    "request": {
+      "form": {
+        "value": "1"
+      },
+      "json": null,
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/ro/2_01/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "2_01",
+          "dev": "ro",
+          "value": 0
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"ro\", \"circuit\": \"2_01\", \"value\": 0}}",
+      "status": 200
+    }
+  }
+}

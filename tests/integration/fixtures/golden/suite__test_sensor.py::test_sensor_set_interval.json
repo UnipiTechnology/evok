@@ -1,0 +1,63 @@
+{
+  "d6654ecbca3ab556": {
+    "request": {
+      "form": null,
+      "json": {
+        "interval": 10
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/sensor/28CD79A90800004A/"
+    },
+    "response": {
+      "body": {
+        "result": null,
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": null}",
+      "status": 200
+    }
+  },
+  "df1fedb7fc45ff7d": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/sensor/28CD79A90800004A/"
+    },
+    "response": {
+      "body": {
+        "address": "28.CD79A9080000.4A",
+        "circuit": "28CD79A90800004A",
+        "dev": "temp",
+        "interval": 10,
+        "lost": false,
+        "time": 196.699964675,
+        "type": "DS18B20",
+        "value": 26.3
+      },
+      "raw_text": "{\"dev\": \"temp\", \"circuit\": \"28CD79A90800004A\", \"address\": \"28.CD79A9080000.4A\", \"value\": 26.3, \"lost\": false, \"time\": 196.699964675, \"interval\": 10, \"type\": \"DS18B20\"}",
+      "status": 200
+    }
+  },
+  "e9d80fc87de1375e": {
+    "request": {
+      "form": null,
+      "json": {
+        "interval": 15
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/sensor/28CD79A90800004A/"
+    },
+    "response": {
+      "body": {
+        "result": null,
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": null}",
+      "status": 200
+    }
+  }
+}

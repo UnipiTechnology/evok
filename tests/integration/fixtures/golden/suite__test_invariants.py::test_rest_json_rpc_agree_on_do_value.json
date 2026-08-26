@@ -1,0 +1,108 @@
+{
+  "3152524087c28193": {
+    "request": {
+      "form": null,
+      "json": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "output_set",
+        "params": [
+          "1_01",
+          "1"
+        ]
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rpc"
+    },
+    "response": {
+      "body": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": 1
+      },
+      "raw_text": "{\"jsonrpc\": \"2.0\", \"id\": 1, \"result\": 1}",
+      "status": 200
+    }
+  },
+  "41cf5f6919193d42": {
+    "request": {
+      "form": null,
+      "json": {
+        "id": 2,
+        "jsonrpc": "2.0",
+        "method": "output_get",
+        "params": [
+          "1_01"
+        ]
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rpc"
+    },
+    "response": {
+      "body": {
+        "id": 2,
+        "jsonrpc": "2.0",
+        "result": [
+          1,
+          false
+        ]
+      },
+      "raw_text": "{\"jsonrpc\": \"2.0\", \"id\": 2, \"result\": [1, false]}",
+      "status": 200
+    }
+  },
+  "bb0cfcf8944dce11": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/do/1_01/"
+    },
+    "response": {
+      "body": {
+        "circuit": "1_01",
+        "dev": "do",
+        "mode": "Simple",
+        "modes": [
+          "Simple",
+          "PWM"
+        ],
+        "pending": false,
+        "pwm_duty": 0,
+        "pwm_freq": 39.0625,
+        "value": 1
+      },
+      "raw_text": "{\"dev\": \"do\", \"circuit\": \"1_01\", \"value\": 1, \"pending\": false, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_freq\": 39.0625, \"pwm_duty\": 0}",
+      "status": 200
+    }
+  },
+  "f391c72730d5d8bc": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/json/do/1_01/"
+    },
+    "response": {
+      "body": {
+        "circuit": "1_01",
+        "dev": "do",
+        "mode": "Simple",
+        "modes": [
+          "Simple",
+          "PWM"
+        ],
+        "pending": false,
+        "pwm_duty": 0,
+        "pwm_freq": 39.0625,
+        "value": 1
+      },
+      "raw_text": "{\"dev\": \"do\", \"circuit\": \"1_01\", \"value\": 1, \"pending\": false, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_freq\": 39.0625, \"pwm_duty\": 0}",
+      "status": 200
+    }
+  }
+}

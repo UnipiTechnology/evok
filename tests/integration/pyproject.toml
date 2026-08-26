@@ -1,0 +1,33 @@
+[project]
+name = "evok-integration-tests"
+version = "0.1.0"
+description = "Black-box integration & regression harness for the Evok API. Server-agnostic: validates externally observable behavior over HTTP/WS/RPC."
+requires-python = ">=3.13"
+dependencies = [
+    "httpx >=0.27",
+    "websockets >=12.0",
+    "pytest >=8.0",
+    "pytest-asyncio >=0.23",
+    "pyyaml >=6.0",
+    "jsonschema >=4.0",
+    "pymodbus >=3.5,<3.7",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["suite"]
+markers = [
+    "record: capture live responses into golden cassettes (run manually, not CI)",
+    "replay: serve assertions from cassettes (CI default)",
+    "live: run against a real running server",
+    "functional: mock-bus backed, no hardware",
+    "integration: requires real hardware / golden captures",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# Targeted rule set for the harness. Evok (legacy) is linted separately in CI
+# as a fallible advisory step and is NOT held to this config.
+select = ["E", "F", "W", "I", "UP", "B", "RUF", "ASYNC", "BLE", "SIM"]

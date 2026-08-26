@@ -1,0 +1,35 @@
+{
+  "31641379b82261b6": {
+    "request": {
+      "form": null,
+      "json": {
+        "id": 9,
+        "jsonrpc": "2.0",
+        "method": "owbus_list",
+        "params": [
+          "OWBUS"
+        ]
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rpc"
+    },
+    "response": {
+      "body": {
+        "id": 9,
+        "jsonrpc": "2.0",
+        "result": {
+          "DS18B20": [
+            "28.CD79A9080000.4A"
+          ],
+          "DS18S20": [],
+          "DS2408": [],
+          "DS2413": [],
+          "DS2438": []
+        }
+      },
+      "raw_text": "{\"jsonrpc\": \"2.0\", \"id\": 9, \"result\": {\"DS18S20\": [], \"DS18B20\": [\"28.CD79A9080000.4A\"], \"DS2438\": [], \"DS2408\": [], \"DS2413\": []}}",
+      "status": 200
+    }
+  }
+}

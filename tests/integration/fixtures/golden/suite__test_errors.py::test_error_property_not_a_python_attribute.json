@@ -1,0 +1,21 @@
+{
+  "a67e37e8ad8a51b2": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/ai/1_01/unit"
+    },
+    "response": {
+      "body": {
+        "errors": {
+          "AttributeError": "'AnalogInput' object has no attribute 'unit'"
+        },
+        "success": false
+      },
+      "raw_text": "{\"success\": false, \"errors\": {\"AttributeError\": \"'AnalogInput' object has no attribute 'unit'\"}}",
+      "status": 404
+    }
+  }
+}

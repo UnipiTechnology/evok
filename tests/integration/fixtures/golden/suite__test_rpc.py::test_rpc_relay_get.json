@@ -1,0 +1,27 @@
+{
+  "1d925a2e110fccfc": {
+    "request": {
+      "form": null,
+      "json": {
+        "id": 4,
+        "jsonrpc": "2.0",
+        "method": "relay_get",
+        "params": [
+          "2_01"
+        ]
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rpc"
+    },
+    "response": {
+      "body": {
+        "id": 4,
+        "jsonrpc": "2.0",
+        "result": 1
+      },
+      "raw_text": "{\"jsonrpc\": \"2.0\", \"id\": 4, \"result\": 1}",
+      "status": 200
+    }
+  }
+}

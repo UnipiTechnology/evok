@@ -1,0 +1,18 @@
+{
+  "a0e989c72119c042": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/di/2_01/value"
+    },
+    "response": {
+      "body": {
+        "value": 0
+      },
+      "raw_text": "{\"value\": 0}",
+      "status": 200
+    }
+  }
+}

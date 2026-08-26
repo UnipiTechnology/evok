@@ -1,0 +1,37 @@
+{
+  "88664d0d67783ff0": {
+    "request": {
+      "form": null,
+      "json": {
+        "debounce": 50
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/di/2_01/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "2_01",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"di\", \"circuit\": \"2_01\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}}",
+      "status": 200
+    }
+  }
+}

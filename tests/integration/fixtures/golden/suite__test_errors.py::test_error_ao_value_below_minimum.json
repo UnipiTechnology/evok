@@ -1,0 +1,23 @@
+{
+  "2be27f6e3c5f52a2": {
+    "request": {
+      "form": null,
+      "json": {
+        "value": -1
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/json/ao/1_01/"
+    },
+    "response": {
+      "body": {
+        "errors": {
+          "ValidationError": "-1 is less than the minimum of 0\n\nFailed validating 'minimum' in schema['properties']['value']:\n    {'minimum': 0, 'type': ['string', 'number']}\n\nOn instance['value']:\n    -1"
+        },
+        "success": false
+      },
+      "raw_text": "{\"success\": false, \"errors\": {\"ValidationError\": \"-1 is less than the minimum of 0\\n\\nFailed validating 'minimum' in schema['properties']['value']:\\n    {'minimum': 0, 'type': ['string', 'number']}\\n\\nOn instance['value']:\\n    -1\"}}",
+      "status": 404
+    }
+  }
+}
