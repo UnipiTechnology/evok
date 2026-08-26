@@ -437,8 +437,15 @@ def main():
     arg_parser = argparse.ArgumentParser(prog='evok', description='')
     arg_parser.add_argument('-d', '--debug', action='store_true', default=False, help='Debug logging')
     arg_parser.add_argument('-v', '--version', action='store_true', default=False, help='Print evok version')
+    arg_parser.add_argument('-c', '--config-dir', default=None, help='Path to evok config directory (default: /etc/evok)')
 
     args = arg_parser.parse_args()
+
+    if args.config_dir:
+        global config_path
+        config_path = args.config_dir
+        global evok_config
+        evok_config = config.EvokConfig(config_path)
 
     if args.version:
         print(evok_version)
