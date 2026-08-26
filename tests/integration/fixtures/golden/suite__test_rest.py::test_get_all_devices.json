@@ -1,0 +1,515 @@
+{
+  "2ae84c3cd88503d9": {
+    "request": {
+      "form": {
+        "value": "0"
+      },
+      "json": null,
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/ro/2_01/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "2_01",
+          "dev": "ro",
+          "value": 0
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"ro\", \"circuit\": \"2_01\", \"value\": 0}}",
+      "status": 200
+    }
+  },
+  "890a96442d0cdb1d": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/all/"
+    },
+    "response": {
+      "body": [
+        {
+          "circuit": "2_01",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        {
+          "circuit": "2_02",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        {
+          "circuit": "2_03",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        {
+          "circuit": "2_04",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        {
+          "circuit": "2_05",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        {
+          "circuit": "2_06",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        {
+          "circuit": "2_07",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        {
+          "circuit": "2_08",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        {
+          "circuit": "1_01",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        {
+          "circuit": "1_02",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        {
+          "circuit": "1_03",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        {
+          "circuit": "1_04",
+          "counter": 0,
+          "counter_mode": "Enabled",
+          "counter_modes": [
+            "Enabled",
+            "Disabled"
+          ],
+          "debounce": 50,
+          "dev": "di",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "DirectSwitch"
+          ],
+          "value": 0
+        },
+        {
+          "circuit": "2_01",
+          "dev": "ro",
+          "value": 0
+        },
+        {
+          "circuit": "2_02",
+          "dev": "ro",
+          "value": 0
+        },
+        {
+          "circuit": "2_03",
+          "dev": "ro",
+          "value": 0
+        },
+        {
+          "circuit": "2_04",
+          "dev": "ro",
+          "value": 0
+        },
+        {
+          "circuit": "2_05",
+          "dev": "ro",
+          "value": 0
+        },
+        {
+          "circuit": "2_06",
+          "dev": "ro",
+          "value": 0
+        },
+        {
+          "circuit": "2_07",
+          "dev": "ro",
+          "value": 0
+        },
+        {
+          "circuit": "2_08",
+          "dev": "ro",
+          "value": 0
+        },
+        {
+          "circuit": "1_01",
+          "dev": "do",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "PWM"
+          ],
+          "pending": false,
+          "pwm_duty": 0,
+          "pwm_freq": 39.0625,
+          "value": 0
+        },
+        {
+          "circuit": "1_02",
+          "dev": "do",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "PWM"
+          ],
+          "pending": false,
+          "pwm_duty": 0,
+          "pwm_freq": 39.0625,
+          "value": 0
+        },
+        {
+          "circuit": "1_03",
+          "dev": "do",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "PWM"
+          ],
+          "pending": false,
+          "pwm_duty": 0,
+          "pwm_freq": 39.0625,
+          "value": 0
+        },
+        {
+          "circuit": "1_04",
+          "dev": "do",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "PWM"
+          ],
+          "pending": false,
+          "pwm_duty": 0,
+          "pwm_freq": 39.0625,
+          "value": 0
+        },
+        {
+          "circuit": "1_01",
+          "dev": "ai",
+          "mode": "Voltage",
+          "modes": {
+            "Current": {
+              "range": [
+                0,
+                20
+              ],
+              "unit": "mA",
+              "value": 1
+            },
+            "Voltage": {
+              "range": [
+                0,
+                10
+              ],
+              "unit": "V",
+              "value": 0
+            }
+          },
+          "range": [
+            0,
+            10
+          ],
+          "unit": "V",
+          "value": 0.01
+        },
+        {
+          "circuit": "1_01",
+          "dev": "ao",
+          "mode": "Voltage",
+          "modes": {
+            "Current": {
+              "range": [
+                0,
+                20
+              ],
+              "unit": "mA",
+              "value": 1
+            },
+            "Resistance": {
+              "range": [
+                0,
+                2000
+              ],
+              "unit": "Ohm",
+              "value": 2
+            },
+            "Voltage": {
+              "range": [
+                0,
+                10
+              ],
+              "unit": "V",
+              "value": 0
+            }
+          },
+          "unit": "V",
+          "value": 0.0
+        },
+        {
+          "address": "28.CD79A9080000.4A",
+          "circuit": "28CD79A90800004A",
+          "dev": "temp",
+          "interval": 10,
+          "lost": false,
+          "time": 196.699964675,
+          "type": "DS18B20",
+          "value": 26.3
+        },
+        {
+          "circuit": "1_01",
+          "dev": "led",
+          "value": 1
+        },
+        {
+          "circuit": "1_02",
+          "dev": "led",
+          "value": 0
+        },
+        {
+          "circuit": "1_03",
+          "dev": "led",
+          "value": 0
+        },
+        {
+          "circuit": "1_04",
+          "dev": "led",
+          "value": 0
+        },
+        {
+          "circuit": "2_01",
+          "dev": "wd",
+          "nv_save": 0,
+          "timeout": 5000,
+          "value": 0,
+          "was_wd_reset": 0
+        },
+        {
+          "circuit": "1_01",
+          "dev": "wd",
+          "nv_save": 0,
+          "timeout": 5000,
+          "value": 0,
+          "was_wd_reset": 0
+        },
+        {
+          "circuit": "1",
+          "dev": "modbus_slave",
+          "last_comm": 0.030556917190551758,
+          "modbus_spec": "127.0.0.1",
+          "modbus_type": "TCP",
+          "scan_interval": 0.02,
+          "slave_id": 1
+        },
+        {
+          "circuit": "2",
+          "dev": "modbus_slave",
+          "last_comm": 0.020833969116210938,
+          "modbus_spec": "127.0.0.1",
+          "modbus_type": "TCP",
+          "scan_interval": 0.02,
+          "slave_id": 2
+        },
+        {
+          "circuit": "1",
+          "dev": "owpower",
+          "value": 0
+        },
+        {
+          "bus": "OWFS",
+          "circuit": "OWBUS",
+          "dev": "owbus",
+          "do_reset": false,
+          "do_scan": false,
+          "interval": 10,
+          "scan_interval": 60
+        },
+        {
+          "board_count": 2,
+          "circuit": "M103",
+          "dev": "device_info",
+          "family": "Neuron",
+          "model": "M103",
+          "sn": 870
+        }
+      ],
+      "raw_text": "[{\"dev\": \"di\", \"circuit\": \"2_01\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}, {\"dev\": \"di\", \"circuit\": \"2_02\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}, {\"dev\": \"di\", \"circuit\": \"2_03\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}, {\"dev\": \"di\", \"circuit\": \"2_04\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}, {\"dev\": \"di\", \"circuit\": \"2_05\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}, {\"dev\": \"di\", \"circuit\": \"2_06\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}, {\"dev\": \"di\", \"circuit\": \"2_07\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}, {\"dev\": \"di\", \"circuit\": \"2_08\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}, {\"dev\": \"di\", \"circuit\": \"1_01\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}, {\"dev\": \"di\", \"circuit\": \"1_02\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}, {\"dev\": \"di\", \"circuit\": \"1_03\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}, {\"dev\": \"di\", \"circuit\": \"1_04\", \"value\": 0, \"debounce\": 50, \"counter_modes\": [\"Enabled\", \"Disabled\"], \"counter_mode\": \"Enabled\", \"counter\": 0, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"DirectSwitch\"]}, {\"dev\": \"ro\", \"circuit\": \"2_01\", \"value\": 0}, {\"dev\": \"ro\", \"circuit\": \"2_02\", \"value\": 0}, {\"dev\": \"ro\", \"circuit\": \"2_03\", \"value\": 0}, {\"dev\": \"ro\", \"circuit\": \"2_04\", \"value\": 0}, {\"dev\": \"ro\", \"circuit\": \"2_05\", \"value\": 0}, {\"dev\": \"ro\", \"circuit\": \"2_06\", \"value\": 0}, {\"dev\": \"ro\", \"circuit\": \"2_07\", \"value\": 0}, {\"dev\": \"ro\", \"circuit\": \"2_08\", \"value\": 0}, {\"dev\": \"do\", \"circuit\": \"1_01\", \"value\": 0, \"pending\": false, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_freq\": 39.0625, \"pwm_duty\": 0}, {\"dev\": \"do\", \"circuit\": \"1_02\", \"value\": 0, \"pending\": false, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_freq\": 39.0625, \"pwm_duty\": 0}, {\"dev\": \"do\", \"circuit\": \"1_03\", \"value\": 0, \"pending\": false, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_freq\": 39.0625, \"pwm_duty\": 0}, {\"dev\": \"do\", \"circuit\": \"1_04\", \"value\": 0, \"pending\": false, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_freq\": 39.0625, \"pwm_duty\": 0}, {\"dev\": \"ai\", \"circuit\": \"1_01\", \"value\": 0.01, \"unit\": \"V\", \"mode\": \"Voltage\", \"modes\": {\"Voltage\": {\"value\": 0, \"unit\": \"V\", \"range\": [0, 10]}, \"Current\": {\"value\": 1, \"unit\": \"mA\", \"range\": [0, 20]}}, \"range\": [0, 10]}, {\"dev\": \"ao\", \"circuit\": \"1_01\", \"mode\": \"Voltage\", \"modes\": {\"Voltage\": {\"value\": 0, \"unit\": \"V\", \"range\": [0, 10]}, \"Current\": {\"value\": 1, \"unit\": \"mA\", \"range\": [0, 20]}, \"Resistance\": {\"value\": 2, \"unit\": \"Ohm\", \"range\": [0, 2000]}}, \"unit\": \"V\", \"value\": 0.0}, {\"dev\": \"temp\", \"circuit\": \"28CD79A90800004A\", \"address\": \"28.CD79A9080000.4A\", \"value\": 26.3, \"lost\": false, \"time\": 196.699964675, \"interval\": 10, \"type\": \"DS18B20\"}, {\"dev\": \"led\", \"circuit\": \"1_01\", \"value\": 1}, {\"dev\": \"led\", \"circuit\": \"1_02\", \"value\": 0}, {\"dev\": \"led\", \"circuit\": \"1_03\", \"value\": 0}, {\"dev\": \"led\", \"circuit\": \"1_04\", \"value\": 0}, {\"dev\": \"wd\", \"circuit\": \"2_01\", \"value\": 0, \"timeout\": 5000, \"was_wd_reset\": 0, \"nv_save\": 0}, {\"dev\": \"wd\", \"circuit\": \"1_01\", \"value\": 0, \"timeout\": 5000, \"was_wd_reset\": 0, \"nv_save\": 0}, {\"dev\": \"modbus_slave\", \"circuit\": \"1\", \"last_comm\": 0.030556917190551758, \"slave_id\": 1, \"modbus_type\": \"TCP\", \"modbus_spec\": \"127.0.0.1\", \"scan_interval\": 0.02}, {\"dev\": \"modbus_slave\", \"circuit\": \"2\", \"last_comm\": 0.020833969116210938, \"slave_id\": 2, \"modbus_type\": \"TCP\", \"modbus_spec\": \"127.0.0.1\", \"scan_interval\": 0.02}, {\"dev\": \"owpower\", \"circuit\": \"1\", \"value\": 0}, {\"dev\": \"owbus\", \"circuit\": \"OWBUS\", \"bus\": \"OWFS\", \"scan_interval\": 60, \"interval\": 10, \"do_scan\": false, \"do_reset\": false}, {\"dev\": \"device_info\", \"family\": \"Neuron\", \"model\": \"M103\", \"sn\": 870, \"board_count\": 2, \"circuit\": \"M103\"}]",
+      "status": 200
+    }
+  },
+  "e3be3f9b1c91c2d6": {
+    "request": {
+      "form": {
+        "value": "0"
+      },
+      "json": null,
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/do/1_01/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "1_01",
+          "dev": "do",
+          "mode": "Simple",
+          "modes": [
+            "Simple",
+            "PWM"
+          ],
+          "pending": false,
+          "pwm_duty": 0,
+          "pwm_freq": 39.0625,
+          "value": 0
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"do\", \"circuit\": \"1_01\", \"value\": 0, \"pending\": false, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_freq\": 39.0625, \"pwm_duty\": 0}}",
+      "status": 200
+    }
+  }
+}

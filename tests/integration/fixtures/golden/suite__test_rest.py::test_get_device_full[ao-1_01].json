@@ -1,0 +1,99 @@
+{
+  "5e004e7faa9b527e": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/ao/1_01/"
+    },
+    "response": {
+      "body": {
+        "circuit": "1_01",
+        "dev": "ao",
+        "mode": "Voltage",
+        "modes": {
+          "Current": {
+            "range": [
+              0,
+              20
+            ],
+            "unit": "mA",
+            "value": 1
+          },
+          "Resistance": {
+            "range": [
+              0,
+              2000
+            ],
+            "unit": "Ohm",
+            "value": 2
+          },
+          "Voltage": {
+            "range": [
+              0,
+              10
+            ],
+            "unit": "V",
+            "value": 0
+          }
+        },
+        "unit": "V",
+        "value": 0.0
+      },
+      "raw_text": "{\"dev\": \"ao\", \"circuit\": \"1_01\", \"mode\": \"Voltage\", \"modes\": {\"Voltage\": {\"value\": 0, \"unit\": \"V\", \"range\": [0, 10]}, \"Current\": {\"value\": 1, \"unit\": \"mA\", \"range\": [0, 20]}, \"Resistance\": {\"value\": 2, \"unit\": \"Ohm\", \"range\": [0, 2000]}}, \"unit\": \"V\", \"value\": 0.0}",
+      "status": 200
+    }
+  },
+  "be96eb029815b181": {
+    "request": {
+      "form": {
+        "value": "0"
+      },
+      "json": null,
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/ao/1_01/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "1_01",
+          "dev": "ao",
+          "mode": "Voltage",
+          "modes": {
+            "Current": {
+              "range": [
+                0,
+                20
+              ],
+              "unit": "mA",
+              "value": 1
+            },
+            "Resistance": {
+              "range": [
+                0,
+                2000
+              ],
+              "unit": "Ohm",
+              "value": 2
+            },
+            "Voltage": {
+              "range": [
+                0,
+                10
+              ],
+              "unit": "V",
+              "value": 0
+            }
+          },
+          "unit": "V",
+          "value": 0.0
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"ao\", \"circuit\": \"1_01\", \"mode\": \"Voltage\", \"modes\": {\"Voltage\": {\"value\": 0, \"unit\": \"V\", \"range\": [0, 10]}, \"Current\": {\"value\": 1, \"unit\": \"mA\", \"range\": [0, 20]}, \"Resistance\": {\"value\": 2, \"unit\": \"Ohm\", \"range\": [0, 2000]}}, \"unit\": \"V\", \"value\": 0.0}}",
+      "status": 200
+    }
+  }
+}

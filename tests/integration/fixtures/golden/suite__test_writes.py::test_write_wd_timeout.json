@@ -1,0 +1,28 @@
+{
+  "f612dc057b03cbb0": {
+    "request": {
+      "form": null,
+      "json": {
+        "timeout": 5000
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/wd/2_01/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "2_01",
+          "dev": "wd",
+          "nv_save": 0,
+          "timeout": 5000,
+          "value": 0,
+          "was_wd_reset": 0
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"wd\", \"circuit\": \"2_01\", \"value\": 0, \"timeout\": 5000, \"was_wd_reset\": 0, \"nv_save\": 0}}",
+      "status": 200
+    }
+  }
+}

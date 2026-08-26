@@ -1,0 +1,18 @@
+{
+  "43fe2a579b1bbb8f": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/do/1_01/mode"
+    },
+    "response": {
+      "body": {
+        "mode": "Simple"
+      },
+      "raw_text": "{\"mode\": \"Simple\"}",
+      "status": 200
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "031aeae4c84537c9": {
+    "request": {
+      "form": null,
+      "json": {
+        "interval": 10,
+        "scan_interval": 60
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/owbus/OWBUS/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "bus": "OWFS",
+          "circuit": "OWBUS",
+          "dev": "owbus",
+          "do_reset": false,
+          "do_scan": false,
+          "interval": 10,
+          "scan_interval": 60
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"owbus\", \"circuit\": \"OWBUS\", \"bus\": \"OWFS\", \"scan_interval\": 60, \"interval\": 10, \"do_scan\": false, \"do_reset\": false}}",
+      "status": 200
+    }
+  }
+}

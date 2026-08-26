@@ -1,0 +1,21 @@
+{
+  "232abd557f285d4a": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/ro/2_01/_internal"
+    },
+    "response": {
+      "body": {
+        "errors": {
+          "Exception": "Invalid property name"
+        },
+        "success": false
+      },
+      "raw_text": "{\"success\": false, \"errors\": {\"Exception\": \"Invalid property name\"}}",
+      "status": 404
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "d782773b74e1232f": {
+    "request": {
+      "form": {
+        "value": "0"
+      },
+      "json": null,
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/ro/2_01/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "2_01",
+          "dev": "ro",
+          "value": 0
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"ro\", \"circuit\": \"2_01\", \"value\": 0}}",
+      "status": 200
+    }
+  },
+  "e64cf085e4a53cc9": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/json/ro/2_01/"
+    },
+    "response": {
+      "body": {
+        "circuit": "2_01",
+        "dev": "ro",
+        "value": 0
+      },
+      "raw_text": "{\"dev\": \"ro\", \"circuit\": \"2_01\", \"value\": 0}",
+      "status": 200
+    }
+  }
+}
