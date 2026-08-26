@@ -23,14 +23,30 @@ dependencies = [
     'pymodbus@git+https://github.com/martyy665/pymodbus@fix-tid-overflow',
     'pyserial == 3.5',
     'tornado == 6.3.3',
+    'tornado-jsonrpc2 == 0.5',
     'jsonschema == 2.6.0',
     'importlib_metadata == 7.1.0',
+    'pyyaml == 6.0.1',
     'asyncowfs@git+https://github.com/UniPiTechnology/asyncowfs'
 #    'asyncowfs@file:///home/unipi/packages/evok-internal/asyncowfs'
 ]
 
 [tool.setuptools]
 packages = ["evok"]
+
+# Prebuilt ARM wheels for Raspberry Pi. Used at install/export time for the
+# binary deps (PyYAML, tornado). The evok source repo resolves against the
+# default PyPI index via `uv lock`; the Debian builder re-injects this index
+# when generating a pip-compatible requirements.txt from uv.lock
+# (see evok-builder/build-before-script.sh):
+#   uv export --format requirements-txt \
+#     --extra-index-url https://www.piwheels.org/simple -o requirements.txt
+# The hand-maintained requirements.txt is superseded by uv.lock; this config
+# is the documented home for the piwheels index URL.
+[[tool.uv.index]]
+name = "piwheels"
+url = "https://www.piwheels.org/simple"
+explicit = true
 
 [project.scripts]
 evok = "evok.evok:main"
