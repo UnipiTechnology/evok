@@ -1,0 +1,21 @@
+# Expected device inventory for the reference board(s).
+# Extracted from Evok v3.0.6 on a Neuron M103 (2025-08-25) via GET /rest/all.
+
+reference: unipi-neuron-m103
+
+boards:
+  unipi-neuron-m103:
+    di:  ["2_01","2_02","2_03","2_04","2_05","2_06","2_07","2_08","1_01","1_02","1_03","1_04"]
+    ro:  ["2_01","2_02","2_03","2_04","2_05","2_06","2_07","2_08"]
+    do:  ["1_01","1_02","1_03","1_04"]
+    ai:  ["1_01"]
+    ao:  ["1_01"]
+    led: ["1_01","1_02","1_03","1_04"]
+    wd:  ["2_01","1_01"]
+    modbus_slave: ["1","2"]
+    owpower: ["1"]
+    owbus: ["OWBUS"]
+    device_info: ["M103"]
+    register: []
+    data_point: []
+    sensor: []

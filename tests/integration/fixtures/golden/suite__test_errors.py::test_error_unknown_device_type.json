@@ -1,0 +1,21 @@
+{
+  "2b6a09a1ece88277": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/nosuchdev/1/"
+    },
+    "response": {
+      "body": {
+        "errors": {
+          "KeyError": "'nosuchdev'"
+        },
+        "success": false
+      },
+      "raw_text": "{\"success\": false, \"errors\": {\"KeyError\": \"'nosuchdev'\"}}",
+      "status": 404
+    }
+  }
+}

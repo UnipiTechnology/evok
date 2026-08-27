@@ -1,0 +1,15 @@
+{
+  "d05decf06effff3e": {
+    "request": {
+      "kind": "ws",
+      "open_cmd": {
+        "cmd": "filter",
+        "devices": [
+          "do",
+          "ao"
+        ]
+      }
+    },
+    "stream": []
+  }
+}

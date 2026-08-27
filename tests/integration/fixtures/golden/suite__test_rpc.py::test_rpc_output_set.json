@@ -1,0 +1,28 @@
+{
+  "d94f18d88da529ce": {
+    "request": {
+      "form": null,
+      "json": {
+        "id": 5,
+        "jsonrpc": "2.0",
+        "method": "output_set",
+        "params": [
+          "1_01",
+          "1"
+        ]
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rpc"
+    },
+    "response": {
+      "body": {
+        "id": 5,
+        "jsonrpc": "2.0",
+        "result": 1
+      },
+      "raw_text": "{\"jsonrpc\": \"2.0\", \"id\": 5, \"result\": 1}",
+      "status": 200
+    }
+  }
+}

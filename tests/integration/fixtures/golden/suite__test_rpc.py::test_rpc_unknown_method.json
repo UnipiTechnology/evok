@@ -1,0 +1,30 @@
+{
+  "bb9e19c2300a020d": {
+    "request": {
+      "form": null,
+      "json": {
+        "id": 6,
+        "jsonrpc": "2.0",
+        "method": "nonexistent_method_xyz",
+        "params": [
+          "2_01"
+        ]
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rpc"
+    },
+    "response": {
+      "body": {
+        "error": {
+          "code": -32601,
+          "message": "Method not found: Method 'nonexistent_method_xyz' not found!"
+        },
+        "id": 6,
+        "jsonrpc": "2.0"
+      },
+      "raw_text": "{\"jsonrpc\": \"2.0\", \"id\": 6, \"error\": {\"code\": -32601, \"message\": \"Method not found: Method 'nonexistent_method_xyz' not found!\"}}",
+      "status": 200
+    }
+  }
+}

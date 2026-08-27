@@ -1,0 +1,874 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "device_types": {
+    "ai": {
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "BogusMode",
+              "Current",
+              "Voltage"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "circuit": {
+            "enum": [
+              "1_01"
+            ],
+            "type": "string"
+          },
+          "dev": {
+            "enum": [
+              "ai"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "Voltage"
+            ],
+            "type": "string"
+          },
+          "modes": {
+            "type": "object"
+          },
+          "range": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "unit": {
+            "enum": [
+              "V"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "maximum": 0.01,
+            "minimum": 0.01,
+            "type": "number"
+          }
+        },
+        "required": [
+          "circuit",
+          "dev",
+          "mode",
+          "modes",
+          "range",
+          "unit",
+          "value"
+        ],
+        "type": "object"
+      }
+    },
+    "ao": {
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "Current",
+              "Voltage"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "enum": [
+              -1,
+              0,
+              "0",
+              5
+            ],
+            "maximum": 5,
+            "minimum": -1,
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "circuit": {
+            "enum": [
+              "1_01"
+            ],
+            "type": "string"
+          },
+          "dev": {
+            "enum": [
+              "ao"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "Voltage"
+            ],
+            "type": "string"
+          },
+          "modes": {
+            "type": "object"
+          },
+          "unit": {
+            "enum": [
+              "V"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "maximum": 0.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "circuit",
+          "dev",
+          "mode",
+          "modes",
+          "unit",
+          "value"
+        ],
+        "type": "object"
+      }
+    },
+    "device_info": {
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "board_count": {
+            "enum": [
+              2
+            ],
+            "maximum": 2,
+            "minimum": 2,
+            "type": "integer"
+          },
+          "circuit": {
+            "enum": [
+              "M103"
+            ],
+            "type": "string"
+          },
+          "dev": {
+            "enum": [
+              "device_info"
+            ],
+            "type": "string"
+          },
+          "family": {
+            "enum": [
+              "Neuron"
+            ],
+            "type": "string"
+          },
+          "model": {
+            "enum": [
+              "M103"
+            ],
+            "type": "string"
+          },
+          "sn": {
+            "enum": [
+              870
+            ],
+            "maximum": 870,
+            "minimum": 870,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "board_count",
+          "circuit",
+          "dev",
+          "family",
+          "model",
+          "sn"
+        ],
+        "type": "object"
+      }
+    },
+    "di": {
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "counter_mode": {
+            "enum": [
+              "Disabled",
+              "Enabled"
+            ],
+            "type": "string"
+          },
+          "debounce": {
+            "enum": [
+              50
+            ],
+            "maximum": 50,
+            "minimum": 50,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "circuit": {
+            "type": "string"
+          },
+          "counter": {
+            "enum": [
+              0
+            ],
+            "maximum": 0,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "counter_mode": {
+            "enum": [
+              "Enabled"
+            ],
+            "type": "string"
+          },
+          "counter_modes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "debounce": {
+            "enum": [
+              50
+            ],
+            "maximum": 50,
+            "minimum": 50,
+            "type": "integer"
+          },
+          "dev": {
+            "enum": [
+              "di"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "Simple"
+            ],
+            "type": "string"
+          },
+          "modes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "value": {
+            "enum": [
+              0
+            ],
+            "maximum": 0,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "circuit",
+          "counter",
+          "counter_mode",
+          "counter_modes",
+          "debounce",
+          "dev",
+          "mode",
+          "modes",
+          "value"
+        ],
+        "type": "object"
+      }
+    },
+    "do": {
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "enum": [
+              "0",
+              1
+            ],
+            "maximum": 1,
+            "minimum": 1,
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "circuit": {
+            "enum": [
+              "1_01",
+              "1_02",
+              "1_03",
+              "1_04"
+            ],
+            "type": "string"
+          },
+          "dev": {
+            "enum": [
+              "do"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "Simple"
+            ],
+            "type": "string"
+          },
+          "modes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "pwm_duty": {
+            "enum": [
+              0
+            ],
+            "maximum": 0,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pwm_freq": {
+            "maximum": 39.0625,
+            "minimum": 39.0625,
+            "type": "number"
+          },
+          "value": {
+            "enum": [
+              0,
+              1
+            ],
+            "maximum": 1,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "circuit",
+          "dev",
+          "mode",
+          "modes",
+          "pending",
+          "pwm_duty",
+          "pwm_freq",
+          "value"
+        ],
+        "type": "object"
+      }
+    },
+    "led": {
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "enum": [
+              "1"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "circuit": {
+            "enum": [
+              "1_01",
+              "1_02",
+              "1_03",
+              "1_04"
+            ],
+            "type": "string"
+          },
+          "dev": {
+            "enum": [
+              "led"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "enum": [
+              0,
+              1
+            ],
+            "maximum": 1,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "circuit",
+          "dev",
+          "value"
+        ],
+        "type": "object"
+      }
+    },
+    "modbus_slave": {
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "circuit": {
+            "enum": [
+              "1",
+              "2"
+            ],
+            "type": "string"
+          },
+          "dev": {
+            "enum": [
+              "modbus_slave"
+            ],
+            "type": "string"
+          },
+          "last_comm": {
+            "maximum": 0.03374648094177246,
+            "minimum": 0.005158662796020508,
+            "type": "number"
+          },
+          "modbus_spec": {
+            "enum": [
+              "127.0.0.1"
+            ],
+            "type": "string"
+          },
+          "modbus_type": {
+            "enum": [
+              "TCP"
+            ],
+            "type": "string"
+          },
+          "scan_interval": {
+            "maximum": 0.02,
+            "minimum": 0.02,
+            "type": "number"
+          },
+          "slave_id": {
+            "enum": [
+              1,
+              2
+            ],
+            "maximum": 2,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "circuit",
+          "dev",
+          "last_comm",
+          "modbus_spec",
+          "modbus_type",
+          "scan_interval",
+          "slave_id"
+        ],
+        "type": "object"
+      }
+    },
+    "owbus": {
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "interval": {
+            "enum": [
+              10
+            ],
+            "maximum": 10,
+            "minimum": 10,
+            "type": "integer"
+          },
+          "scan_interval": {
+            "enum": [
+              60
+            ],
+            "maximum": 60,
+            "minimum": 60,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "interval",
+          "scan_interval"
+        ],
+        "type": "object"
+      },
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "bus": {
+            "enum": [
+              "OWFS"
+            ],
+            "type": "string"
+          },
+          "circuit": {
+            "enum": [
+              "OWBUS"
+            ],
+            "type": "string"
+          },
+          "dev": {
+            "enum": [
+              "owbus"
+            ],
+            "type": "string"
+          },
+          "do_reset": {
+            "type": "boolean"
+          },
+          "do_scan": {
+            "type": "boolean"
+          },
+          "interval": {
+            "enum": [
+              10
+            ],
+            "maximum": 10,
+            "minimum": 10,
+            "type": "integer"
+          },
+          "scan_interval": {
+            "enum": [
+              60
+            ],
+            "maximum": 60,
+            "minimum": 60,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bus",
+          "circuit",
+          "dev",
+          "do_reset",
+          "do_scan",
+          "interval",
+          "scan_interval"
+        ],
+        "type": "object"
+      }
+    },
+    "owpower": {
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "enum": [
+              0,
+              1
+            ],
+            "maximum": 1,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "circuit": {
+            "enum": [
+              "1"
+            ],
+            "type": "string"
+          },
+          "dev": {
+            "enum": [
+              "owpower"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "enum": [
+              0
+            ],
+            "maximum": 0,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "circuit",
+          "dev",
+          "value"
+        ],
+        "type": "object"
+      }
+    },
+    "ro": {
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "enum": [
+              "0",
+              "1"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "circuit": {
+            "enum": [
+              "2_01",
+              "2_02",
+              "2_03",
+              "2_04",
+              "2_05",
+              "2_06",
+              "2_07",
+              "2_08"
+            ],
+            "type": "string"
+          },
+          "dev": {
+            "enum": [
+              "ro"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "enum": [
+              0,
+              1
+            ],
+            "maximum": 1,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "circuit",
+          "dev",
+          "value"
+        ],
+        "type": "object"
+      }
+    },
+    "sensor": {
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "interval": {
+            "enum": [
+              10,
+              15
+            ],
+            "maximum": 15,
+            "minimum": 10,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "interval"
+        ],
+        "type": "object"
+      }
+    },
+    "temp": {
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "address": {
+            "enum": [
+              "28.CD79A9080000.4A"
+            ],
+            "type": "string"
+          },
+          "circuit": {
+            "enum": [
+              "28CD79A90800004A"
+            ],
+            "type": "string"
+          },
+          "dev": {
+            "enum": [
+              "temp"
+            ],
+            "type": "string"
+          },
+          "interval": {
+            "enum": [
+              10
+            ],
+            "maximum": 10,
+            "minimum": 10,
+            "type": "integer"
+          },
+          "lost": {
+            "type": "boolean"
+          },
+          "time": {
+            "maximum": 196.699964675,
+            "minimum": 196.699964675,
+            "type": "number"
+          },
+          "type": {
+            "enum": [
+              "DS18B20"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "maximum": 26.3,
+            "minimum": 26.3,
+            "type": "number"
+          }
+        },
+        "required": [
+          "address",
+          "circuit",
+          "dev",
+          "interval",
+          "lost",
+          "time",
+          "type",
+          "value"
+        ],
+        "type": "object"
+      }
+    },
+    "wd": {
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "timeout": {
+            "enum": [
+              5000
+            ],
+            "maximum": 5000,
+            "minimum": 5000,
+            "type": "integer"
+          },
+          "value": {
+            "enum": [
+              0
+            ],
+            "maximum": 0,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "circuit": {
+            "enum": [
+              "1_01",
+              "2_01"
+            ],
+            "type": "string"
+          },
+          "dev": {
+            "enum": [
+              "wd"
+            ],
+            "type": "string"
+          },
+          "nv_save": {
+            "enum": [
+              0
+            ],
+            "maximum": 0,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "timeout": {
+            "enum": [
+              5000
+            ],
+            "maximum": 5000,
+            "minimum": 5000,
+            "type": "integer"
+          },
+          "value": {
+            "enum": [
+              0
+            ],
+            "maximum": 0,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "was_wd_reset": {
+            "enum": [
+              0
+            ],
+            "maximum": 0,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "circuit",
+          "dev",
+          "nv_save",
+          "timeout",
+          "value",
+          "was_wd_reset"
+        ],
+        "type": "object"
+      }
+    }
+  }
+}

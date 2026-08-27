@@ -1,0 +1,78 @@
+name: lint
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    paths:
+      - 'tests/integration/**'
+      - 'evok/**'
+      - '.github/workflows/lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  harness-checks:
+    name: harness lint & format
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tests/integration
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'tests/integration/uv.lock'
+
+      - name: uv.lock is up to date
+        run: uv lock --check
+
+      - name: Project builds (sync)
+        run: uv sync --frozen
+
+      - name: ruff check (harness)
+        run: uvx ruff check .
+
+      - name: ruff format --check (harness)
+        run: uvx ruff format --check .
+
+  evok-check:
+    name: evok lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+
+      - name: ruff check (evok, advisory)
+        # Legacy code with known debt. ::error annotations surface on files;
+        # The sed strips the workspace prefix so GitHub links annotations to
+        # repo-relative files (ruff emits absolute paths).
+        run: |
+          set -o pipefail
+          uvx ruff check --output-format=github evok/ 2>&1 \
+            | sed "s#file=$GITHUB_WORKSPACE/#file=#g"
+
+      - name: ruff format --check (evok, advisory)
+        run: |
+          uvx ruff format --check evok/ 2>&1
+
+  evok-format:
+    name: evok format check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+
+      - name: ruff format --check (evok, advisory)
+        run: |
+          uvx ruff format --check evok/ 2>&1

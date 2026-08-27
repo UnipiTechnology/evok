@@ -4,3 +4,10 @@ evok/Makefile
 .idea/
 .venv
 venv/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+
+# mockbus launcher generated runtime config
+/tests/integration/mockbus/run/
+
