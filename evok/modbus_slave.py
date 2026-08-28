@@ -39,10 +39,11 @@ class ModbusCacheMap(object):
         self.modbus_slave: ModbusSlave = modbus_slave
         self.sem = Semaphore(1)
         self.frequency = {}
-        self.initial_read = True
+        self._initialized = False
         for m_reg_group in self.modbus_reg_map:
             self.frequency[m_reg_group['start_reg']] = 10000001  # frequency less than 1/10 million are not read on start
             m_reg_group['values'] = [None for i in range(m_reg_group['count'])]
+            m_reg_group['initialised'] = False
 
     def __get_reg_group(self, index: int, is_input: bool):
         group = None
@@ -81,8 +82,8 @@ class ModbusCacheMap(object):
             group[group_index + i] = val.registers[i]
         return val.registers
 
-    async def do_scan(self, slave=0, initial=False) -> bool:
-        if initial:
+    async def do_scan(self, slave=0) -> bool:
+        if not self._initialized:
             await self.sem.acquire()
         changeset = []
 
@@ -105,16 +106,19 @@ class ModbusCacheMap(object):
                         m_reg_group['values'] = vals.registers
 
                         # call force update callbacks in registered devices and check differences
-                        for device in self.modbus_slave.eventable_devices:
-                            try:
-                                if await device.check_new_data() is True:
-                                    changeset.append(device)
-                            except Exception as E:
-                                m = (f"Error while checking new data in device '{device.devtype}"
-                                     f"_{device.circuit}': {E}")
-                                logger.error(m)
-                                if logger.level == logging.DEBUG:
-                                    traceback.print_exc()
+                        if self._initialized:
+                            for device in self.modbus_slave.eventable_devices:
+                                try:
+                                    if await device.check_new_data() is True:
+                                        changeset.append(device)
+                                except Exception as E:
+                                    m = (f"Error while checking new data in device '{device.devtype}"
+                                         f"_{device.circuit}': {E}")
+                                    logger.error(m)
+                                    if logger.level == logging.DEBUG:
+                                        traceback.print_exc()
+                        else:
+                            m_reg_group['initialised'] = True
 
                         # reset communication flags
                         self.last_comm_time = time.time()
@@ -127,7 +131,8 @@ class ModbusCacheMap(object):
             proxy = Proxy(set(changeset))
             # print(f"changeset: {changeset}")
             devents.status(proxy)
-        if initial:
+        if not self._initialized:
+            self._initialized = all([m['initialised'] for m in self.modbus_reg_map])
             self.sem.release()
         return scanned
 
@@ -178,7 +183,7 @@ class ModbusSlave(object):
 
     def switch_to_async(self, loop: IOLoop):
         self.loop = loop
-        loop.add_callback(lambda: self.readboards())
+        self.readboards()
 
     async def set(self, print_log=None):
         if print_log is not None and print_log != 0:
@@ -187,15 +192,15 @@ class ModbusSlave(object):
         else:
             return ""
 
-    async def readboards(self):
-        logger.info(f"Initial reading the Modbus board on Modbus address {self.modbus_address}\t({self.circuit})")
+    def readboards(self):
+        logger.info(f"Initialing Modbus board on Modbus address {self.modbus_address}\t({self.circuit})")
         self.boards = list()
         try:
             if self.device_model not in self.hw_dict.definitions:
                 raise KeyError(f"readboards: Unsupported device model {self.device_model}! (check HW definitions)")
             self.hw_board_dict = self.hw_dict.definitions[self.device_model]
             board = Board(self.evok_config, self.circuit, self.modbus_address, self)
-            await board.parse_definition(self.hw_dict)
+            board.parse_definition(self.hw_dict)
             self.boards.append(board)
         except ConnectionException as E:
             logger.error(f"No board detected on Modbus {self.modbus_address}\t({type(E).__name__}:{E})")
@@ -295,16 +300,10 @@ class Board(object):
             Devices.set_alias(alias, self)
         return await self.full()
 
-    async def initialise_cache(self, cache_definition):
+    def initialise_cache(self, cache_definition):
         if 'modbus_register_blocks' in cache_definition:
             if self.modbus_slave.modbus_cache_map is None:
                 self.modbus_slave.modbus_cache_map = ModbusCacheMap(cache_definition['modbus_register_blocks'], self.modbus_slave)
-                await self.modbus_slave.modbus_cache_map.do_scan(initial=True, slave=self.modbus_address)
-                await self.modbus_slave.modbus_cache_map.sem.acquire()
-                self.modbus_slave.modbus_cache_map.sem.release()
-            else:
-                await self.modbus_slave.modbus_cache_map.sem.acquire()
-                self.modbus_slave.modbus_cache_map.sem.release()
         else:
             raise Exception("HW Definition %s requires Modbus register blocks to be specified" % cache_definition['type'])
 
@@ -508,12 +507,12 @@ class Board(object):
         else:
             logging.warning("Unknown feature: " + str(m_feature['type']) + " at board: " + str(self.major_group))
 
-    async def parse_definition(self, hw_dict):
+    def parse_definition(self, hw_dict):
         try:
             for defin_name, defin in hw_dict.definitions.items():
                 if defin and (self.modbus_slave.device_model == defin_name):
-                    await self.initialise_cache(defin)
                     for m_feature in defin['modbus_features']:
+                        self.initialise_cache(defin)
                         self.parse_feature(m_feature)
                     return
             logging.error(f"Not found type '{self.modbus_slave.device_model}' in loaded hw-definitions.")
