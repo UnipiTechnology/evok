@@ -9,7 +9,8 @@ import tornado.ioloop
 from tornado_jsonrpc2 import JSONRPCHandler
 from tornado_jsonrpc2.exceptions import MethodNotFound, InvalidParams
 
-from .devices import *
+from .devices import SENSOR, OWBUS, DI, DO, RO, AI, AO
+from .devices import Devices, DeviceNotFound
 
 
 async def create_response(request, backend):

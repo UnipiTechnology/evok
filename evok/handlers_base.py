@@ -7,7 +7,10 @@ from .schemas import schemas
 import jsonschema
 import tornado
 
-from .devices import *
+from .devices import Devices
+from .devices import OWBUS, DEVICE_INFO, SENSOR, MODBUS_SLAVE, \
+                     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
+                     REGISTER, DATA_POINT
 from .log import logger
 
 SCHEMA_VALIDATE = True

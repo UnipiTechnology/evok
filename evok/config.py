@@ -1,14 +1,17 @@
 import os
 from typing import List, Dict, Union
 from tornado.ioloop import IOLoop
+import logging
+import traceback
 
 from .modbus_unipi import EvokModbusSerialClient, EvokModbusTcpClient
 from .modbus_slave import ModbusSlave
 from . import owdevice
 
 import yaml
-from .devices import *
-
+from .devices import Devices, Aliases
+from .devices import OWBUS, SERIALBUS, DEVICE_INFO, TCPBUS, SENSOR, MODBUS_SLAVE
+from .log import logger
 
 class EvokConfigError(Exception):
     pass
@@ -31,7 +34,7 @@ class HWDict:
         if paths is not None:
             scope.extend(paths)
         if scope is None or len(scope) == 0:
-            logger.warning(f"HWDict: no scope!")
+            logger.warning("HWDict: no scope!")
         else:
             for file_path in scope:
                 if file_path.endswith(".yaml") and os.path.isfile(file_path):
@@ -172,7 +175,7 @@ class EvokConfig:
 
     def get_api(self, name: str) -> dict:
         if name not in self.apis:
-            logging.warning(f"Api '{name}' not found")
+            logger.warning(f"Api '{name}' not found")
             return {}
         return self.apis[name]
 

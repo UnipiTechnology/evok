@@ -5,22 +5,26 @@
 from copy import copy, deepcopy
 import math
 import datetime
+import logging
+import traceback
 from math import sqrt
 from typing import Union
 
 from tornado.ioloop import IOLoop
-from pymodbus.client import AsyncModbusTcpClient, AsyncModbusSerialClient
+from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.pdu import ExceptionResponse
 from pymodbus.exceptions import ModbusIOException, ConnectionException
-from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
-from pymodbus.constants import Endian
+#from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
+#from pymodbus.constants import Endian
 from tornado.locks import Semaphore
 
-from .devices import *
+from .devices import Devices, devents
+from .devices import MODBUS_SLAVE, \
+                     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
+                     REGISTER, DATA_POINT, BOARD, NV_SAVE
 from .errors import ENoCacheRegister, ModbusSlaveError
 from .modbus_unipi import EvokModbusSerialClient, EvokModbusTcpClient
-from .log import *
-from . import config
+from .log import logger
 import time
 
 import subprocess
@@ -89,7 +93,8 @@ class ModbusCacheMap(object):
         scanned = False
         for m_reg_group in self.modbus_reg_map:
             m_reg_group: dict
-            if (self.frequency[m_reg_group['start_reg']] >= m_reg_group['frequency']) or (self.frequency[m_reg_group['start_reg']] == 0):    # only read once for every [frequency] cycles
+            if (self.frequency[m_reg_group['start_reg']] >= m_reg_group['frequency']) or \
+               (self.frequency[m_reg_group['start_reg']] == 0):    # only read once for every [frequency] cycles
                 vals = None
                 try:
                     # read values from modbus
@@ -682,7 +687,7 @@ class DigitalOutput:
                     else:
                         pwm_prescaler = round((1000 / pwm_freq) - 1)
                         if pwm_prescaler < 0:
-                            raise ValueError(f"Frequency out of range!")
+                            raise ValueError("Frequency out of range!")
                         self.pwm_freq = round(1000 / (1 + pwm_prescaler),1)
                         await self.arm.modbus_slave.client.write_register(self.pwmpresetreg, 2, slave=self.arm.modbus_address)
                         await self.arm.modbus_slave.client.write_register(self.pwmcustompresc, pwm_prescaler, slave=self.arm.modbus_address)
@@ -1595,7 +1600,7 @@ class AnalogOutput:
         if mode is not None and mode in self.modes and self.regmode is not None:
             mdata = self.modes[mode]
             if 'value' not in mdata:
-                raise ValueError(f"AnalogOutput: this device cant switch mode!")
+                raise ValueError("AnalogOutput: this device cant switch mode!")
             mvalue = int(mdata['value'])
             await self.arm.modbus_slave.client.write_register(self.regmode, mvalue, slave=self.arm.modbus_address)
 
@@ -1711,7 +1716,7 @@ class AnalogInput:
         if mode is not None and mode in self.modes:
             mdata = self.modes[mode]
             if 'value' not in mdata:
-                raise ValueError(f"AnalogInput: this device cant switch mode!")
+                raise ValueError("AnalogInput: this device cant switch mode!")
             mvalue = int(mdata['value'])
             await self.arm.modbus_slave.client.write_register(self.regmode, mvalue, slave=self.arm.modbus_address)
         return self.full()

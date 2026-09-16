@@ -31,7 +31,10 @@ import signal
 
 import json
 from . import config
-from .devices import *
+from .devices import DI, RO, AI, AO, SENSOR, MODBUS_SLAVE, \
+                     RUN, OWBUS, TCPBUS, SERIALBUS
+from .devices import Devices, devtype_altnames, devents
+from .devices import num_to_devtype_name
 
 # from tornadows import complextypes
 
@@ -45,7 +48,7 @@ evok_config = config.EvokConfig(config_path)
 try:
     evok_version = 'v' + version("evok")
 except PackageNotFoundError:
-    logger.error(f"Cannot detect evok version.")
+    logger.error("Cannot detect evok version.")
     evok_version = 'unknown'
 
 wh = None
