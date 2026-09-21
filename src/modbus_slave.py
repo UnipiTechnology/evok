@@ -11,11 +11,10 @@ from math import sqrt
 from typing import Union
 
 from tornado.ioloop import IOLoop
-from pymodbus.client import AsyncModbusTcpClient
+#from tmodbus import create_async_rtu_client, create_async_tcp_client
+from pymodbus.client import AsyncModbusTcpClient, ModbusBaseClient
 from pymodbus.pdu import ExceptionResponse
 from pymodbus.exceptions import ModbusIOException, ConnectionException
-#from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
-#from pymodbus.constants import Endian
 from tornado.locks import Semaphore
 
 from .devices import Devices, devents
@@ -76,9 +75,11 @@ class ModbusCacheMap(object):
 
         # read values from modbus
         if is_input:
-            val = await self.modbus_slave.client.read_input_registers(index, count, slave=slave)
+            val = await self.modbus_slave.client\
+                        .read_input_registers(index, count=count, device_id=slave)
         else:
-            val = await self.modbus_slave.client.read_holding_registers(index, count, slave=slave)
+            val = await self.modbus_slave.client \
+                        .read_holding_registers(index, count=count, device_id=slave)
 
         # update cache map
         for i in range(len(val.registers)):
@@ -99,9 +100,13 @@ class ModbusCacheMap(object):
                 try:
                     # read values from modbus
                     if 'type' in m_reg_group and m_reg_group['type'] == 'input':
-                        vals = await self.modbus_slave.client.read_input_registers(m_reg_group['start_reg'], m_reg_group['count'], slave=slave)
+                        vals = await self.modbus_slave.client \
+                                     .read_input_registers(m_reg_group['start_reg'],
+                                         count=m_reg_group['count'], device_id=slave)
                     else:
-                        vals = await self.modbus_slave.client.read_holding_registers(m_reg_group['start_reg'], m_reg_group['count'], slave=slave)
+                        vals = await self.modbus_slave.client \
+                                     .read_holding_registers(m_reg_group['start_reg'],
+                                        count=m_reg_group['count'], device_id=slave)
 
                     # check modbus response
                     if not isinstance(vals, ExceptionResponse) and not isinstance(vals, ModbusIOException) and\
@@ -602,7 +607,8 @@ class DigitalOutput:
         if self.pending_id:
             IOLoop.instance().remove_timeout(self.pending_id)
             self.pending_id = None
-        await self.arm.modbus_slave.client.write_coil(self.coil, 1 if value else 0, slave=self.arm.modbus_address)
+        await self.arm.modbus_slave.client.write_coil(self.coil, 1 if value else 0,
+                                                      device_id=self.arm.modbus_address)
         return 1 if value else 0
 
     async def check_new_data(self):
@@ -1082,12 +1088,12 @@ class Watchdog(object):
 
 class DataPoint:
 
-    def __init__(self, circuit, arm, reg, reg_type=None, major_group=0, datatype=None, unit=None, offset=0, factor=1, valid_mask_reg=None, valid_mask=None, name=None, post_write=None):
+    def __init__(self, circuit, arm: Board, reg, reg_type=None, major_group=0, datatype=None, unit=None, offset=0, factor=1, valid_mask_reg=None, valid_mask=None, name=None, post_write=None):
         # TODO - valid mask reg
         self.alias = ""
         self.devtype = DATA_POINT
         self.circuit = circuit
-        self.arm = arm
+        self.arm: Board = arm
         self.major_group = major_group
         self.valreg = reg
         self.offset = offset
@@ -1135,7 +1141,8 @@ class DataPoint:
             return None
 
     def __parse_float32(self, raw_regs):
-        ret = float(BinaryPayloadDecoder.fromRegisters(raw_regs, Endian.BIG, Endian.BIG).decode_32bit_float())
+        ret = ModbusBaseClient.convert_from_registers(raw_regs, ModbusBaseClient.DATATYPE.FLOAT32, "big")
+        #ret = float(BinaryPayloadDecoder.fromRegisters(raw_regs, Endian.BIG, Endian.BIG).decode_32bit_float())
         return ret if not math.isnan(ret) else 'NaN'
 
     async def set(self, value=None, alias=None, **kwargs):
@@ -1442,16 +1449,18 @@ class AnalogOutputBrain:
 
     def regvalue(self):
         try:
-            ret = self.arm.modbus_slave.modbus_cache_map.get_register(2, self.reg)
-            ret = BinaryPayloadDecoder.fromRegisters(ret, Endian.BIG, Endian.LITTLE).decode_32bit_float()
+            regs = self.arm.modbus_slave.modbus_cache_map.get_register(2, self.reg)
+            ret = ModbusBaseClient.convert_from_registers(regs, ModbusBaseClient.DATATYPE.FLOAT32, "little")
+            #ret = BinaryPayloadDecoder.fromRegisters(ret, Endian.BIG, Endian.LITTLE).decode_32bit_float()
             return round(float(ret), 3)
         except:
             return 0
 
     def regres_value(self):
         try:
-            ret = self.arm.modbus_slave.modbus_cache_map.get_register(2, self.reg_res)
-            ret = BinaryPayloadDecoder.fromRegisters(ret, Endian.BIG, Endian.LITTLE).decode_32bit_float()
+            regs = self.arm.modbus_slave.modbus_cache_map.get_register(2, self.reg_res)
+            ret = ModbusBaseClient.convert_from_registers(regs, ModbusBaseClient.DATATYPE.FLOAT32, "little")
+            #ret = BinaryPayloadDecoder.fromRegisters(ret, Endian.BIG, Endian.LITTLE).decode_32bit_float()
             return round(float(ret), 3)
         except:
             return 0
@@ -1487,9 +1496,10 @@ class AnalogOutputBrain:
             value = 0
         # TODO: omezenit horni hodnoty!!!
 
-        builder = BinaryPayloadBuilder(byteorder=Endian.BIG, wordorder=Endian.LITTLE)
-        builder.add_32bit_float(float(value))
-        value_set = builder.to_registers()
+        value_set = ModbusBaseClient.convert_to_registers(float(value), ModbusBaseClient.DATATYPE.FLOAT32, "little")
+        #builder = BinaryPayloadBuilder(byteorder=Endian.BIG, wordorder=Endian.LITTLE)
+        #builder.add_32bit_float(float(value))
+        #value_set = builder.to_registers()
 
         await self.arm.modbus_slave.client.write_registers(self.reg, values=value_set, slave=self.arm.modbus_address)
         return value
@@ -1614,17 +1624,12 @@ class AnalogOutput:
 
 class AnalogInput:
 
-    endian_map={"little" : Endian.LITTLE,
-                "Little" : Endian.LITTLE,
-                "big" : Endian.BIG,
-                "Big" : Endian.BIG,}
-
-    def __init__(self, circuit, arm, reg, regmode=None, major_group=0, legacy_mode=True, modes=None):
+    def __init__(self, circuit, arm: Board, reg, regmode=None, major_group=0, legacy_mode=True, modes=None):
         self.alias = ""
         self.devtype = AI
         self.circuit = circuit
         self.valreg = reg
-        self.arm = arm
+        self.arm: Board = arm
         self.legacy_mode = legacy_mode
         self.regmode = regmode
         self.modes = modes if modes is not None else {}
@@ -1633,8 +1638,11 @@ class AnalogInput:
         self.major_group = major_group
         self.is_voltage = lambda: True
         self.value = None
-        self.transformation = lambda registers: round(BinaryPayloadDecoder.fromRegisters(registers, Endian.BIG,
-                                                                                   Endian.LITTLE).decode_32bit_float(),3)
+        self.transformation = lambda registers: \
+              round(float(ModbusBaseClient.convert_from_registers(registers,
+                          ModbusBaseClient.DATATYPE.FLOAT32, "little")), 3)
+        #      round(BinaryPayloadDecoder.fromRegisters(registers, Endian.BIG,
+        #            Endian.LITTLE).decode_32bit_float(),3)
 
         #logger.debug(f"AnalogInput.__init__ called, instance content {vars(self)}")
 
@@ -1649,28 +1657,33 @@ class AnalogInput:
             if mode_value == data['value']:
                 if data.get("transformation"):
                     #logger.debug(f"Mode: {data['value']} -> {data['transformation']}")
-                    byteorder = AnalogInput.endian_map[data["transformation"].get("byteorder", "big")]
-                    wordorder = AnalogInput.endian_map[data["transformation"].get("wordorder", "little")]
                     datatype = data["transformation"].get("datatype", "float32")
                     decimals = data["transformation"].get("decimals", 3)
                     ratio = data["transformation"].get("ratio", 1)
-                    logger.debug(f"Aplying transformation on analog input {self.circuit}: {datatype} {byteorder} {wordorder} {decimals}")
+                    logger.debug(f"Aplying transformation on analog input {self.circuit}: {datatype}  {decimals}")
                     if datatype == "float32":
-                        self.transformation = lambda registers : round(BinaryPayloadDecoder.fromRegisters(registers,
-                                                                                                      byteorder=byteorder,
-                                                                                                      wordorder=wordorder).decode_32bit_float() * ratio,decimals)
+                        self.transformation = lambda registers:\
+                            round(float(ModbusBaseClient.convert_from_registers(registers,
+                                        ModbusBaseClient.DATATYPE.FLOAT32,
+                                        "little")) * ratio, decimals)
+
                     elif datatype == "int32":
-                        self.transformation = lambda registers: int(BinaryPayloadDecoder.fromRegisters(registers,
-                                                                                                         byteorder=byteorder,
-                                                                                                         wordorder=wordorder).decode_32bit_int() * ratio)
-                    elif datatype == "uint32" and (ratio, float) :
-                        self.transformation = lambda registers: round(float(BinaryPayloadDecoder.fromRegisters(registers,
-                                                                                                       byteorder=byteorder,
-                                                                                                       wordorder=wordorder).decode_32bit_uint() * ratio),decimals)
+                        self.transformation = lambda registers:\
+                            int(ModbusBaseClient.convert_from_registers(registers,
+                                ModbusBaseClient.DATATYPE.INT32,
+                                "little")) * ratio
+
+                    elif datatype == "uint32" and isinstance(ratio, float) :
+                        self.transformation = lambda registers:\
+                            round(int(ModbusBaseClient.convert_from_registers(registers,
+                                      ModbusBaseClient.DATATYPE.UINT32,
+                                      "little")) * ratio, decimals)
+
                     elif datatype == "uint32":
-                        self.transformation = lambda registers: int(BinaryPayloadDecoder.fromRegisters(registers,
-                                                                                                       byteorder=byteorder,
-                                                                                                       wordorder=wordorder).decode_32bit_uint() * ratio)
+                        self.transformation = lambda registers:\
+                            int(ModbusBaseClient.convert_from_registers(registers,
+                                ModbusBaseClient.DATATYPE.UINT32,
+                                "little")) * ratio
                 return mode
         return None
 
