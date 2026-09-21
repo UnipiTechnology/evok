@@ -5,7 +5,7 @@ from typing import Any, Callable, Type, Tuple
 from pymodbus.client import AsyncModbusSerialClient, AsyncModbusTcpClient
 from pymodbus.exceptions import ConnectionException, ModbusIOException
 from pymodbus.pdu import ExceptionResponse
-from pymodbus.framer import ModbusRtuFramer, ModbusFramer, ModbusSocketFramer
+from pymodbus.framer import FramerRTU, FramerSocket
 
 #---------------------------------------------------------------------------#
 # Logging
@@ -20,7 +20,7 @@ exception_classes = [ExceptionResponse, ModbusIOException]
 
 
 class EvokModbusSerialClient(AsyncModbusSerialClient):
-    def __init__(self, port: str, framer: Type[ModbusFramer] = ModbusRtuFramer, baudrate: int = 19200,
+    def __init__(self, port: str, framer: Type[FramerRTU] = FramerRTU, baudrate: int = 19200,
                  bytesize: int = 8, parity: str = "N", stopbits: int = 1, timeout: float = 1, **kwargs: Any) -> None:
         super().__init__(port, framer, baudrate, bytesize, parity, stopbits, retries=0, **kwargs)
         for method_name in ['read_holding_registers', 'read_input_registers', 'write_register', 'write_registers',
@@ -51,7 +51,7 @@ class EvokModbusSerialClient(AsyncModbusSerialClient):
 
 
 class EvokModbusTcpClient(AsyncModbusTcpClient):
-    def __init__(self, host: str, port: int = 502, framer: Type[ModbusFramer] = ModbusSocketFramer,
+    def __init__(self, host: str, port: int = 502, framer: Type[FramerSocket] = FramerSocket,
                  source_address: Tuple[str, int] = None, timeout: float = 1, **kwargs: Any) -> None:
         super().__init__(host, port, framer, source_address, retries=0, **kwargs)
         for method_name in ['read_holding_registers', 'read_input_registers', 'write_register', 'write_registers',

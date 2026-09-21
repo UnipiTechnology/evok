@@ -436,7 +436,7 @@ def config_cb(device, *kwargs):
 
 ################################ MAIN ################################
 
-def main():
+async def main():
     arg_parser = argparse.ArgumentParser(prog='evok', description='')
     arg_parser.add_argument('-d', '--debug', action='store_true', default=False, help='Debug logging')
     arg_parser.add_argument('-v', '--version', action='store_true', default=False, help='Print evok version')
@@ -544,8 +544,9 @@ def main():
     signal.signal(signal.SIGTERM, sig_handler)
     signal.signal(signal.SIGINT, sig_handler)
 
-    mainLoop.start()
+    #mainLoop.start()
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
