@@ -2,6 +2,12 @@
 
 Evok configuration is located in `/etc/evok/config.yaml`. The default configuration is installed by the debian package. To apply the configuration, it is necessary to restart Evok with the command `systemctl restart evok`.
 
+The configuration directory (with `config.yaml`, `hw_definitions/` and optional `autogen.yaml`) can be changed with the command line option `--config-dir` or the environment variable `EVOK_CONFIG_DIR`, the aliases file with `--alias-file` or `EVOK_ALIAS_FILE`. Evok exits with an error if `config.yaml` is not found.
+
+```
+evok --config-dir ./my-config --alias-file ./alias.yaml
+```
+
 ## API settings
 
 In this section you can configure address and port for API listening. These settings will be applied to protocols [REST](../apis/rest.md), [JSON](../apis/json.md), [BULK](../apis/bulk.md), [RPC](../apis/rpc.md), [Webhook](../apis/webhook.md), [WebSocket](../apis/websocket.md).
@@ -118,7 +124,7 @@ If the Debian package `unipi-os-configurator` is installed,
 Evok can automatically create the hardware configuration for the running device,
 but it works only for Unipi controllers.
 You can enable this feature with `autogen: true` in config.
-If this feature is enabled, Evok includes the file `/etc/evok/autogen.yaml`.
+If this feature is enabled, Evok includes the file `autogen.yaml` from the configuration directory (`/etc/evok/autogen.yaml` by default).
 This file contains the hardware configuration of the running device.
 `unipi-os-configurator` generates this file if a hardware change has been detected.
 You can force the creation of this file using this command:

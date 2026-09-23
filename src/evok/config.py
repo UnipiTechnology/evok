@@ -109,6 +109,7 @@ class DeviceInfo:
 class EvokConfig:
 
     def __init__(self, conf_dir_path: str):
+        self.conf_dir_path = conf_dir_path
         data = self.__get_final_conf(scope=[conf_dir_path+'/config.yaml'])
         self.comm_channels: dict = self.__get_comm_channels(data)
         self.apis: dict = self.__get_apis_conf(data)
@@ -139,7 +140,7 @@ class EvokConfig:
             except FileNotFoundError:
                 logger.warning(f"Config file {path} not found!")
         if check_autogen and final_conf.get('autogen', False):
-            return self.__get_final_conf(scope=['/etc/evok/autogen.yaml', *scope], check_autogen=False)
+            return self.__get_final_conf(scope=[self.conf_dir_path + '/autogen.yaml', *scope], check_autogen=False)
         return final_conf
 
     @staticmethod

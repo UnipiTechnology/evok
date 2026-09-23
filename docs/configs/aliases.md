@@ -111,7 +111,7 @@ Alias of DO 1_01 will be removed.
 
 You can set aliases manually in the alias config file. This option is especially suitable for transferring an alias from another device.
 
-The configuration file is located in `/var/lib/evok/aliases.yaml`. First required parameter is `version`, it affects the configuration file structure. Second parameter is list of aliases names `aliases`, each element in this list must contain 'circuit' and 'devtype' specifying the aliased device. Both of these parameters are available using the API.
+The configuration file is located in `/var/lib/evok/alias.yaml`. First required parameter is `version`, it affects the configuration file structure. Second parameter is list of aliases names `aliases`, each element in this list must contain 'circuit' and 'devtype' specifying the aliased device. Both of these parameters are available using the API.
 
 ```yaml title="Example"
 version: 2.0

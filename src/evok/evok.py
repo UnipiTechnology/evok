@@ -39,11 +39,13 @@ from .devices import num_to_devtype_name
 
 # from tornadows import complextypes
 
-# Read config during initialisation
-config_path = '/etc/evok'
-if not os.path.isdir(config_path):
-    config_path = '.'
-evok_config = config.EvokConfig(config_path)
+DEFAULT_CONFIG_DIR = '/etc/evok'
+DEFAULT_ALIAS_FILE = '/var/lib/evok/alias.yaml'
+
+# Set in main() after parsing command line arguments
+config_path = None
+alias_file = None
+evok_config = None
 
 try:
     evok_version = 'v' + version("evok")
@@ -384,7 +386,8 @@ class JSONBulkHandler(tornado.web.RequestHandler):
 class AliasTask:
     SAVE_TIME = 300  # s
 
-    def __init__(self, aliases, loop):
+    def __init__(self, aliases, loop, alias_file):
+        self.alias_file = alias_file
         self.dirty_timestamp = 0
         self.dirty_trigger = asyncio.Event()
         self.save_trigger = asyncio.Event()
@@ -420,7 +423,7 @@ class AliasTask:
                 self.save_trigger.clear()
                 self.dirty_trigger.clear()
                 alias_dict = self.aliases.get_dict_to_save()
-                await asyncio.to_thread(config.save_aliases, alias_dict, '/var/lib/evok/alias.yaml')
+                await asyncio.to_thread(config.save_aliases, alias_dict, self.alias_file)
             except Exception as E:
                 logger.exception(E)
 
@@ -438,15 +441,31 @@ def config_cb(device, *kwargs):
 ################################ MAIN ################################
 
 async def main():
+    global config_path, alias_file, evok_config
+
     arg_parser = argparse.ArgumentParser(prog='evok', description='')
     arg_parser.add_argument('-d', '--debug', action='store_true', default=False, help='Debug logging')
     arg_parser.add_argument('-v', '--version', action='store_true', default=False, help='Print evok version')
+    arg_parser.add_argument('-c', '--config-dir',
+                            default=os.environ.get('EVOK_CONFIG_DIR', DEFAULT_CONFIG_DIR),
+                            help='Directory with config.yaml and hw_definitions/ '
+                                 f'(env EVOK_CONFIG_DIR, default {DEFAULT_CONFIG_DIR})')
+    arg_parser.add_argument('-a', '--alias-file',
+                            default=os.environ.get('EVOK_ALIAS_FILE', DEFAULT_ALIAS_FILE),
+                            help=f'File for storing aliases (env EVOK_ALIAS_FILE, default {DEFAULT_ALIAS_FILE})')
 
     args = arg_parser.parse_args()
 
     if args.version:
         print(evok_version)
         sys.exit(0)
+
+    config_path = args.config_dir.rstrip('/') or '/'
+    alias_file = args.alias_file
+    if not os.path.isfile(os.path.join(config_path, 'config.yaml')):
+        sys.exit(f"evok: config file '{os.path.join(config_path, 'config.yaml')}' not found "
+                 "(use --config-dir or EVOK_CONFIG_DIR)")
+    evok_config = config.EvokConfig(config_path)
 
     log_level = evok_config.logging.get("level", "INFO").upper()
     if args.debug:
@@ -471,7 +490,7 @@ async def main():
         # logging.getLogger('pymodbus').setLevel(logging.DEBUG)
 
     hw_dict = config.HWDict(dir_paths=[f'{config_path}/hw_definitions/'])
-    config.load_aliases('/var/lib/evok/alias.yaml')
+    config.load_aliases(alias_file)
     address_api = evok_config.apis.get("address", None)
 
     port_api = evok_config.apis.get("port", 8080)
@@ -517,7 +536,7 @@ async def main():
     config.create_devices(evok_config, hw_dict)
     Devices.register_device(RUN, Devices.aliases)
 
-    alias_task = AliasTask(Devices.aliases, mainLoop)
+    alias_task = AliasTask(Devices.aliases, mainLoop, alias_file)
 
     for bustype in [OWBUS]:
         for device in Devices.by_int(bustype):
