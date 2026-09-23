@@ -14,7 +14,7 @@ body:
       options:
         - label: I am running the latest Evok version
           required: true
-        - label: I have searched other [issues](https://github.com/UniPiTechnology/evok/issues)
+        - label: I have searched other [issues](https://github.com/UnipiTechnology/evok/issues)
           required: true
   - type: textarea
     id: what-happened

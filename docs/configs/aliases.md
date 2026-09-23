@@ -15,7 +15,7 @@ There are several restrictions to aliases:
 Aliases can be set in a total of 3 ways:
 
 - Using the API
-- Using the [evok-web](https://github.com/UniPiTechnology/evok-web-jq)
+- Using the [evok-web](https://github.com/UnipiTechnology/evok-web-jq)
 - Manually writing to the configuration file
 
 ## Examples

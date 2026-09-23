@@ -12,7 +12,7 @@ It provides multiple ways to easily access the I/Os of the devices, including:
 
 Besides that, Evok also supports sending notifications via webhook.
 
-[evok-web](https://github.com/UniPiTechnology/evok-web-jq) is a simple demo web application using Evok demonstrating its usage and allowing easy control of the devices configured in Evok.
+[evok-web](https://github.com/UnipiTechnology/evok-web-jq) is a simple demo web application using Evok demonstrating its usage and allowing easy control of the devices configured in Evok.
 
 ## First steps
 

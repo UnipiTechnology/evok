@@ -31,7 +31,7 @@ Complete API documentation (REST and JSON API) including syntax of all other API
 - Updating Evok from v2 to v3 is unsupported as well as migration from Debian 10 is unsupported - it's recommended to start from a fresh operating system.
 - The configuration of Evok has been completely rewritten to yaml based on tree structure(old .conf structure is no longer supported). See more information in the [Evok configuration](https://evok.readthedocs.io/en/latest/configs/evok_configuration/).
 - Dropped support of rarely used functions/entities (Eeprom,i2cbus,adchip,mcp,gpiobus,pca9685,unipi2,uart,wifi,light_channel,light_device,ext_config)
-- Example website aka 'Unipi Control Panel' has been split into separate project [evok-web-jq](https://github.com/UniPiTechnology/evok-web-jq) and can be installed manually.
+- Example website aka 'Unipi Control Panel' has been split into separate project [evok-web-jq](https://github.com/UnipiTechnology/evok-web-jq) and can be installed manually.
 - Added option 'all' instead of circuit using API (/rest/relay/all).
 - The device names in the API now match the name in the configuration. For more information see [evok configuration](https://evok.readthedocs.io/en/latest/configs/evok_configuration/#device-configuration).
 - [Aliases](https://evok.readthedocs.io/en/latest/configs/aliases/) system has been rewritten. Aliases are automatically saved 5 mins after a change, not immediately. Saving of aliases can be forced via API.
@@ -51,6 +51,6 @@ Apache License, Version 2.0
 [PATRON]:https://www.unipi.technology/products/unipi-patron-374
 [GATE]:https://www.unipi.technology/products/unipi-gate-388
 [Unipi 1.1]:https://www.unipi.technology/products/unipi-1-1-1-1-lite-19?categoryId=1
-[Evok-web]:https://github.com/UniPiTechnology/evok-web-jq
+[Evok-web]:https://github.com/UnipiTechnology/evok-web-jq
 [Extension modules]:https://www.unipi.technology/products?category=32
 [Unipi technology]:https://www.unipi.technology/

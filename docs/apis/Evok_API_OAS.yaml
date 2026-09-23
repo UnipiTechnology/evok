@@ -9,7 +9,7 @@ info:
   contact:
     name: Evok support
     email: support@unipi.technology
-    url: 'https://github.com/UniPiTechnology/evok'
+    url: 'https://github.com/UnipiTechnology/evok'
   license:
     name: Apache 2.0
     url: 'https://www.apache.org/licenses/LICENSE-2.0.html'

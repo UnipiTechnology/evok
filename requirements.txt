@@ -6,4 +6,4 @@ tornado-jsonrpc2 == 0.5
 jsonschema == 2.6.0
 pyyaml == 6.0.1
 anyio >= 3
-asyncowfs@git+https://github.com/UniPiTechnology/asyncowfs
+asyncowfs@git+https://github.com/UnipiTechnology/asyncowfs
