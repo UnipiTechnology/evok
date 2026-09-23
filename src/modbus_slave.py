@@ -11,10 +11,19 @@ from math import sqrt
 from typing import Union
 
 from tornado.ioloop import IOLoop
-#from tmodbus import create_async_rtu_client, create_async_tcp_client
-from pymodbus.client import AsyncModbusTcpClient, ModbusBaseClient
-from pymodbus.pdu import ExceptionResponse
-from pymodbus.exceptions import ModbusIOException, ConnectionException
+from tmodbus import (
+    create_async_rtu_client,
+    create_async_tcp_client,
+    AsyncModbusClient,
+    AsyncTcpTransport,
+    AsyncSmartTransport
+)
+from tmodbus.exceptions import TModbusError
+
+from pymodbus.client import ModbusBaseClient
+#from pymodbus.client import AsyncModbusTcpClient
+#from pymodbus.pdu import ExceptionResponse
+#from pymodbus.exceptions import ModbusIOException, ConnectionException
 from tornado.locks import Semaphore
 
 from .devices import Devices, devents
@@ -22,7 +31,6 @@ from .devices import MODBUS_SLAVE, \
                      DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
                      REGISTER, DATA_POINT, BOARD, NV_SAVE
 from .errors import ENoCacheRegister, ModbusSlaveError
-from .modbus_unipi import EvokModbusSerialClient, EvokModbusTcpClient
 from .log import logger
 import time
 
@@ -76,10 +84,10 @@ class ModbusCacheMap(object):
         # read values from modbus
         if is_input:
             val = await self.modbus_slave.client\
-                        .read_input_registers(index, count=count, device_id=slave)
+                        .read_input_registers(index, quantity=count)
         else:
-            val = await self.modbus_slave.client \
-                        .read_holding_registers(index, count=count, device_id=slave)
+            val = await self.modbus_slave.client\
+                        .read_holding_registers(index, quantity=count)
 
         # update cache map
         for i in range(len(val.registers)):
@@ -102,33 +110,36 @@ class ModbusCacheMap(object):
                     if 'type' in m_reg_group and m_reg_group['type'] == 'input':
                         vals = await self.modbus_slave.client \
                                      .read_input_registers(m_reg_group['start_reg'],
-                                         count=m_reg_group['count'], device_id=slave)
+                                        quantity=m_reg_group['count'])
                     else:
                         vals = await self.modbus_slave.client \
                                      .read_holding_registers(m_reg_group['start_reg'],
-                                        count=m_reg_group['count'], device_id=slave)
+                                        quantity=m_reg_group['count'])
 
-                    # check modbus response
-                    if not isinstance(vals, ExceptionResponse) and not isinstance(vals, ModbusIOException) and\
-                       vals is not None and len(vals.registers) == m_reg_group['count']:
-                        # update modbus cache
-                        m_reg_group['values'] = vals.registers
+                    #if vals is not None and len(vals.registers) == m_reg_group['count']:
+                    #update modbus cache
+                    m_reg_group['values'] = vals
 
-                        # call force update callbacks in registered devices and check differences
-                        for device in self.modbus_slave.eventable_devices:
-                            try:
-                                if await device.check_new_data() is True:
-                                    changeset.append(device)
-                            except Exception as E:
-                                m = (f"Error while checking new data in device '{device.devtype}"
-                                     f"_{device.circuit}': {E}")
-                                logger.error(m)
-                                if logger.level == logging.DEBUG:
-                                    traceback.print_exc()
+                    # call force update callbacks in registered devices and check differences
+                    for device in self.modbus_slave.eventable_devices:
+                        try:
+                            if await device.check_new_data() is True:
+                                changeset.append(device)
+                        except Exception as E:
+                            m = (f"Error while checking new data in device '{device.devtype}"
+                                 f"_{device.circuit}': {E}")
+                            logger.error(m)
+                            if logger.level == logging.DEBUG:
+                                traceback.print_exc()
 
-                        # reset communication flags
-                        self.last_comm_time = time.time()
-                        scanned = True
+                    # reset communication flags
+                    self.last_comm_time = time.time()
+                    scanned = True
+
+                except (TModbusError, TimeoutError) as E:
+                    logger.error(E)
+                    pass # ToDo: logging
+
                 finally:
                     self.frequency[m_reg_group['start_reg']] = 1
             else:
@@ -144,7 +155,7 @@ class ModbusCacheMap(object):
 
 class ModbusSlave(object):
 
-    def __init__(self, client: Union[EvokModbusTcpClient, EvokModbusSerialClient],
+    def __init__(self, transport: AsyncSmartTransport,
                  circuit, evok_config, scan_freq, scan_enabled, hw_dict, slave_id=1,
                  major_group=1, device_model='unspecified'):
         self.alias = ""
@@ -169,19 +180,15 @@ class ModbusSlave(object):
         self.scan_enabled = scan_enabled
         self.versions = []
         self.logfile = evok_config.logging.get("file", "./evok.log")
-        self.client: Union[AsyncModbusTcpClient, EvokModbusSerialClient] = client
+        self.client: AsyncModbusClient = AsyncModbusClient(transport, unit_id=slave_id)
         self.loop: Union[None, IOLoop] = None
         self.circuit: Union[None, str] = circuit
-        self.modbus_type = 'UNKNOWN'
-        self.modbus_spec = 'UNKNOWN'
-        if type(self.client) in [EvokModbusTcpClient]:
-            self.client: EvokModbusTcpClient
+        if isinstance(transport.base_transport, AsyncTcpTransport):
             self.modbus_type = 'TCP'
-            self.modbus_spec = self.client.host
-        elif type(self.client) in [EvokModbusSerialClient]:
-            self.client: EvokModbusSerialClient
+            self.modbus_spec = transport.base_transport.host
+        else:
             self.modbus_type = 'RTU'
-            self.modbus_spec = self.client.port
+            self.modbus_spec = transport.base_transport.port
 
     def get(self):
         return self.full()
@@ -229,16 +236,20 @@ class ModbusSlave(object):
         if self.is_scanning and invoc:
             return
         try:
-            if self.modbus_cache_map is not None:
-                if await self.modbus_cache_map.do_scan(slave=self.modbus_address) is True:
-                    if self.scan_errors:
-                        logger.info(f"Communication with device is back: '{self.circuit}'")
-                    self.scan_errors = 0
+            scan_result = self.modbus_cache_map is None \
+                       or await self.modbus_cache_map.do_scan(slave=self.modbus_address)
         except Exception as E:
+            scan_result = False
             if not self.scan_errors:
                 logger.error(f"{self.circuit}: Error while scanning: {E}")
                 if logger.level == logging.DEBUG:
                     traceback.print_exc()
+        if scan_result:
+            if self.scan_errors:
+                 logger.info(f"Communication with device is back: '{self.circuit}'")
+            self.scan_errors = 0
+        else:
+            if not self.scan_errors:
                 logger.warning(f"Slowing down device: '{self.circuit}'")
             self.scan_errors += 1
 
@@ -1641,8 +1652,6 @@ class AnalogInput:
         self.transformation = lambda registers: \
               round(float(ModbusBaseClient.convert_from_registers(registers,
                           ModbusBaseClient.DATATYPE.FLOAT32, "little")), 3)
-        #      round(BinaryPayloadDecoder.fromRegisters(registers, Endian.BIG,
-        #            Endian.LITTLE).decode_32bit_float(),3)
 
         #logger.debug(f"AnalogInput.__init__ called, instance content {vars(self)}")
 

@@ -4,8 +4,14 @@ from tornado.ioloop import IOLoop
 import logging
 import traceback
 
-from .modbus_unipi import EvokModbusSerialClient, EvokModbusTcpClient
 from .modbus_slave import ModbusSlave
+from tmodbus import (
+    AsyncModbusClient,
+    AsyncRtuTransport,
+    AsyncSmartTransport,
+    AsyncTcpTransport,
+)
+
 from . import owdevice
 
 import yaml
@@ -58,23 +64,22 @@ class OWSensorDevice:
 
 
 class TcpBusDevice:
-    def __init__(self, circuit: str, bus_driver: EvokModbusTcpClient):
+    def __init__(self, circuit: str, bus_driver: AsyncModbusClient):
         self.bus_driver = bus_driver
         self.circuit = circuit
 
     def switch_to_async(self, loop: IOLoop):
-        loop.add_callback(lambda: self.bus_driver.connect())
+        loop.add_callback(lambda: self.bus_driver.open())
 
 
 class SerialBusDevice:
-    def __init__(self, circuit: str,  bus_driver: EvokModbusSerialClient):
+    def __init__(self, circuit: str,  bus_driver: AsyncModbusClient):
         self.bus_driver = bus_driver
         self.circuit = circuit
 
     def switch_to_async(self, loop: IOLoop):
         self.bus_driver.ioloop = loop
-        loop.add_callback(lambda: self.bus_driver.connect())
-
+        loop.add_callback(lambda: self.bus_driver.open())
 
 class DeviceInfo:
     def __init__(self, name: str, family: str, model: str, sn: Union[None, int], board_count: int):
@@ -207,9 +212,22 @@ def create_devices(evok_config: EvokConfig, hw_dict):
             Devices.register_device(OWBUS, bus)
 
         elif bus_type == 'MODBUSTCP':
-            modbus_server = bus_data.get("hostname", "127.0.0.1")
-            modbus_port = bus_data.get("port", 502)
-            bus_driver = EvokModbusTcpClient(host=modbus_server, port=modbus_port)
+            host = bus_data.get("hostname", "127.0.0.1")
+            port = bus_data.get("port", 502)
+            bus_driver = AsyncSmartTransport(
+                AsyncTcpTransport(
+                    host,
+                    port,
+                    timeout=0.5,
+                    connect_timeout=1.0
+                ),
+                wait_between_requests=0.0,
+                wait_after_connect=0.0,
+                auto_reconnect=True,
+                retry_on_device_busy=True,
+                retry_on_device_failure=False,
+            )
+            #bus_driver = create_async_tcp_client(host=modbus_server, port=modbus_port, unit_id=0)
             bus = TcpBusDevice(circuit=bus_name, bus_driver=bus_driver)
             Devices.register_device(TCPBUS, bus)
 
@@ -218,8 +236,22 @@ def create_devices(evok_config: EvokConfig, hw_dict):
             serial_baud_rate = bus_data.get("baudrate", 19200)
             serial_parity = bus_data.get("parity", 'N')
             serial_stopbits = bus_data.get("stopbits", 1)
-            bus_driver = EvokModbusSerialClient(port=serial_port, baudrate=serial_baud_rate, parity=serial_parity,
-                                                stopbits=serial_stopbits, timeout=0.5)
+            bus_driver = AsyncSmartTransport(
+                AsyncRtuTransport(
+                    serial_port,
+                    timeout=0.5,
+                    baudrate=serial_baud_rate,
+                    parity=serial_parity,
+                    stopbits=serial_stopbits),
+                auto_reconnect=True,
+                wait_between_requests=0.0,
+                wait_after_connect=0.0,
+                retry_on_device_busy=True,
+                retry_on_device_failure=False
+            )   
+            
+            #bus_driver = create_async_rtu_client(port=serial_port, unit_id=0, baudrate=serial_baud_rate, parity=serial_parity,
+            #                                    stopbits=serial_stopbits, timeout=0.5)
             bus = SerialBusDevice(circuit=bus_name, bus_driver=bus_driver)
             Devices.register_device(SERIALBUS, bus)
 
