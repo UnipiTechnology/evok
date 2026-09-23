@@ -18,7 +18,7 @@ from tmodbus import (
     AsyncTcpTransport,
     AsyncSmartTransport
 )
-from tmodbus.exceptions import TModbusError
+from tmodbus.exceptions import TModbusError, ModbusConnectionError
 
 from pymodbus.client import ModbusBaseClient
 #from pymodbus.client import AsyncModbusTcpClient
@@ -214,7 +214,7 @@ class ModbusSlave(object):
             board = Board(self.evok_config, self.circuit, self.modbus_address, self)
             await board.parse_definition(self.hw_dict)
             self.boards.append(board)
-        except ConnectionException as E:
+        except (ModbusConnectionError, TimeoutError) as E:
             logger.error(f"No board detected on Modbus {self.modbus_address}\t({type(E).__name__}:{E})")
             if logger.level == logging.DEBUG:
                 traceback.print_exc()
