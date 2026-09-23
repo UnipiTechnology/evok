@@ -12,7 +12,7 @@ authors = [
 ]
 description = "Web service bridge for Unipi PLCs"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
