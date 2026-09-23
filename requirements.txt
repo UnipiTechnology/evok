@@ -1,9 +1,9 @@
 --extra-index-url=https://www.piwheels.org/simple
-pymodbus@git+https://github.com/martyy665/pymodbus@fix-tid-overflow
-pyserial == 3.5
+tmodbus[async-serial] == 0.6.2
+pymodbus >= 3.8.1, < 4
 tornado == 6.3.3
+tornado-jsonrpc2 == 0.5
 jsonschema == 2.6.0
-importlib_metadata == 7.1.0
-asyncowfs@git+https://github.com/UniPiTechnology/asyncowfs
 pyyaml == 6.0.1
-tornado-jsonrpc2==0.5
+anyio >= 3
+asyncowfs@git+https://github.com/UniPiTechnology/asyncowfs
