@@ -15,6 +15,7 @@ import tornado.ioloop
 import tornado.web
 
 import logging
+import logging.handlers
 from .log import logger
 
 logging.basicConfig(level=logging.WARNING)  # noqa
@@ -402,7 +403,8 @@ class AliasTask:
         self.alias_task = asyncio.create_task(self.work())
 
     def cancel(self):
-        self.alias_task.cancel()
+        if self.alias_task is not None:
+            self.alias_task.cancel()
 
     async def wait_for_save(self, timeout):
         with contextlib.suppress(asyncio.TimeoutError):
@@ -531,22 +533,26 @@ async def main():
         if modbus_slave.scan_enabled:
             modbus_slave.start_scanning()
 
-    def sig_handler(sig, frame):
-        if sig in (signal.SIGTERM, signal.SIGINT):
-            tornado.ioloop.IOLoop.instance().add_callback_from_signal(shutdown)
+    # graceful shutdown: let main() return, so asyncio.run() can clean up
+    stop_event = asyncio.Event()
 
-    # graceful shutdown
     def shutdown():
-        alias_task.cancel()
         logger.info("Shutting down")
-        tornado.ioloop.IOLoop.instance().stop()
+        alias_task.cancel()
+        stop_event.set()
 
-    signal.signal(signal.SIGTERM, sig_handler)
-    signal.signal(signal.SIGINT, sig_handler)
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGTERM, shutdown)
+    loop.add_signal_handler(signal.SIGINT, shutdown)
 
-    #mainLoop.start()
-    await asyncio.Event().wait()
+    await stop_event.wait()
+    httpServerApi.stop()
+
+
+def run():
+    """Entry point of the evok console script and of python -m evok."""
+    asyncio.run(main())
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run()
