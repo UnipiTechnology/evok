@@ -212,9 +212,6 @@ class DS2408(MySensor):
     def simple(self):
         return self.full()
 
-    def m_set_pio(self, pio, value):
-        self.__bus.taskWr.send((OWCMD_SET_PIO, self.circuit, value))
-
     def set_pio(self, pio, value):
         # elif command == OWCMD_SET_PIO:
         #    mysensor = next(x for x in self.mysensors if x.circuit == circuit)

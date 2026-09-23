@@ -450,9 +450,9 @@ async def main():
     log_level = evok_config.logging.get("level", "INFO").upper()
     if args.debug:
         log_level = 'DEBUG'
-    if log_level == 'DEBUG':
+#    if log_level == 'DEBUG':
         # Debug level for pymodbus is too much!
-        logging.getLogger('pymodbus').setLevel(logging.INFO)
+#        logging.getLogger('pymodbus').setLevel(logging.INFO)
 
     logger.info(f"Starting Evok {evok_version} using config directory '{config_path}'.")
     logger.info(f"Setting logging level to '{log_level}'.")

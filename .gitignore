@@ -1,5 +1,6 @@
 Makefile
 evok/Makefile
+src/evok/evok
 *.pyc
 .idea/
 .venv
