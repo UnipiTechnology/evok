@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -13,9 +13,10 @@ authors = [
 description = "Web service bridge for Unipi PLCs"
 readme = "README.md"
 requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
@@ -39,5 +40,6 @@ package-dir = {"" = "src"}
 evok = "evok.evok:main"
 
 [project.urls]
-"Homepage" = "https://github.com/pypa/sampleproject"
-"Bug Tracker" = "https://github.com/pypa/sampleproject/issues"
+"Homepage" = "https://github.com/UniPiTechnology/evok"
+"Documentation" = "https://evok.readthedocs.io/"
+"Bug Tracker" = "https://github.com/UniPiTechnology/evok/issues"
