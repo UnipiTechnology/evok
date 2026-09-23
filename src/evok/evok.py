@@ -42,8 +42,7 @@ from .devices import num_to_devtype_name
 # Read config during initialisation
 config_path = '/etc/evok'
 if not os.path.isdir(config_path):
-    config_path = os.path.dirname(os.path.realpath(__file__)) + '/evok'
-    os.mkdir(config_path) if not os.path.exists(config_path) else None
+    config_path = '.'
 evok_config = config.EvokConfig(config_path)
 
 try:

@@ -1,6 +1,7 @@
 Makefile
 evok/Makefile
-src/evok/evok
+config.yaml
+hw_definitions/
 *.pyc
 .idea/
 .venv

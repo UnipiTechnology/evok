@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "evok"
-version = "2.5.8"
+version = "3.1.0a1"
 authors = [
   { name="Martin Triska", email="triska@unipi.technology" },
   { name="Miroslav Ondra", email="bokula@unipi.technology" },
