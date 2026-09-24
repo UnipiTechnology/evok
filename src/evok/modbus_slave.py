@@ -24,7 +24,7 @@ from pymodbus.client import ModbusBaseClient
 #from pymodbus.client import AsyncModbusTcpClient
 #from pymodbus.pdu import ExceptionResponse
 #from pymodbus.exceptions import ModbusIOException, ConnectionException
-from tornado.locks import Semaphore
+import asyncio
 
 from .devices import Devices, devents
 from .devices import MODBUS_SLAVE, \
@@ -48,7 +48,7 @@ class ModbusCacheMap(object):
         self.last_comm_time = 0
         self.modbus_reg_map = deepcopy(modbus_reg_map)
         self.modbus_slave: ModbusSlave = modbus_slave
-        self.sem = Semaphore(1)
+        self.sem = asyncio.Semaphore(1)
         self.frequency = {}
         self.initial_read = True
         for m_reg_group in self.modbus_reg_map:
