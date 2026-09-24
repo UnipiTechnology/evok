@@ -77,7 +77,7 @@ class ModbusCacheMap(object):
         except (IndexError, KeyError) as E:
             raise ValueError(f"get_register: get register {index} error: {E}")
 
-    async def get_register_async(self, count, index, slave=0, is_input=False):
+    async def get_register_async(self, count, index, is_input=False):
         group, group_index = self.__get_reg_group(index=index, is_input=is_input)
         # ^^ raise exception if index not in cache map!
 
@@ -94,7 +94,7 @@ class ModbusCacheMap(object):
             group[group_index + i] = val.registers[i]
         return val.registers
 
-    async def do_scan(self, slave=0, initial=False) -> bool:
+    async def do_scan(self, initial=False) -> bool:
         if initial:
             await self.sem.acquire()
         changeset = []
@@ -237,7 +237,7 @@ class ModbusSlave(object):
             return
         try:
             scan_result = self.modbus_cache_map is None \
-                       or await self.modbus_cache_map.do_scan(slave=self.modbus_address)
+                       or await self.modbus_cache_map.do_scan()
         except Exception as E:
             scan_result = False
             if not self.scan_errors:
@@ -320,7 +320,7 @@ class Board(object):
         if 'modbus_register_blocks' in cache_definition:
             if self.modbus_slave.modbus_cache_map is None:
                 self.modbus_slave.modbus_cache_map = ModbusCacheMap(cache_definition['modbus_register_blocks'], self.modbus_slave)
-                await self.modbus_slave.modbus_cache_map.do_scan(initial=True, slave=self.modbus_address)
+                await self.modbus_slave.modbus_cache_map.do_scan(initial=True)
                 await self.modbus_slave.modbus_cache_map.sem.acquire()
                 self.modbus_slave.modbus_cache_map.sem.release()
             else:
@@ -1358,20 +1358,20 @@ class DigitalInput:
         if mode is not None and mode != self.mode and mode in self.modes:
             self.mode = mode
             if self.mode == 'DirectSwitch':
-                curr_ds = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regmode, slave=self.arm.modbus_address)
+                curr_ds = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regmode)
                 curr_ds_val = curr_ds[0]
                 curr_ds_val = curr_ds_val | int(self.bitmask)
                 await self.arm.modbus_slave.client.write_register(self.regmode, curr_ds_val, slave=self.arm.modbus_address)
             else:
-                curr_ds = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regmode, slave=self.arm.modbus_address)
+                curr_ds = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regmode)
                 curr_ds_val = curr_ds[0]
                 curr_ds_val = curr_ds_val & (~int(self.bitmask))
                 await self.arm.modbus_slave.client.write_register(self.regmode, curr_ds_val, slave=self.arm.modbus_address)
 
         if self.mode == 'DirectSwitch' and ds_mode is not None and ds_mode in self.ds_modes:
             self.ds_mode = ds_mode
-            curr_ds_pol = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regpolarity, slave=self.arm.modbus_address)
-            curr_ds_tgl = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regtoggle, slave=self.arm.modbus_address)
+            curr_ds_pol = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regpolarity)
+            curr_ds_tgl = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regtoggle)
             curr_ds_pol_val = curr_ds_pol[0]
             curr_ds_tgl_val = curr_ds_tgl[0]
             if self.ds_mode == 'Inverted':
