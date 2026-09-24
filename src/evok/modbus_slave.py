@@ -4,13 +4,11 @@
 """
 from copy import copy, deepcopy
 import math
-import datetime
 import logging
 import traceback
 from math import sqrt
 from typing import Union
 
-from tornado.ioloop import IOLoop
 from tmodbus import (
     create_async_rtu_client,
     create_async_tcp_client,
@@ -167,8 +165,7 @@ class ModbusSlave(object):
         self.modbus_address = slave_id
         self.device_model = device_model
         self.evok_config = evok_config
-        self.do_scanning = False
-        self.is_scanning = False
+        self.scan_task: Union[None, asyncio.Task] = None
         self.major_group = major_group
         self.hw_board_dict = {}
         if scan_freq == 0:
@@ -176,12 +173,10 @@ class ModbusSlave(object):
             # scan_interval cannot be zero!! (slowing down device)
         else:
             self.scan_interval = 1.0 / scan_freq
-        self.scan_errors = 0
         self.scan_enabled = scan_enabled
         self.versions = []
         self.logfile = evok_config.logging.get("file", "./evok.log")
         self.client: AsyncModbusClient = AsyncModbusClient(transport, unit_id=slave_id)
-        self.loop: Union[None, IOLoop] = None
         self.circuit: Union[None, str] = circuit
         if isinstance(transport.base_transport, AsyncTcpTransport):
             self.modbus_type = 'TCP'
@@ -193,9 +188,8 @@ class ModbusSlave(object):
     def get(self):
         return self.full()
 
-    def switch_to_async(self, loop: IOLoop):
-        self.loop = loop
-        loop.add_callback(lambda: self.readboards())
+    def switch_to_async(self):
+        self._rb_task = asyncio.create_task(self.readboards())
 
     async def set(self, print_log=None):
         if print_log is not None and print_log != 0:
@@ -223,42 +217,38 @@ class ModbusSlave(object):
             pass
 
     def start_scanning(self):
-        self.do_scanning = True
-        if not self.is_scanning:
-            self.loop.call_later(self.scan_interval, self.scan_boards)
-            self.is_scanning = True
+        if self.scan_task is None or self.scan_task.done():
+            self.scan_task = asyncio.create_task(self.scan_loop())
+
+    async def scan_loop(self):
+        interval = self.scan_interval
+        err = False
+        while True:
+            await asyncio.sleep(interval)
+            if await self.scan_boards():
+                if err:
+                    err = False
+                    logger.info(f"Communication with device is back: '{self.circuit}'")
+                interval = self.scan_interval
+            else:
+                if not err:
+                    err = True
+                    logger.warning(f"Slowing down device: '{self.circuit}'")
+                #exponential growth interval with limitation [s]
+                interval = min(interval * 2, max(120, self.scan_interval))
 
     def stop_scanning(self):
-        if not self.scan_enabled:
-            self.do_scanning = False
+        if self.scan_task is not None:
+            self.scan_task.cancel()
+            self.scan_task = None
 
-    async def scan_boards(self, invoc=False):
-        if self.is_scanning and invoc:
-            return
+    async def scan_boards(self) -> bool:
         try:
-            scan_result = self.modbus_cache_map is None \
-                       or await self.modbus_cache_map.do_scan()
+            return self.modbus_cache_map is None \
+                or await self.modbus_cache_map.do_scan()
         except Exception as E:
-            scan_result = False
-            if not self.scan_errors:
-                logger.error(f"{self.circuit}: Error while scanning: {E}")
-                if logger.level == logging.DEBUG:
-                    traceback.print_exc()
-        if scan_result:
-            if self.scan_errors:
-                 logger.info(f"Communication with device is back: '{self.circuit}'")
-            self.scan_errors = 0
-        else:
-            if not self.scan_errors:
-                logger.warning(f"Slowing down device: '{self.circuit}'")
-            self.scan_errors += 1
-
-        if self.do_scanning and (self.scan_interval != 0):
-            interval = min(self.scan_interval*(2**self.scan_errors), 120)  # exponential growth with limitation [s]
-            self.loop.call_later(interval, self.scan_boards)
-            self.is_scanning = True
-        else:
-            self.is_scanning = False
+            logger.exception(f"{self.circuit}: Error while scanning: {E}")
+            return False
 
     def full(self):
         ret = {'dev': 'modbus_slave',
@@ -546,7 +536,7 @@ class Board(object):
 
 
 class DigitalOutput:
-    pending_id = 0
+    pending_task: Union[None, asyncio.Task] = None
     def __init__(self, circuit, arm, coil, reg, mask, major_group=0,
                  pwmcyclereg=-1, pwmprescalereg=-1, pwmdutyreg=-1, pwmpresetreg=-1, pwmcustompresc=-1 ,
                  legacy_mode=True, digital_only=False, modes=None):
@@ -587,7 +577,7 @@ class DigitalOutput:
         ret =  {'dev': 'do',
                 'circuit': self.circuit,
                 'value': self.value,
-                'pending': self.pending_id != 0,
+                'pending': self.pending_task is not None,
                 'mode': self.mode,
                 'modes': self.modes,
                 }
@@ -610,14 +600,14 @@ class DigitalOutput:
               current on/off status is taken from last mcp value without reading it from hardware
               is_pending is Boolean
         """
-        return (self.value, self.pending_id != 0)
+        return (self.value, self.pending_task is not None)
 
     async def set_state(self, value):
         """ Sets new on/off status. Disable pending timeouts
         """
-        if self.pending_id:
-            IOLoop.instance().remove_timeout(self.pending_id)
-            self.pending_id = None
+        if self.pending_task is not None:
+            self.pending_task.cancel()
+            self.pending_task = None
         await self.arm.modbus_slave.client.write_coil(self.coil, 1 if value else 0,
                                                       device_id=self.arm.modbus_address)
         return 1 if value else 0
@@ -677,9 +667,9 @@ class DigitalOutput:
     async def set(self, value=None, timeout=None, mode=None, pwm_freq=None, pwm_duty=None, alias=None):
         """ Sets new on/off status. Disable pending timeouts """
         try:
-            if self.pending_id:
-                IOLoop.instance().remove_timeout(self.pending_id)
-                self.pending_id = None
+            if self.pending_task is not None:
+                self.pending_task.cancel()
+                self.pending_task = None
 
             if pwm_duty is not None:
                 pwm_duty = float(pwm_duty)
@@ -783,11 +773,11 @@ class DigitalOutput:
                 return self.full()
 
             async def timercallback():
-                self.pending_id = None
+                await asyncio.sleep(float(timeout))
+                self.pending_task = None
                 await self.arm.modbus_slave.client.write_coil(self.coil, 0 if value else 1, slave=self.arm.modbus_address)
 
-            self.pending_id = IOLoop.instance().add_timeout(
-                datetime.timedelta(seconds=float(timeout)), timercallback)
+            self.pending_task = asyncio.create_task(timercallback())
 
             return self.full()
 

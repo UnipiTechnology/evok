@@ -273,8 +273,8 @@ class OwBusDriver:
             list[dev] = temp_list
         return list
 
-    def switch_to_async(self, mainLoop):
-        mainLoop.add_callback(self.run)
+    def switch_to_async(self):
+        self._run_task = asyncio.create_task(self.run())
 
     async def set(self, scan_interval=None, do_scan=False, interval=None, do_reset=None):
         was_changed = False
@@ -286,7 +286,7 @@ class OwBusDriver:
             was_changed = True
         if do_scan:
             logger.info("Invoked scan of 1W bus")
-            await self.do_scan(invoked_async=True)
+            self.do_scan()
         if not (interval is None) and (interval != self.interval):
             self.interval = interval
             for mysensor in self.mysensors:  # Global change - for all sensors
@@ -302,7 +302,7 @@ class OwBusDriver:
         self.mysensors.append(mysensor)
         Devices.register_device(SENSOR, mysensor)
 
-    def do_scan(self, invoked_async=False):
+    def do_scan(self):
         if hasattr(self, 'scanning_scope'):
             self.scanning_scope.cancel()
 

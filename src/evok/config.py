@@ -1,12 +1,11 @@
 import os
 from typing import List, Dict, Union
-from tornado.ioloop import IOLoop
+import asyncio
 import logging
 import traceback
 
 from .modbus_slave import ModbusSlave
 from tmodbus import (
-    AsyncModbusClient,
     AsyncRtuTransport,
     AsyncSmartTransport,
     AsyncTcpTransport,
@@ -64,22 +63,21 @@ class OWSensorDevice:
 
 
 class TcpBusDevice:
-    def __init__(self, circuit: str, bus_driver: AsyncModbusClient):
+    def __init__(self, circuit: str, bus_driver: AsyncSmartTransport):
         self.bus_driver = bus_driver
         self.circuit = circuit
 
-    def switch_to_async(self, loop: IOLoop):
-        loop.add_callback(lambda: self.bus_driver.open())
+    def switch_to_async(self):
+        self._open_task = asyncio.create_task(self.bus_driver.open())
 
 
 class SerialBusDevice:
-    def __init__(self, circuit: str,  bus_driver: AsyncModbusClient):
+    def __init__(self, circuit: str,  bus_driver: AsyncSmartTransport):
         self.bus_driver = bus_driver
         self.circuit = circuit
 
-    def switch_to_async(self, loop: IOLoop):
-        self.bus_driver.ioloop = loop
-        loop.add_callback(lambda: self.bus_driver.open())
+    def switch_to_async(self):
+        self._open_task = asyncio.create_task(self.bus_driver.open())
 
 class DeviceInfo:
     def __init__(self, name: str, family: str, model: str, sn: Union[None, int], board_count: int):

@@ -11,7 +11,6 @@ from importlib.metadata import version, PackageNotFoundError
 import jsonschema
 import tornado.httpserver
 import tornado.httpclient
-import tornado.ioloop
 import tornado.web
 
 import logging
@@ -224,9 +223,6 @@ class WsHandler(websocket.WebSocketHandler):
     def on_close(self):
         if ("all" in registered_ws) and (self in registered_ws["all"]):
             registered_ws["all"].remove(self)
-            if len(registered_ws["all"]) == 0:
-                for neuron in Devices.by_int(MODBUS_SLAVE):
-                    neuron.stop_scanning()
 
 
 class LogoutHandler(tornado.web.RequestHandler):
@@ -386,46 +382,50 @@ class JSONBulkHandler(tornado.web.RequestHandler):
 class AliasTask:
     SAVE_TIME = 300  # s
 
-    def __init__(self, aliases, loop, alias_file):
+    def __init__(self, aliases, alias_file):
         self.alias_file = alias_file
-        self.dirty_timestamp = 0
         self.dirty_trigger = asyncio.Event()
         self.save_trigger = asyncio.Event()
         self.aliases = aliases
         self.aliases.register_dirty_cb(lambda: self.dirty_trigger.set())
         self.aliases.register_save_cb(self.set_save_trigger)
-        self.alias_task = None
-        loop.add_callback(self.start)
+        self.alias_task = asyncio.create_task(self.work())
 
     def set_save_trigger(self):
         if self.dirty_trigger.is_set():
             self.save_trigger.set()
 
-    async def start(self):
-        self.alias_task = asyncio.create_task(self.work())
-
     def cancel(self):
-        if self.alias_task is not None:
-            self.alias_task.cancel()
+        self.alias_task.cancel()
 
     async def wait_for_save(self, timeout):
         with contextlib.suppress(asyncio.TimeoutError):
             await asyncio.wait_for(self.save_trigger.wait(), timeout)
 
-    async def work(self):
-        """ Wait for Event generated on setting alias and save aliases to file (in thread)"""
+    def get_dict_to_save(self):
         self.save_trigger.clear()
         self.dirty_trigger.clear()
-        while True:
-            await self.dirty_trigger.wait()
-            await self.wait_for_save(self.SAVE_TIME)
-            try:
-                self.save_trigger.clear()
-                self.dirty_trigger.clear()
-                alias_dict = self.aliases.get_dict_to_save()
-                await asyncio.to_thread(config.save_aliases, alias_dict, self.alias_file)
-            except Exception as E:
-                logger.exception(E)
+        return self.aliases.get_dict_to_save()
+
+    async def work(self):
+        """ Wait for Event generated on setting alias and save aliases to file (in thread)"""
+        try:
+            while True:
+                await self.dirty_trigger.wait()
+                await self.wait_for_save(self.SAVE_TIME)
+                try:
+                    alias_dict = self.get_dict_to_save()
+                    await asyncio.to_thread(config.save_aliases, alias_dict, self.alias_file)
+                except Exception as E:
+                    logger.exception(E)
+        except asyncio.CancelledError:
+            # save pending changes on shutdown (synchronously, the task is being cancelled)
+            if self.dirty_trigger.is_set():
+                try:
+                    config.save_aliases(self.get_dict_to_save(), self.alias_file)
+                except Exception as E:
+                    logger.exception(E)
+            raise
 
 
 def status_cb(device, *kwargs):
@@ -525,8 +525,6 @@ async def main():
         wh = WhHandler(wh_address, wh_types, wh_complex)
         wh.open()
 
-    mainLoop = tornado.ioloop.IOLoop.instance()
-
     #### prepare hardware according to config #####
     # prepare callbacks for config events
     devents.register_config_cb(config_cb)
@@ -536,18 +534,18 @@ async def main():
     config.create_devices(evok_config, hw_dict)
     Devices.register_device(RUN, Devices.aliases)
 
-    alias_task = AliasTask(Devices.aliases, mainLoop, alias_file)
+    alias_task = AliasTask(Devices.aliases, alias_file)
 
     for bustype in [OWBUS]:
         for device in Devices.by_int(bustype):
-            device.bus_driver.switch_to_async(mainLoop)
+            device.bus_driver.switch_to_async()
 
     for bustype in [TCPBUS, SERIALBUS]:
         for device in Devices.by_int(bustype):
-            device.switch_to_async(mainLoop)
+            device.switch_to_async()
 
     for modbus_slave in Devices.by_int(MODBUS_SLAVE):
-        modbus_slave.switch_to_async(mainLoop)
+        modbus_slave.switch_to_async()
         if modbus_slave.scan_enabled:
             modbus_slave.start_scanning()
 

@@ -4,8 +4,6 @@ import functools
 import inspect
 from typing import Awaitable, Optional
 
-import tornado.ioloop
-
 from tornado_jsonrpc2 import JSONRPCHandler
 from tornado_jsonrpc2.exceptions import MethodNotFound, InvalidParams
 
@@ -14,10 +12,9 @@ from .devices import Devices, DeviceNotFound
 
 
 async def create_response(request, backend):
-    try:
-        method = getattr(backend, request.method)
-    except AttributeError:
+    if request.method not in backend.RPC_METHODS:
         raise MethodNotFound(f"Method '{request.method}' not found!")
+    method = getattr(backend, request.method)
 
     awaitable = False
     if inspect.isawaitable(method) or inspect.iscoroutine(method) or inspect.iscoroutinefunction(method):
@@ -59,30 +56,51 @@ class UserBasicHelper(JSONRPCHandler):
         self.set_header('WWW-Authenticate', 'Basic realm=tmr')
         self.set_status(401)
         self.finish()
-        return False
 
     def get_current_user(self):
         if len(self._passwords) == 0: return True
         auth_header = self.request.headers.get('Authorization')
-        if auth_header is None:
-            return self._request_auth()
-        if not auth_header.startswith('Basic '):
-            return self._request_auth()
-        auth_decoded = base64.decodestring(auth_header[6:])
-        username, password = auth_decoded.split(':', 2)
-
-        # print (username, password)
-        # print self._passwords
-        if (username == 'rpc' and password in self._passwords):
-            return True
-        else:
-            self._request_auth()
+        if auth_header is None or not auth_header.startswith('Basic '):
+            return False
+        try:
+            username, password = base64.b64decode(auth_header[6:]).decode().split(':', 1)
+        except ValueError:
+            # invalid base64, invalid utf-8 or missing ':'
+            return False
+        return username == 'rpc' and password in self._passwords
 
 
 class Handler(UserBasicHelper):
+    # methods callable via JSON-RPC, other attributes of the handler are not exposed
+    RPC_METHODS = frozenset((
+        'input_get',
+        'input_get_value',
+        'input_set',
+        'relay_get',
+        'relay_set',
+        'output_get',
+        'output_set',
+        'output_set_for_time',
+        'ai_get',
+        'ai_set_bits',
+        'ai_set_interval',
+        'ai_set_gain',
+        'ai_set',
+        'ao_set_value',
+        'ao_set',
+        'owbus_get',
+        'owbus_set',
+        'owbus_scan',
+        'owbus_list',
+        'sensor_set',
+        'sensor_get',
+        'sensor_get_value',
+    ))
 
-    @tornado.web.authenticated
     async def post(self):
+        if not self.current_user:
+            self._request_auth()
+            return
         await JSONRPCHandler.post(self)
 
     ###### Input ######
