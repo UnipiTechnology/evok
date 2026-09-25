@@ -7,6 +7,7 @@ import math
 import logging
 import traceback
 from math import sqrt
+import struct
 from typing import Union
 
 from tmodbus import (
@@ -18,10 +19,7 @@ from tmodbus import (
 )
 from tmodbus.exceptions import TModbusError, ModbusConnectionError
 
-from pymodbus.client import ModbusBaseClient
-#from pymodbus.client import AsyncModbusTcpClient
-#from pymodbus.pdu import ExceptionResponse
-#from pymodbus.exceptions import ModbusIOException, ConnectionException
+from tmodbus.utils.order_aware_struct import OrderAwareStruct
 import asyncio
 
 from .devices import Devices, devents
@@ -33,6 +31,23 @@ from .log import logger
 import time
 
 import subprocess
+
+
+FLOAT32_BE = OrderAwareStruct(">f")
+FLOAT32_LE = OrderAwareStruct(">f", word_order="little")
+INT32_LE = OrderAwareStruct(">i", word_order="little")
+UINT32_LE = OrderAwareStruct(">I", word_order="little")
+
+
+def from_registers(fmt: struct.Struct, registers):
+    """ Decode a value from a list of 16-bit registers """
+    return fmt.unpack(struct.pack(f">{len(registers)}H", *registers))[0]
+
+
+def to_registers(fmt: struct.Struct, value):
+    """ Encode a value into a list of 16-bit registers """
+    data = fmt.pack(value)
+    return list(struct.unpack(f">{len(data) // 2}H", data))
 
 
 def raise_if_null(data, index):
@@ -88,9 +103,9 @@ class ModbusCacheMap(object):
                         .read_holding_registers(index, quantity=count)
 
         # update cache map
-        for i in range(len(val.registers)):
-            group[group_index + i] = val.registers[i]
-        return val.registers
+        for i in range(len(val)):
+            group[group_index + i] = val[i]
+        return val
 
     async def do_scan(self, initial=False) -> bool:
         if initial:
@@ -176,7 +191,7 @@ class ModbusSlave(object):
         self.scan_enabled = scan_enabled
         self.versions = []
         self.logfile = evok_config.logging.get("file", "./evok.log")
-        self.client: AsyncModbusClient = AsyncModbusClient(transport, unit_id=slave_id)
+        self.client: AsyncModbusClient = AsyncModbusClient(transport, unit_id=slave_id, word_order="little")
         self.circuit: Union[None, str] = circuit
         if isinstance(transport.base_transport, AsyncTcpTransport):
             self.modbus_type = 'TCP'
@@ -608,8 +623,7 @@ class DigitalOutput:
         if self.pending_task is not None:
             self.pending_task.cancel()
             self.pending_task = None
-        await self.arm.modbus_slave.client.write_coil(self.coil, 1 if value else 0,
-                                                      device_id=self.arm.modbus_address)
+        await self.arm.modbus_slave.client.write_single_coil(self.coil, 1 if value else 0)
         return 1 if value else 0
 
     async def check_new_data(self):
@@ -690,14 +704,14 @@ class DigitalOutput:
                     pwm_preset_val = 0
                     if pwm_freq in self.preset_map.values():
                         pwm_preset_val = [preset for preset, freq in self.preset_map.items() if freq == pwm_freq][0]
-                        await self.arm.modbus_slave.client.write_register(self.pwmpresetreg, pwm_preset_val, slave=self.arm.modbus_address)
+                        await self.arm.modbus_slave.client.write_single_register(self.pwmpresetreg, pwm_preset_val)
                     else:
                         pwm_prescaler = round((1000 / pwm_freq) - 1)
                         if pwm_prescaler < 0:
                             raise ValueError("Frequency out of range!")
                         self.pwm_freq = round(1000 / (1 + pwm_prescaler),1)
-                        await self.arm.modbus_slave.client.write_register(self.pwmpresetreg, 2, slave=self.arm.modbus_address)
-                        await self.arm.modbus_slave.client.write_register(self.pwmcustompresc, pwm_prescaler, slave=self.arm.modbus_address)
+                        await self.arm.modbus_slave.client.write_single_register(self.pwmpresetreg, 2)
+                        await self.arm.modbus_slave.client.write_single_register(self.pwmcustompresc, pwm_prescaler)
 
                     other_devs = {dev: dev.pwm_duty for dev in Devices.by_int(DO, major_group=self.major_group)}
 
@@ -723,8 +737,8 @@ class DigitalOutput:
                         tmp_pwm_cycle_val = round(tmp_pwm_prescale_val)
                     other_devs = {dev: float(dev.pwm_duty) for dev in Devices.by_int(DO, major_group=self.major_group)}
 
-                    await self.arm.modbus_slave.client.write_register(self.pwmcyclereg, tmp_pwm_cycle_val - 1, slave=self.arm.modbus_address)
-                    await self.arm.modbus_slave.client.write_register(self.pwmprescalereg, tmp_pwm_prescale_val - 1, slave=self.arm.modbus_address)
+                    await self.arm.modbus_slave.client.write_single_register(self.pwmcyclereg, tmp_pwm_cycle_val - 1)
+                    await self.arm.modbus_slave.client.write_single_register(self.pwmprescalereg, tmp_pwm_prescale_val - 1)
 
                     for other_dev, other_pwm_duty in other_devs.items():
                         other_dev.pwm_freq = pwm_freq
@@ -750,10 +764,10 @@ class DigitalOutput:
                     timeout = float(timeout)
 
                 self.mode = 'Simple'
-                await self.arm.modbus_slave.client.write_coil(self.coil, parsed_value, slave=self.arm.modbus_address)
+                await self.arm.modbus_slave.client.write_single_coil(self.coil, parsed_value)
                 if self.pwm_duty is not None and self.pwm_duty != 0:
                     self.pwm_duty = 0
-                    await self.arm.modbus_slave.client.write_register(self.pwmdutyreg, round(self.pwm_duty), slave=self.arm.modbus_address) # Turn off PWM
+                    await self.arm.modbus_slave.client.write_single_register(self.pwmdutyreg, round(self.pwm_duty)) # Turn off PWM
 
             # Set PWM Duty
             elif pwm_duty is not None and 0.0 <= pwm_duty <= 100.0:
@@ -762,8 +776,8 @@ class DigitalOutput:
                 else:
                     tmp_pwm_duty_val = round(float(self.pwm_cycle_val) * pwm_duty / 100.0)
                 if self.value != 0:
-                    await self.arm.modbus_slave.client.write_coil(self.coil, 0, slave=self.arm.modbus_address)
-                await self.arm.modbus_slave.client.write_register(self.pwmdutyreg, tmp_pwm_duty_val, slave=self.arm.modbus_address)
+                    await self.arm.modbus_slave.client.write_single_coil(self.coil, 0)
+                await self.arm.modbus_slave.client.write_single_register(self.pwmdutyreg, tmp_pwm_duty_val)
                 self.mode = 'PWM'
 
             if alias is not None:
@@ -775,7 +789,7 @@ class DigitalOutput:
             async def timercallback():
                 await asyncio.sleep(float(timeout))
                 self.pending_task = None
-                await self.arm.modbus_slave.client.write_coil(self.coil, 0 if value else 1, slave=self.arm.modbus_address)
+                await self.arm.modbus_slave.client.write_single_coil(self.coil, 0 if value else 1)
 
             self.pending_task = asyncio.create_task(timercallback())
 
@@ -833,7 +847,7 @@ class Relay:
     async def set_state(self, value):
         """ Sets new on/off status. Disable pending timeouts
         """
-        await self.arm.modbus_slave.client.write_coil(self.coil, 1 if value else 0, slave=self.arm.modbus_address)
+        await self.arm.modbus_slave.client.write_single_coil(self.coil, 1 if value else 0)
         return 1 if value else 0
 
     async def check_new_data(self):
@@ -848,7 +862,7 @@ class Relay:
             # Set Binary value
             if value is not None:
                 parsed_value = 1 if int(value) else 0
-                await self.arm.modbus_slave.client.write_coil(self.coil, parsed_value, slave=self.arm.modbus_address)
+                await self.arm.modbus_slave.client.write_single_coil(self.coil, parsed_value)
 
             if alias is not None:
                 Devices.set_alias(alias, self)
@@ -893,7 +907,7 @@ class OwPower(object):
         if value is not None:
             value = bool(int(value))
             self.value = value
-            await self.arm.modbus_slave.client.write_coil(self.coil, 1 if value else 0, slave=self.arm.modbus_address)
+            await self.arm.modbus_slave.client.write_single_coil(self.coil, 1 if value else 0)
         return self.full()
 
     def get(self):
@@ -925,7 +939,7 @@ class NvSave(object):
         if value is not None:
             value = bool(int(value))
             self.value = value
-            await self.arm.modbus_slave.client.write_coil(self.coil, 1 if value else 0, slave=self.arm.modbus_address)
+            await self.arm.modbus_slave.client.write_single_coil(self.coil, 1 if value else 0)
         return self.full()
 
     def get(self):
@@ -973,7 +987,7 @@ class ULED(object):
     async def set_state(self, value):
         """ Sets new on/off status. Disable pending timeouts
         """
-        await self.arm.modbus_slave.client.write_coil(self.coil, 1 if value else 0, slave=self.arm.modbus_address)
+        await self.arm.modbus_slave.client.write_single_coil(self.coil, 1 if value else 0)
         return 1 if value else 0
 
     async def set(self, value=None, alias=None):
@@ -983,7 +997,7 @@ class ULED(object):
             Devices.set_alias(alias, self)
         if value is not None:
             value = int(value)
-            await self.arm.modbus_slave.client.write_coil(self.coil, 1 if value else 0, slave=self.arm.modbus_address)
+            await self.arm.modbus_slave.client.write_single_coil(self.coil, 1 if value else 0)
         return self.full()
 
     def get(self):
@@ -1051,7 +1065,7 @@ class Watchdog(object):
     async def set_state(self, value):
         """ Sets new on/off status. Disable pending timeouts
         """
-        await self.arm.modbus_slave.client.write_register(self.valreg, 1 if value else 0, slave=self.arm.modbus_address)
+        await self.arm.modbus_slave.client.write_single_register(self.valreg, 1 if value else 0)
         return 1 if value else 0
 
     async def set(self, value=None, timeout=None, reset=None, nv_save=None, alias=None):
@@ -1062,26 +1076,25 @@ class Watchdog(object):
 
         if value is not None:
             value = int(value)
-            await self.arm.modbus_slave.client.write_register(self.valreg, 1 if value else 0,
-                                                              slave=self.arm.modbus_address)
+            await self.arm.modbus_slave.client.write_single_register(self.valreg, 1 if value else 0)
 
         if not (timeout is None):
             timeout = int(timeout)
             if timeout > 65535:
                 timeout = 65535
-            await self.arm.modbus_slave.client.write_register(self.toreg, timeout, slave=self.arm.modbus_address)
+            await self.arm.modbus_slave.client.write_single_register(self.toreg, timeout)
 
         if self.nv_save_coil >= 0 and nv_save is not None and nv_save != self.nvsavvalue:
             if nv_save != 0:
                 self.nvsavvalue = 1
             else:
                 self.nvsavvalue = 0
-            await self.arm.modbus_slave.client.write_coil(self.nv_save_coil, 1, slave=self.arm.modbus_address)
+            await self.arm.modbus_slave.client.write_single_coil(self.nv_save_coil, 1)
 
         if self.reset_coil >= 0 and reset is not None:
             if reset != 0:
                 self.nvsavvalue = 0
-                await self.arm.modbus_slave.client.write_coil(self.reset_coil, 1, slave=self.arm.modbus_address)
+                await self.arm.modbus_slave.client.write_single_coil(self.reset_coil, 1)
                 logger.info("Performed reset of board %s" % self.circuit)
 
         return self.full()
@@ -1142,7 +1155,7 @@ class DataPoint:
             return None
 
     def __parse_float32(self, raw_regs):
-        ret = ModbusBaseClient.convert_from_registers(raw_regs, ModbusBaseClient.DATATYPE.FLOAT32, "big")
+        ret = from_registers(FLOAT32_BE, raw_regs)
         #ret = float(BinaryPayloadDecoder.fromRegisters(raw_regs, Endian.BIG, Endian.BIG).decode_32bit_float())
         return ret if not math.isnan(ret) else 'NaN'
 
@@ -1246,7 +1259,7 @@ class Register:
     async def set_state(self, value):
         """ Sets new on/off status. Disable pending timeouts
         """
-        await self.arm.modbus_slave.client.write_register(self.valreg, value if value else 0, slave=self.arm.modbus_address)
+        await self.arm.modbus_slave.client.write_single_register(self.valreg, value if value else 0)
         return value if value else 0
 
     async def set(self, value=None, alias=None):
@@ -1256,7 +1269,7 @@ class Register:
             Devices.set_alias(alias, self)
         if value is not None:
             value = int(value)
-            await self.arm.modbus_slave.client.write_register(self.valreg, value if value else 0, slave=self.arm.modbus_address)
+            await self.arm.modbus_slave.client.write_single_register(self.valreg, value if value else 0)
 
         return self.full()
 
@@ -1351,12 +1364,12 @@ class DigitalInput:
                 curr_ds = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regmode)
                 curr_ds_val = curr_ds[0]
                 curr_ds_val = curr_ds_val | int(self.bitmask)
-                await self.arm.modbus_slave.client.write_register(self.regmode, curr_ds_val, slave=self.arm.modbus_address)
+                await self.arm.modbus_slave.client.write_single_register(self.regmode, curr_ds_val)
             else:
                 curr_ds = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regmode)
                 curr_ds_val = curr_ds[0]
                 curr_ds_val = curr_ds_val & (~int(self.bitmask))
-                await self.arm.modbus_slave.client.write_register(self.regmode, curr_ds_val, slave=self.arm.modbus_address)
+                await self.arm.modbus_slave.client.write_single_register(self.regmode, curr_ds_val)
 
         if self.mode == 'DirectSwitch' and ds_mode is not None and ds_mode in self.ds_modes:
             self.ds_mode = ds_mode
@@ -1373,18 +1386,18 @@ class DigitalInput:
             else:
                 curr_ds_pol_val = curr_ds_pol_val & (~self.bitmask)
                 curr_ds_tgl_val = curr_ds_tgl_val & (~self.bitmask)
-            await self.arm.modbus_slave.client.write_register(self.regpolarity, curr_ds_pol_val, slave=self.arm.modbus_address)
-            await self.arm.modbus_slave.client.write_register(self.regtoggle, curr_ds_tgl_val, slave=self.arm.modbus_address)
+            await self.arm.modbus_slave.client.write_single_register(self.regpolarity, curr_ds_pol_val)
+            await self.arm.modbus_slave.client.write_single_register(self.regtoggle, curr_ds_tgl_val)
 
         if counter_mode is not None and counter_mode in self.counter_modes and counter_mode != self.counter_mode:
             self.counter_mode = counter_mode
 
         if debounce is not None:
             if self.regdebounce is not None:
-                await self.arm.modbus_slave.client.write_register(self.regdebounce, int(float(debounce)), slave=self.arm.modbus_address)
+                await self.arm.modbus_slave.client.write_single_register(self.regdebounce, int(float(debounce)))
         if counter is not None:
             if self.regcounter is not None:
-                await self.arm.modbus_slave.client.write_registers(self.regcounter, ((int(float(counter)) & 0xFFFF), (int(float(counter)) >> 16) & 0xFFFF), slave=self.arm.modbus_address)
+                await self.arm.modbus_slave.client.write_uint32(self.regcounter, int(float(counter)))
         return self.full()
 
     def get(self):
@@ -1451,7 +1464,7 @@ class AnalogOutputBrain:
     def regvalue(self):
         try:
             regs = self.arm.modbus_slave.modbus_cache_map.get_register(2, self.reg)
-            ret = ModbusBaseClient.convert_from_registers(regs, ModbusBaseClient.DATATYPE.FLOAT32, "little")
+            ret = from_registers(FLOAT32_LE, regs)
             #ret = BinaryPayloadDecoder.fromRegisters(ret, Endian.BIG, Endian.LITTLE).decode_32bit_float()
             return round(float(ret), 3)
         except:
@@ -1460,7 +1473,7 @@ class AnalogOutputBrain:
     def regres_value(self):
         try:
             regs = self.arm.modbus_slave.modbus_cache_map.get_register(2, self.reg_res)
-            ret = ModbusBaseClient.convert_from_registers(regs, ModbusBaseClient.DATATYPE.FLOAT32, "little")
+            ret = from_registers(FLOAT32_LE, regs)
             #ret = BinaryPayloadDecoder.fromRegisters(ret, Endian.BIG, Endian.LITTLE).decode_32bit_float()
             return round(float(ret), 3)
         except:
@@ -1497,12 +1510,12 @@ class AnalogOutputBrain:
             value = 0
         # TODO: omezenit horni hodnoty!!!
 
-        value_set = ModbusBaseClient.convert_to_registers(float(value), ModbusBaseClient.DATATYPE.FLOAT32, "little")
+        value_set = to_registers(FLOAT32_LE, float(value))
         #builder = BinaryPayloadBuilder(byteorder=Endian.BIG, wordorder=Endian.LITTLE)
         #builder.add_32bit_float(float(value))
         #value_set = builder.to_registers()
 
-        await self.arm.modbus_slave.client.write_registers(self.reg, values=value_set, slave=self.arm.modbus_address)
+        await self.arm.modbus_slave.client.write_multiple_registers(self.reg, values=value_set)
         return value
 
     async def set(self, value=None, mode=None, alias=None):
@@ -1519,7 +1532,7 @@ class AnalogOutputBrain:
             elif mode == "Resistance":
                 val = 3
             self.mode = mode
-            await self.arm.modbus_slave.client.write_register(self.regmode, val, slave=self.arm.modbus_address)
+            await self.arm.modbus_slave.client.write_single_register(self.regmode, val)
             if mode == "Voltage" or mode == "Current":
                 await self.set_value(cur_val)        # Restore original value (i.e. 1.5V becomes 1.5mA)
         if not (value is None):
@@ -1601,7 +1614,7 @@ class AnalogOutput:
             valuei = 0
         elif valuei > 4095:
             valuei = 4095
-        await self.arm.modbus_slave.client.write_register(self.reg, valuei, slave=self.arm.modbus_address)
+        await self.arm.modbus_slave.client.write_single_register(self.reg, valuei)
         return float(valuei) * 0.0025
 
     async def set(self, value=None, mode=None, alias=None):
@@ -1613,7 +1626,7 @@ class AnalogOutput:
             if 'value' not in mdata:
                 raise ValueError("AnalogOutput: this device cant switch mode!")
             mvalue = int(mdata['value'])
-            await self.arm.modbus_slave.client.write_register(self.regmode, mvalue, slave=self.arm.modbus_address)
+            await self.arm.modbus_slave.client.write_single_register(self.regmode, mvalue)
 
         if not (value is None):
             await self.set_value(value)
@@ -1640,8 +1653,7 @@ class AnalogInput:
         self.is_voltage = lambda: True
         self.value = None
         self.transformation = lambda registers: \
-              round(float(ModbusBaseClient.convert_from_registers(registers,
-                          ModbusBaseClient.DATATYPE.FLOAT32, "little")), 3)
+              round(float(from_registers(FLOAT32_LE, registers)), 3)
 
         #logger.debug(f"AnalogInput.__init__ called, instance content {vars(self)}")
 
@@ -1662,27 +1674,19 @@ class AnalogInput:
                     logger.debug(f"Aplying transformation on analog input {self.circuit}: {datatype}  {decimals}")
                     if datatype == "float32":
                         self.transformation = lambda registers:\
-                            round(float(ModbusBaseClient.convert_from_registers(registers,
-                                        ModbusBaseClient.DATATYPE.FLOAT32,
-                                        "little")) * ratio, decimals)
+                            round(float(from_registers(FLOAT32_LE, registers)) * ratio, decimals)
 
                     elif datatype == "int32":
                         self.transformation = lambda registers:\
-                            int(ModbusBaseClient.convert_from_registers(registers,
-                                ModbusBaseClient.DATATYPE.INT32,
-                                "little")) * ratio
+                            int(from_registers(INT32_LE, registers)) * ratio
 
                     elif datatype == "uint32" and isinstance(ratio, float) :
                         self.transformation = lambda registers:\
-                            round(int(ModbusBaseClient.convert_from_registers(registers,
-                                      ModbusBaseClient.DATATYPE.UINT32,
-                                      "little")) * ratio, decimals)
+                            round(int(from_registers(UINT32_LE, registers)) * ratio, decimals)
 
                     elif datatype == "uint32":
                         self.transformation = lambda registers:\
-                            int(ModbusBaseClient.convert_from_registers(registers,
-                                ModbusBaseClient.DATATYPE.UINT32,
-                                "little")) * ratio
+                            int(from_registers(UINT32_LE, registers)) * ratio
                 return mode
         return None
 
@@ -1730,7 +1734,7 @@ class AnalogInput:
             if 'value' not in mdata:
                 raise ValueError("AnalogInput: this device cant switch mode!")
             mvalue = int(mdata['value'])
-            await self.arm.modbus_slave.client.write_register(self.regmode, mvalue, slave=self.arm.modbus_address)
+            await self.arm.modbus_slave.client.write_single_register(self.regmode, mvalue)
         return self.full()
 
     def full(self):
