@@ -90,6 +90,12 @@ class ModbusCacheMap(object):
         except (IndexError, KeyError) as E:
             raise ValueError(f"get_register: get register {index} error: {E}")
 
+    def set_register(self, index, values, is_input=False):
+        """ Update cached registers after a successful write """
+        group, group_index = self.__get_reg_group(index=index, is_input=is_input)
+        for i, value in enumerate(values):
+            group[group_index + i] = value
+
     async def get_register_async(self, count, index, is_input=False):
         group, group_index = self.__get_reg_group(index=index, is_input=is_input)
         # ^^ raise exception if index not in cache map!
@@ -1315,6 +1321,8 @@ class DigitalInput:
                     self.ds_mode = 'Inverted'
                 elif curr_ds_tgl & self.bitmask:
                     self.ds_mode = 'Toggle'
+                else:
+                    self.ds_mode = 'Simple'
             else:
                 self.mode = "Simple"
 
@@ -1354,47 +1362,57 @@ class DigitalInput:
                     'circuit': self.circuit,
                     'value': self.value}
 
+    async def write_config_register(self, reg, value):
+        """ Write register and update the cache, so check_new_data does not see a stale value """
+        await self.arm.modbus_slave.client.write_single_register(reg, value)
+        self.arm.modbus_slave.modbus_cache_map.set_register(reg, [value])
+
     async def set(self, debounce=None, mode=None, counter=None, counter_mode=None, ds_mode=None, alias=None):
         if alias is not None:
             Devices.set_alias(alias, self)
 
-        if mode is not None and mode != self.mode and mode in self.modes:
+        # Decide by the requested values and always read-modify-write the registers:
+        # self.mode and self.ds_mode can be stale or rewritten by check_new_data()
+        # in the scan task while this coroutine awaits.
+        if mode not in self.modes:
+            mode = self.mode
+        else:
             self.mode = mode
-            if self.mode == 'DirectSwitch':
+            if mode == 'DirectSwitch':
                 curr_ds = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regmode)
                 curr_ds_val = curr_ds[0]
                 curr_ds_val = curr_ds_val | int(self.bitmask)
-                await self.arm.modbus_slave.client.write_single_register(self.regmode, curr_ds_val)
+                await self.write_config_register(self.regmode, curr_ds_val)
             else:
                 curr_ds = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regmode)
                 curr_ds_val = curr_ds[0]
                 curr_ds_val = curr_ds_val & (~int(self.bitmask))
-                await self.arm.modbus_slave.client.write_single_register(self.regmode, curr_ds_val)
+                await self.write_config_register(self.regmode, curr_ds_val)
 
-        if self.mode == 'DirectSwitch' and ds_mode is not None and ds_mode in self.ds_modes:
+        if mode == 'DirectSwitch' and ds_mode is not None and ds_mode in self.ds_modes:
             self.ds_mode = ds_mode
             curr_ds_pol = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regpolarity)
             curr_ds_tgl = await self.arm.modbus_slave.modbus_cache_map.get_register_async(1, self.regtoggle)
             curr_ds_pol_val = curr_ds_pol[0]
             curr_ds_tgl_val = curr_ds_tgl[0]
-            if self.ds_mode == 'Inverted':
+            if ds_mode == 'Inverted':
                 curr_ds_pol_val = curr_ds_pol_val | self.bitmask
                 curr_ds_tgl_val = curr_ds_tgl_val & (~self.bitmask)
-            elif self.ds_mode == 'Toggle':
+            elif ds_mode == 'Toggle':
                 curr_ds_pol_val = curr_ds_pol_val & (~self.bitmask)
                 curr_ds_tgl_val = curr_ds_tgl_val | self.bitmask
             else:
                 curr_ds_pol_val = curr_ds_pol_val & (~self.bitmask)
                 curr_ds_tgl_val = curr_ds_tgl_val & (~self.bitmask)
-            await self.arm.modbus_slave.client.write_single_register(self.regpolarity, curr_ds_pol_val)
-            await self.arm.modbus_slave.client.write_single_register(self.regtoggle, curr_ds_tgl_val)
+            await self.write_config_register(self.regpolarity, curr_ds_pol_val)
+            await self.write_config_register(self.regtoggle, curr_ds_tgl_val)
 
         if counter_mode is not None and counter_mode in self.counter_modes and counter_mode != self.counter_mode:
             self.counter_mode = counter_mode
 
         if debounce is not None:
             if self.regdebounce is not None:
-                await self.arm.modbus_slave.client.write_single_register(self.regdebounce, int(float(debounce)))
+                await self.write_config_register(self.regdebounce, int(float(debounce)))
         if counter is not None:
             if self.regcounter is not None:
                 await self.arm.modbus_slave.client.write_uint32(self.regcounter, int(float(counter)))
