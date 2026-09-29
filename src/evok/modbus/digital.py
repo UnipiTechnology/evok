@@ -17,7 +17,7 @@ from ..devices import MODBUS_SLAVE, \
                      REGISTER, DATA_POINT, BOARD, NV_SAVE, Devices
 from ..errors import ModbusSlaveError
 from ..log import logger
-from .cache import ModbusCacheMap, ENoCacheRegister
+from .cache import ENoCacheRegister
 
 
 

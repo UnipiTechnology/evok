@@ -13,10 +13,7 @@ from .analog import  AnalogInput, AnalogOutput, AnalogOutputBrain,\
                      Register, DataPoint
 from ..devices import \
                      DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
-                     REGISTER, DATA_POINT, BOARD, NV_SAVE, Devices
-
-from .cache import ModbusCacheMap, ENoCacheRegister
-from ..errors import ModbusSlaveError
+                     REGISTER, DATA_POINT, NV_SAVE, Devices
 
 class IOParser:
 
@@ -240,50 +237,3 @@ class IOParser:
     def populate(self):
         for m_feature in self.hw_features:
             self.parse_feature(m_feature)
-
-
-class Board(IOParser):
-    def __init__(self, evok_config, circuit, modbus_address, modbus_slave, hw_definition: dict, major_group=1):
-        super().__init__(modbus_slave, hw_definition.get('modbus_features', []),
-                         circuit=circuit)
-        self.alias = ""
-        self.devtype = BOARD
-        self.evok_config = evok_config
-        self.modbus_address = modbus_address
-        self.hw_definition = hw_definition
-
-    @property
-    def cache(self):
-        return self.modbus_slave.modbus_cache_map
-
-    @property
-    def client(self):
-        return self.modbus_slave.client
-
-    async def set(self, alias=None):
-        if not alias is None:
-            Devices.set_alias(alias, self)
-        return await self.full()
-
-    async def initialise_cache(self, cache_definition):
-        if 'modbus_register_blocks' in cache_definition:
-            if self.modbus_slave.modbus_cache_map is None:
-                self.modbus_slave.modbus_cache_map = ModbusCacheMap(cache_definition['modbus_register_blocks'], self.modbus_slave)
-                await self.modbus_slave.modbus_cache_map.do_scan(initial=True)
-                await self.modbus_slave.modbus_cache_map.sem.acquire()
-                self.modbus_slave.modbus_cache_map.sem.release()
-            else:
-                await self.modbus_slave.modbus_cache_map.sem.acquire()
-                self.modbus_slave.modbus_cache_map.sem.release()
-        else:
-            raise Exception("HW Definition %s requires Modbus register blocks to be specified" % cache_definition['type'])
-
-    async def parse_definition(self):
-        try:
-            await self.initialise_cache(self.hw_definition)
-            self.populate()
-        except ENoCacheRegister as E:
-            raise ModbusSlaveError(f"Error while parsing HW definition. ({E}) \t Please check your configuration file.")
-
-    def get(self):
-        return self.full()

@@ -11,7 +11,7 @@ from tmodbus import (
     AsyncSmartTransport
 )
 
-from .cache import XModbusCacheMap
+from .cache import ModbusCacheMap
 from ..devices import devents
 from ..log import logger
 
@@ -19,7 +19,7 @@ class Client:
 
     def __init__(self, name: str,
                  mb_client: AsyncModbusClient,
-                 cache: XModbusCacheMap):
+                 cache: ModbusCacheMap):
         self.name = name
         self.cache = cache
         self.mb_client = mb_client

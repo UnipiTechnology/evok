@@ -19,8 +19,7 @@ from ..devices import MODBUS_SLAVE, \
                      REGISTER, DATA_POINT, BOARD, NV_SAVE, Devices
 from ..errors import ModbusSlaveError
 from ..log import logger
-from .cache import ModbusCacheMap, ENoCacheRegister
-#from .builder import Board
+from .cache import ENoCacheRegister
 
 FLOAT32_BE = OrderAwareStruct(">f")
 FLOAT32_LE = OrderAwareStruct(">f", word_order="little")

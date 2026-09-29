@@ -23,7 +23,7 @@ from typing import Union
 from ..devices import MODBUS_SLAVE
 from ..log import logger
 from .builder import IOParser
-from .cache import XModbusCacheMap, ENoCacheRegister
+from .cache import ModbusCacheMap, ENoCacheRegister
 from .client import Client
 
 import subprocess
@@ -57,7 +57,7 @@ class ModbusScanner:
                                       unit_id=unit_id,
                                       word_order="little")
 
-        self.cache = XModbusCacheMap(hw_definition.get('modbus_register_blocks', []),
+        self.cache = ModbusCacheMap(hw_definition.get('modbus_register_blocks', []),
                                      mb_client)
 
         self.client = Client(self.name, mb_client, self.cache)
