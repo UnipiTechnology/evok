@@ -24,7 +24,7 @@ print(requests.post(url, json=payload).json())
 ```
 
 ```rs title="Output"
-{'individual_assignments': [{'dev': 'do', 'circuit': '1_01', 'value': 0, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'glob_dev_id': 2, 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_02', 'value': 0, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'glob_dev_id': 2, 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_03', 'value': 0, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'glob_dev_id': 2, 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_04', 'value': 0, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'glob_dev_id': 2, 'pwm_freq': 4800.0, 'pwm_duty': 0}]}
+{'individual_assignments': [{'dev': 'do', 'circuit': '1_01', 'value': 0, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_02', 'value': 0, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_03', 'value': 0, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_04', 'value': 0, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}]}
 ```
 
 ### Setting DOs to LOW
@@ -45,7 +45,7 @@ print(requests.post(url, json=payload).json())
 ```
 
 ``` rs title="Output"
-{'individual_assignments': [{'dev': 'do', 'circuit': '1_01', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'glob_dev_id': 2, 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_02', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'glob_dev_id': 2, 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_03', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'glob_dev_id': 2, 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_04', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'glob_dev_id': 2, 'pwm_freq': 4800.0, 'pwm_duty': 0}]}
+{'individual_assignments': [{'dev': 'do', 'circuit': '1_01', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_02', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_03', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_04', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}]}
 ```
 
 !!! tip

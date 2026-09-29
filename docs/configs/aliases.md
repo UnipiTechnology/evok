@@ -48,7 +48,7 @@ DO 1_01 will be called my_relay.
     ```
 
 ```rs title="Output"
-{'success': True, 'result': {'dev': 'relay', 'relay_type': 'digital', 'circuit': '1_01', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'glob_dev_id': 2, 'pwm_freq': 4800.0, 'pwm_duty': 0, 'alias': 'my_relay'}}
+{'success': True, 'result': {'dev': 'relay', 'relay_type': 'digital', 'circuit': '1_01', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0, 'alias': 'my_relay'}}
 ```
 
 ### Removing alias for DO
@@ -77,7 +77,7 @@ Alias of DO 1_01 will be removed.
     ```
 
 ```rs title="Output"
-{'success': True, 'result': {'dev': 'relay', 'relay_type': 'digital', 'circuit': '1_01', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'glob_dev_id': 2, 'pwm_freq': 4800.0, 'pwm_duty': 0}}
+{'success': True, 'result': {'dev': 'relay', 'relay_type': 'digital', 'circuit': '1_01', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}}
 ```
 
 ### Force saving alias to flash

@@ -48,17 +48,17 @@ For more information see [Evok configuration](../configs/evok_configuration.md).
 WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
  * Running on http://127.0.0.1:8181
 Press CTRL+C to quit
-{'[{"dev": "do", "circuit": "1_03", "value": 0, "pending": false, "mode": "Simple", "modes": ["Simple", "PWM"], "glob_dev_id": 2, "pwm_freq": 4800.0, "pwm_duty": 0}]': ''}
+{'[{"dev": "do", "circuit": "1_03", "value": 0, "pending": false, "mode": "Simple", "modes": ["Simple", "PWM"], "pwm_freq": 4800.0, "pwm_duty": 0}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:54:58] "POST / HTTP/1.1" 200 -
-{'[{"dev": "ro", "circuit": "2_04", "value": 1, "pending": false, "mode": "Simple", "modes": ["Simple"], "glob_dev_id": 3}]': ''}
+{'[{"dev": "ro", "circuit": "2_04", "value": 1, "pending": false, "mode": "Simple", "modes": ["Simple"]}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:55:02] "POST / HTTP/1.1" 200 -
-{'[{"dev": "ro", "circuit": "2_04", "value": 0, "pending": false, "mode": "Simple", "modes": ["Simple"], "glob_dev_id": 3}]': ''}
+{'[{"dev": "ro", "circuit": "2_04", "value": 0, "pending": false, "mode": "Simple", "modes": ["Simple"]}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:55:02] "POST / HTTP/1.1" 200 -
-{'[{"dev": "ao", "circuit": "1_01", "mode": "Voltage", "modes": {"Voltage": {"value": 0, "unit": "V", "range": [0, 10]}, "Current": {"value": 1, "unit": "mA", "range": [0, 20]}, "Resistance": {"value": 2, "unit": "Ohm", "range": [0, 2000]}}, "glob_dev_id": 2, "unit": "V", "value": 8.301}]': ''}
+{'[{"dev": "ao", "circuit": "1_01", "mode": "Voltage", "modes": {"Voltage": {"value": 0, "unit": "V", "range": [0, 10]}, "Current": {"value": 1, "unit": "mA", "range": [0, 20]}, "Resistance": {"value": 2, "unit": "Ohm", "range": [0, 2000]}}, "unit": "V", "value": 8.301}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:55:05] "POST / HTTP/1.1" 200 -
-{'[{"dev": "ao", "circuit": "2_01", "mode": "Voltage", "modes": {"Voltage": {"unit": "V", "range": [0, 10]}}, "glob_dev_id": 3, "value": 1.5, "unit": "V", "range": [0, 10]}]': ''}
+{'[{"dev": "ao", "circuit": "2_01", "mode": "Voltage", "modes": {"Voltage": {"unit": "V", "range": [0, 10]}}, "value": 1.5, "unit": "V", "range": [0, 10]}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:55:05] "POST / HTTP/1.1" 200 -
-{'[{"dev": "ao", "circuit": "1_01", "mode": "Voltage", "modes": {"Voltage": {"value": 0, "unit": "V", "range": [0, 10]}, "Current": {"value": 1, "unit": "mA", "range": [0, 20]}, "Resistance": {"value": 2, "unit": "Ohm", "range": [0, 2000]}}, "glob_dev_id": 2, "unit": "V", "value": 2.7}]': ''}
+{'[{"dev": "ao", "circuit": "1_01", "mode": "Voltage", "modes": {"Voltage": {"value": 0, "unit": "V", "range": [0, 10]}, "Current": {"value": 1, "unit": "mA", "range": [0, 20]}, "Resistance": {"value": 2, "unit": "Ohm", "range": [0, 2000]}}, "unit": "V", "value": 2.7}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:55:06] "POST / HTTP/1.1" 200 -
 ...
 ```

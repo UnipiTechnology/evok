@@ -320,12 +320,6 @@ class JSONBulkHandler(tornado.web.RequestHandler):
                             if single_dev.circuit in single_query['device_circuits']:
                                 all_devs_filtered.append(single_dev)
                         all_devs = all_devs_filtered
-                    if 'global_device_id' in single_query:
-                        all_devs_filtered = []
-                        for single_dev in all_devs:
-                            if single_dev.dev_id == single_query['global_device_id']:
-                                all_devs_filtered.append(single_dev)
-                        all_devs = all_devs_filtered
                     if 'group_queries' in result:
                         result['group_queries'] += [map(methodcaller('full'), all_devs)]
                     else:
@@ -345,13 +339,6 @@ class JSONBulkHandler(tornado.web.RequestHandler):
                             if single_dev.circuit in single_command['device_circuits']:
                                 all_devs_filtered.append(single_dev)
                         all_devs = all_devs_filtered
-                    if 'global_device_id' in single_command:
-                        all_devs_filtered = []
-                        for single_dev in all_devs:
-                            if single_dev.dev_id == single_command['global_device_id']:
-                                all_devs_filtered.append(single_dev)
-                        for single_dev in all_devs_filtered:
-                            outp = await all_devs[single_dev].set(**(single_command['assigned_values']))
                     if 'group_assignments' in result:
                         result['group_assignments'] += [map(methodcaller('full'), all_devs)]
                     else:

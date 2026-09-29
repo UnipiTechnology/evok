@@ -31,7 +31,7 @@ Value of DI 1.01 will be returned.
     ```
 
 ```rs title="Output"
-{"dev": "di", "circuit": "1_01", "value": 0, "debounce": 50, "counter_modes": ["Enabled", "Disabled"], "counter_mode": "Enabled", "counter": 0, "mode": "Simple", "modes": ["Simple", "DirectSwitch"], "glob_dev_id": 2}
+{"dev": "di", "circuit": "1_01", "value": 0, "debounce": 50, "counter_modes": ["Enabled", "Disabled"], "counter_mode": "Enabled", "counter": 0, "mode": "Simple", "modes": ["Simple", "DirectSwitch"]}
 ```
 
 ### Setting DO
@@ -60,7 +60,7 @@ DO 1.01 will be set to HIGH.
     ```
 
 ```rs title="Output"
-{"success": true, "result": {"dev": "do", "circuit": "1_01", "value": 1, "pending": false, "mode": "Simple", "modes": ["Simple", "PWM"], "glob_dev_id": 2, "pwm_freq": 4800.0, "pwm_duty": 0}}
+{"success": true, "result": {"dev": "do", "circuit": "1_01", "value": 1, "pending": false, "mode": "Simple", "modes": ["Simple", "PWM"], "pwm_freq": 4800.0, "pwm_duty": 0}}
 ```
 
 !!! tip

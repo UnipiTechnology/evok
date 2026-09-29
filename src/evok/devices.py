@@ -143,18 +143,6 @@ class DeviceList(dict):
     def remove_item(self, key, value):
         del (self[key])[value.circuit]
 
-    def remove_global_device(self, glob_dev_id):
-        try:
-            for devtype_name in num_to_devtype_name.values():
-                to_delete = []
-                for dev_name in self[devtype_name]:
-                    if ((self[devtype_name])[dev_name]).dev_id == glob_dev_id:
-                        to_delete += [(self[devtype_name])[dev_name]]
-                for value in to_delete:
-                    del (self[devtype_name])[value.circuit]
-        except KeyError as E:
-            logger.warning(f"Trying to remove non-existing global device ({E})")
-
     def by_int(self, devtype_name, circuit=None, major_group=None):
         circuit = str(circuit) if circuit is not None else None
         devdict = self[devtype_name]
