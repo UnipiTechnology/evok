@@ -6,3 +6,5 @@ hw_definitions/
 .idea/
 .venv
 venv/
+*.egg-info/
+__pycache__/
