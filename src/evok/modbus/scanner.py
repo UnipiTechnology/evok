@@ -35,12 +35,10 @@ class ModbusScanner:
 
     def __init__(self, transport: AsyncSmartTransport,
                  circuit, evok_config, scan_freq, scan_enabled, hw_definition,
-                 unit_id: int,
-                 major_group=1):
+                 unit_id: int):
         self.alias = ""
         self.devtype = MODBUS_SLAVE
         self.circuit: Union[None, str] = circuit
-        self.major_group = major_group
         self.modbus_address = unit_id
         is_tcp = isinstance(transport.base_transport, AsyncTcpTransport)
         self.modbus_type = 'TCP' if is_tcp else 'RTU'
@@ -63,7 +61,7 @@ class ModbusScanner:
                                      mb_client)
 
         self.client = Client(self.name, mb_client, self.cache)
-        self.parser = IOParser(self.client, hw_definition.get('modbus_features', []), circuit, major_group)
+        self.parser = IOParser(self.client, hw_definition.get('modbus_features', []), circuit)
 
     def start_scanning(self):
         if self.scan_task is None or self.scan_task.done():
@@ -97,7 +95,7 @@ class ModbusScanner:
         while not await self.cache.do_scan(initial=True):
             await asyncio.sleep(self.INITIAL_SCAN_INTERVAL)
 
-        await self.parser.populate() #self.client)
+        self.parser.populate()
 
         interval = self.scan_interval
         err = False

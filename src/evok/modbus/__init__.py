@@ -8,9 +8,11 @@ Created on Fri Sep 25 12:53:01 2026
 
 from .cache import ModbusCacheMap, ENoCacheRegister
 from .modbus_unit import ModbusSlave
+from .scanner import ModbusScanner
 
 __all__ = [
     'ModbusSlave',
+    'ModbusScanner',
     'ModbusCacheMap',
     'ENoCacheRegister',
 ]

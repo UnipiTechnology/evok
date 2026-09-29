@@ -4,7 +4,7 @@ import asyncio
 import logging
 import traceback
 
-from .modbus import ModbusSlave
+from .modbus import ModbusScanner
 from tmodbus import (
     AsyncRtuTransport,
     AsyncSmartTransport,
@@ -293,17 +293,15 @@ def create_devices(evok_config: EvokConfig, hw_dict):
                     scanfreq = device_data.get("scan_frequency", 50)
                     scan_enabled = device_data.get("scan_enabled", True)
                     device_model = device_data["model"]
-                    circuit = f"{device_name}"
-                    major_group = device_name
+                    circuit = str(device_name)
                     if device_model not in hw_dict.definitions:
                         logger.error("Unsupported device model %s. Check HW definitions",
                                      device_model)
                         raise EvokConfigError("")
                     hw_model_dict = hw_dict.definitions[device_model]
 
-                    slave = ModbusSlave(bus.bus_driver, circuit, evok_config, scanfreq, scan_enabled,
-                                        hw_model_dict, device_model=device_model, slave_id=slave_id,
-                                        major_group=major_group)
+                    slave = ModbusScanner(bus.bus_driver, circuit, evok_config, scanfreq, scan_enabled,
+                                          hw_model_dict, unit_id=slave_id)
                     Devices.register_device(MODBUS_SLAVE, slave)
 
                     if bus_device_info is None or "device_info" in device_data:

@@ -304,46 +304,30 @@ class JSONBulkHandler(tornado.web.RequestHandler):
         try:
             js_dict = json.loads(self.request.body)
             if 'group_queries' in js_dict:
+                result['group_queries'] = []
                 for single_query in js_dict['group_queries']:
-                    all_devs = []
-                    for device_type in single_query['device_types']:
-                        all_devs += Devices.by_name(device_type)
-                    if 'group' in single_query:
-                        all_devs_filtered = []
-                        for single_dev in all_devs:
-                            if single_dev.arm.major_group == single_query['group']:
-                                all_devs_filtered.append(single_dev)
-                        all_devs = all_devs_filtered
-                    if 'device_circuits' in single_query:
-                        all_devs_filtered = []
-                        for single_dev in all_devs:
-                            if single_dev.circuit in single_query['device_circuits']:
-                                all_devs_filtered.append(single_dev)
-                        all_devs = all_devs_filtered
-                    if 'group_queries' in result:
-                        result['group_queries'] += [map(methodcaller('full'), all_devs)]
-                    else:
-                        result['group_queries'] = [map(methodcaller('full'), all_devs)]
+                    all_devs = [ dev for device_type in single_query['device_types']\
+                                     for dev in Devices.by_name(device_type)]
+                    if (grp := single_query.get('group', None)) is not None:
+                        all_devs = [ dev for dev in all_devs if dev.major_group == str(grp)]
+                    if (circuits := single_query.get('device_circuits', None)) is not None:
+                        all_devs = [ dev for dev in all_devs if dev.circuit in circuits]
+                    result['group_queries'].append(list(map(methodcaller('full'), all_devs)))
+
             if 'group_assignments' in js_dict:
+                result['group_assignments'] = []
                 for single_command in js_dict['group_assignments']:
                     all_devs = Devices.by_name(single_command['device_type'])
-                    if 'group' in single_command:
-                        all_devs_filtered = []
-                        for single_dev in all_devs:
-                            if single_dev.arm.major_group == single_command['group']:
-                                all_devs_filtered.append(single_dev)
-                        all_devs = all_devs_filtered
-                    if 'device_circuits' in single_command:
-                        all_devs_filtered = []
-                        for single_dev in all_devs:
-                            if single_dev.circuit in single_command['device_circuits']:
-                                all_devs_filtered.append(single_dev)
-                        all_devs = all_devs_filtered
-                    if 'group_assignments' in result:
-                        result['group_assignments'] += [map(methodcaller('full'), all_devs)]
-                    else:
-                        result['group_assignments'] = [map(methodcaller('full'), all_devs)]
+                    if (grp := single_command.get('group', None)) is not None:
+                        all_devs = [ dev for dev in all_devs if dev.major_group == str(grp)]
+                    if (circuits := single_command.get('device_circuits', None)) is not None:
+                        all_devs = [ dev for dev in all_devs if dev.circuit in circuits]
+                    for dev in all_devs:
+                        await dev.set(**(single_command['assigned_values']))
+                    result['group_assignments'].append(list(map(methodcaller('full'), all_devs)))
+
             if 'individual_assignments' in js_dict:
+                result['individual_assignments'] = []
                 for single_command in js_dict['individual_assignments']:
                     dev = single_command['device_type']
                     schema, example = schemas[dev]
@@ -352,10 +336,8 @@ class JSONBulkHandler(tornado.web.RequestHandler):
                     if SCHEMA_VALIDATE:
                         jsonschema.validate(instance=kw, schema=schema)
                     outp = await outp.set(**kw)
-                    if 'individual_assignments' in result:
-                        result['individual_assignments'] += [outp]
-                    else:
-                        result['individual_assignments'] = [outp]
+                    result['individual_assignments'].append(outp)
+
             self.write(json.dumps(result))
         except Exception as E:
             logger.error(f"Error while processing get: {str(type(E).__name__)}: {str(E)}")
@@ -532,7 +514,6 @@ async def main():
             device.switch_to_async()
 
     for modbus_slave in Devices.by_int(MODBUS_SLAVE):
-        modbus_slave.switch_to_async()
         if modbus_slave.scan_enabled:
             modbus_slave.start_scanning()
 
