@@ -74,12 +74,11 @@ async def test_di_set_counter_and_debounce(unit):
     assert client.mb_client.holding[1011] == 12
 
 
-async def test_di_counter_mode_disabled_hides_counter(unit):
+async def test_di_counter_mode_disabled_zeroes_counter(unit):
     await unit({13: 5})
     di = dev(DI, '1_01')
     await di.set(counter_mode='Disabled')
     assert di.full()['counter'] == 0
-    assert 'counter' not in di.simple()
 
 
 # --- DigitalOutput (hard PWM) -----------------------------------------------

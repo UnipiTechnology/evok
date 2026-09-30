@@ -119,19 +119,24 @@ class Handler(UserBasicHelper):
     ###### Relay ######
     def relay_get(self, circuit):
         relay = Devices.by_int(RO, str(circuit))
-        return relay.get_state()
+        return relay.get()['value']
 
     async def relay_set(self, circuit, value):
         relay = Devices.by_int(RO, str(circuit))
-        return await relay.set_state(value)
+        value = 1 if value else 0
+        await relay.set(value=value)
+        return value
 
     def output_get(self, circuit):
         relay = Devices.by_int(DO, str(circuit))
-        return relay.get_state()
+        state = relay.get()
+        return state['value'], state['pending']
 
     async def output_set(self, circuit, value):
         relay = Devices.by_int(DO, str(circuit))
-        return await relay.set_state(value)
+        value = 1 if value else 0
+        await relay.set(value=value)
+        return value
 
     async def output_set_for_time(self, circuit, value, timeout):
         relay = Devices.by_int(DO, str(circuit))

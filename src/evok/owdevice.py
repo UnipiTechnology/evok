@@ -93,16 +93,6 @@ class DS18B20(MySensor):  # thermometer
             ret['alias'] = self.alias
         return ret
 
-    def simple(self):
-        ret = {'dev': 'temp',
-               'circuit': self.circuit,
-               'value': self.value,
-               'lost': self.lost,
-               'type': self.type}
-        if self.alias is not None and self.alias != '':
-            ret['alias'] = self.alias
-        return ret
-
     async def read_val_from_sens(self, sens):
         new_val = float(await sens.get('temperature'))
         if not (new_val == 85.0 and abs(new_val - self.value) > 2):
@@ -128,20 +118,6 @@ class DS2438(MySensor):  # vdd + vad + thermometer
                'lost': self.lost,
                'time': self.readtime,
                'interval': self.interval,
-               'type': self.type
-               }
-        if self.alias is not None and self.alias != '':
-            ret['alias'] = self.alias
-        return ret
-
-    def simple(self):
-        ret = {'dev': '1wdevice',
-               'circuit': self.circuit,
-               'vdd': getattr(self, 'VDD', None),
-               'vad': getattr(self, 'VAD', None),
-               'temp': getattr(self, 'temperature', None),
-               'vis': getattr(self, 'vis', None),
-               'lost': self.lost,
                'type': self.type
                }
         if self.alias is not None and self.alias != '':
@@ -208,9 +184,6 @@ class DS2408(MySensor):
         if self.alias is not None and self.alias != '':
             ret['alias'] = self.alias
         return ret
-
-    def simple(self):
-        return self.full()
 
     def set_pio(self, pio, value):
         # elif command == OWCMD_SET_PIO:

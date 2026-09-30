@@ -10,20 +10,19 @@ import itertools
 from copy import copy
 from math import isnan
 
-from ..devices import AI, AO, REGISTER, DATA_POINT, Devices
+from ..devices import AI, AO, REGISTER, DATA_POINT
 from ..log import logger
 from .cache import ENoCacheRegister
+from .base import IODevice
 from .client import Client, FLOAT32_LE, to_registers
 
 
-class Register:
-    def __init__(self, circuit, client: Client, post, reg, reg_type="holding", major_group=0, legacy_mode=True):
-        self.alias = ""
-        self.devtype = REGISTER
-        self.circuit = circuit
-        self.client = client
-        self.major_group = major_group
-        self.legacy_mode = legacy_mode
+class Register(IODevice):
+
+    devtype = REGISTER
+
+    def __init__(self, circuit, client: Client, post, reg, reg_type="holding", major_group=0):
+        super().__init__(circuit, client, major_group)
         self.valreg = reg
         self.reg_type = reg_type
 
@@ -38,14 +37,8 @@ class Register:
                'circuit': self.circuit,
                'value': self.regvalue(),
                }
-        if self.alias != '':
-            ret['alias'] = self.alias
+        self._with_alias(ret)
         return ret
-
-    def simple(self):
-        return {'dev': 'register',
-                'circuit': self.circuit,
-                'value': self.regvalue()}
 
     @property
     def value(self):
@@ -57,27 +50,10 @@ class Register:
         return 0
 
 
-    def get(self):
-        return self.full()
-
-    def get_state(self):
-        """ Returns ( status, is_pending )
-              current on/off status is taken from last mcp value without reading it from hardware
-              is_pending is Boolean
-        """
-        return (self.value)
-
-    async def set_state(self, value):
-        """ Sets new on/off status. Disable pending timeouts
-        """
-        await self.client.mb_client.write_single_register(self.valreg, value if value else 0)
-        return value if value else 0
-
     async def set(self, value=None, alias=None):
         """ Sets new on/off status. Disable pending timeouts
         """
-        if alias is not None:
-            Devices.set_alias(alias, self)
+        self.set_alias(alias)
         if value is not None:
             value = int(value)
             await self.client.mb_client.write_single_register(self.valreg, value if value else 0)
@@ -85,9 +61,9 @@ class Register:
         return self.full()
 
 
+class AnalogOutputBrain(IODevice):
 
-
-class AnalogOutputBrain:
+    devtype = AO
 
     modes = {
             'Voltage': {
@@ -108,14 +84,10 @@ class AnalogOutputBrain:
         }
 
     def __init__(self, circuit, client: Client, reg, regmode=None, reg_res=0, major_group=0):
-        self.alias = ""
-        self.devtype = AO
-        self.circuit = circuit
+        super().__init__(circuit, client, major_group)
         self.reg = reg
         self.regmode = regmode
         self.reg_res = reg_res
-        self.client = client
-        self.major_group = major_group
         self.value = None
         self.res_value = None
         self.mode = None
@@ -164,19 +136,8 @@ class AnalogOutputBrain:
                'value': self.value if self.mode != 'Resistance' else self.res_value
         }
 
-        if self.alias != '':
-            ret['alias'] = self.alias
+        self._with_alias(ret)
         return ret
-
-    def simple(self):
-        if self.mode == 'Resistance':
-            return {'dev': 'ao',
-                    'circuit': self.circuit,
-                    'value': self.res_value}
-        else:
-            return {'dev': 'ao',
-                    'circuit': self.circuit,
-                    'value': self.value}
 
     async def set_value(self, value):
         if value < 0:
@@ -189,8 +150,7 @@ class AnalogOutputBrain:
         return value
 
     async def set(self, value=None, mode=None, alias=None):
-        if alias is not None:
-            Devices.set_alias(alias, self)
+        self.set_alias(alias)
 
         if mode is not None and mode in self.modes and self.regmode is not None:
             cur_val = self.value
@@ -204,20 +164,16 @@ class AnalogOutputBrain:
             await self.set_value(float(value))  # Restore original value (i.e. 1.5V becomes 1.5mA)
         return self.full()
 
-    def get(self):
-        return self.full()
 
+class AnalogOutput(IODevice):
 
-class AnalogOutput:
+    devtype = AO
+
     def __init__(self, circuit, client: Client, reg, regmode=None, modes=None, major_group=0):
-        self.alias = ""
-        self.devtype = AO
-        self.circuit = circuit
+        super().__init__(circuit, client, major_group)
         self.reg = reg
         self.regmode = regmode
         self.modes = modes or {}
-        self.client = client
-        self.major_group = major_group
         self.value = None
         self.mode_value = None
         self.mode = list(self.modes.keys())[0] if len(self.modes) == 1 and self.regmode is None else None
@@ -260,14 +216,8 @@ class AnalogOutput:
                'unit': self.unit_name,
                'range': self.range,
                }
-        if self.alias != '':
-            ret['alias'] = self.alias
+        self._with_alias(ret)
         return ret
-
-    def simple(self):
-        return {'dev': 'ao',
-                'circuit': self.circuit,
-                'value': self.value}
 
     async def set_value(self, value):
         valuei = int((float(value) / 0.0025))
@@ -279,8 +229,7 @@ class AnalogOutput:
         return float(valuei) * 0.0025
 
     async def set(self, value=None, mode=None, alias=None):
-        if alias is not None:
-            Devices.set_alias(alias, self)
+        self.set_alias(alias)
 
         if mode is not None and mode in self.modes and self.regmode is not None:
             mdata = self.modes[mode]
@@ -293,26 +242,20 @@ class AnalogOutput:
             await self.set_value(value)
         return self.full()
 
-    def get(self):
-        return self.full()
 
+class AnalogInput(IODevice):
 
-class AnalogInput:
+    devtype = AI
 
-    def __init__(self, circuit, client: Client, reg, regmode=None, major_group=0, legacy_mode=True, modes=None):
-        self.alias = ""
-        self.devtype = AI
-        self.circuit = circuit
+    def __init__(self, circuit, client: Client, reg, regmode=None, major_group=0, modes=None):
+        super().__init__(circuit, client, major_group)
         self.valreg = reg
-        self.client = client
-        self.legacy_mode = legacy_mode
         self.regmode = regmode
         self.modes = modes or {}
         self.mode = list(self.modes.keys())[0] if len(self.modes) == 1 and self.regmode is None else None
         self.mode_value = None
         self.range = None
         self.unit_name = None
-        self.major_group = major_group
         self.value = None
         self.transformation = lambda index: round(float(self.client.read_float32(index)), 3)
 
@@ -368,8 +311,7 @@ class AnalogInput:
         return self.value != old_value or has_changed
 
     async def set(self, mode=None, alias=None):
-        if alias is not None:
-            Devices.set_alias(alias, self)
+        self.set_alias(alias)
 
         if mode is not None:
             if mode not in self.modes:
@@ -390,27 +332,16 @@ class AnalogInput:
                'modes': self.modes,
                'range': self.range,
                }
-        if self.alias != '':
-            ret['alias'] = self.alias
+        self._with_alias(ret)
         return ret
 
-    def get(self):
-        return self.full()
+class DataPoint(IODevice):
 
-    def simple(self):
-        return {'dev': 'ai',
-                'circuit': self.circuit,
-                'value': self.value}
-
-class DataPoint:
+    devtype = DATA_POINT
 
     def __init__(self, circuit, client: Client, reg, reg_type=None, major_group=0, datatype=None, unit=None, offset=0, factor=1, valid_mask_reg=None, valid_mask=None, name=None, post_write=None):
         # TODO - valid mask reg
-        self.alias = ""
-        self.devtype = DATA_POINT
-        self.circuit = circuit
-        self.client = client
-        self.major_group = major_group
+        super().__init__(circuit, client, major_group)
         self.valreg = reg
         self.offset = offset
         self.factor = factor
@@ -460,8 +391,7 @@ class DataPoint:
 
     async def set(self, value=None, alias=None, **kwargs):
         """ Sets new on/off status. Disable pending timeouts """
-        if alias is not None:
-            Devices.set_alias(alias, self)
+        self.set_alias(alias)
 
         raise Exception("Data point object is read-only")
 
@@ -481,22 +411,5 @@ class DataPoint:
         if self.unit is not None:
             ret['unit'] = self.unit
 
-        if self.alias != '':
-            ret['alias'] = self.alias
+        self._with_alias(ret)
         return ret
-
-    def simple(self):
-        return {'dev': 'data_point',
-                'circuit': self.circuit,
-                'value': self.read_value()}
-
-    def get(self):
-        return self.full()
-
-    def get_state(self):
-        """ Returns ( status, is_pending )
-              current on/off status is taken from last mcp value without reading it from hardware
-              is_pending is Boolean
-        """
-        return self.value
-

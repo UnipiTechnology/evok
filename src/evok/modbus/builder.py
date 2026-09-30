@@ -17,8 +17,6 @@ from .client import Client
 
 class IOParser:
 
-    legacy_mode = True
-
     def __init__(self, client: Client, hw_features: list[dict], circuit=None):
         self.hw_features = hw_features
         self.client = client
@@ -41,11 +39,10 @@ class IOParser:
                 _inp = DigitalInput("%s_%02d" % (self.circuit, counter + 1 + start_index), self.client, board_val_reg, 0x1 << (counter % 16),
                                     regdebounce=board_deboun_reg + counter, major_group=self.circuit, regcounter=board_counter_reg + (2 * counter), modes=m_feature['modes'],
                                     ds_modes=m_feature['ds_modes'], regmode=m_feature['direct_reg'], regtoggle=m_feature['toggle_reg'],
-                                    regpolarity=m_feature['polar_reg'], legacy_mode=self.legacy_mode)
+                                    regpolarity=m_feature['polar_reg'])
             else:
                 _inp = DigitalInput("%s_%02d" % (self.circuit, counter + 1 + start_index), self.client, board_val_reg, 0x1 << (counter % 16),
-                                    regdebounce=board_deboun_reg + counter, major_group=self.circuit, regcounter=board_counter_reg + (2 * counter), modes=m_feature['modes'],
-                                    legacy_mode=self.legacy_mode)
+                                    regdebounce=board_deboun_reg + counter, major_group=self.circuit, regcounter=board_counter_reg + (2 * counter), modes=m_feature['modes'])
             self.__register_eventable_device(_inp)
             Devices.register_device(DI, _inp)
             counter+=1
@@ -55,7 +52,7 @@ class IOParser:
         while counter < max_count:
             board_val_reg = m_feature['val_reg']
             _r = Relay("%s_%02d" % (self.circuit, counter + 1), self.client, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
-                      major_group=self.circuit, legacy_mode=self.legacy_mode)
+                      major_group=self.circuit)
             self.__register_eventable_device(_r)
             Devices.register_device(RO, _r)
             counter += 1
@@ -68,13 +65,13 @@ class IOParser:
             if m_feature.get('pwm_reg') and m_feature.get('pwm_ps_reg') and m_feature.get('pwm_c_reg'):
                 _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self.client, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
                                    major_group=self.circuit, pwmcyclereg=m_feature['pwm_c_reg'], pwmprescalereg=m_feature['pwm_ps_reg'], digital_only=True,
-                                   pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'], legacy_mode=self.legacy_mode)
+                                   pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'])
             # Soft PWM
             elif m_feature.get('pwm_reg') and m_feature.get('pwm_preset_reg') and m_feature.get('pwm_cpres_reg'):
                 _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self.client, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
                                    major_group=self.circuit, pwmpresetreg=m_feature['pwm_preset_reg'],
                                    pwmcustompresc=m_feature['pwm_cpres_reg'], digital_only=True,
-                                   pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'], legacy_mode=self.legacy_mode)
+                                   pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'])
             else:
                 raise ValueError(f"Unexpected feature  {m_feature['type']}")
             self.__register_eventable_device(_r)
@@ -86,7 +83,7 @@ class IOParser:
         while counter < max_count:
             board_val_reg = m_feature['val_reg']
             _led = ULED("%s_%02d" % (self.circuit, counter + 1), self.client, counter, board_val_reg, 0x1 << (counter % 16),
-                        m_feature['val_coil'] + counter, major_group=self.circuit, legacy_mode=self.legacy_mode)
+                        m_feature['val_coil'] + counter, major_group=self.circuit)
             self.__register_eventable_device(_led)
             Devices.register_device(LED, _led)
             counter+=1
@@ -107,8 +104,7 @@ class IOParser:
             board_val_reg = m_feature['val_reg']
             board_timeout_reg = m_feature['timeout_reg']
             _wd = Watchdog("%s_%02d" % (self.circuit, counter + 1), self.client, counter, board_val_reg + counter, board_timeout_reg + counter,
-                           major_group=self.circuit, nv_save_coil=m_feature['nv_sav_coil'], reset_coil=m_feature['reset_coil'],
-                           legacy_mode=self.legacy_mode)
+                           major_group=self.circuit, nv_save_coil=m_feature['nv_sav_coil'], reset_coil=m_feature['reset_coil'])
             self.__register_eventable_device(_wd)
             Devices.register_device(WATCHDOG, _wd)
             counter+=1
@@ -144,7 +140,7 @@ class IOParser:
             modes = m_feature['modes']
             _ai = AnalogInput(circuit, self.client, board_val_reg,
                               regmode=m_feature['mode_reg'] + counter if m_feature.get('mode_reg', None) is not None else None,
-                              major_group=self.circuit, modes=modes, legacy_mode=self.legacy_mode)
+                              major_group=self.circuit, modes=modes)
 
             self.__register_eventable_device(_ai)
             Devices.register_device(AI, _ai)
@@ -157,10 +153,10 @@ class IOParser:
             if 'reg_type' in m_feature and m_feature['reg_type'] == 'input':
                 _reg = Register("%s_%d_inp" % (self.circuit, board_val_reg + counter), self.client, counter,
                                 board_val_reg + counter, reg_type='input',
-                                major_group=self.circuit, legacy_mode=self.legacy_mode)
+                                major_group=self.circuit)
             else:
                 _reg = Register("%s_%d" % (self.circuit, board_val_reg + counter), self.client, counter,
-                                board_val_reg + counter, major_group=self.circuit, legacy_mode=self.legacy_mode)
+                                board_val_reg + counter, major_group=self.circuit)
             Devices.register_device(REGISTER, _reg)
             counter+=1
 

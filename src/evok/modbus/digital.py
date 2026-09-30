@@ -13,21 +13,19 @@ from typing import Union
 
 from ..devices import DI, DO, RO, LED, Devices
 from ..log import logger
+from .base import IODevice
 from .client import Client
 
 
+class DigitalOutput(IODevice):
 
-class DigitalOutput:
-    
+    devtype = DO
     pending_task: Union[None, asyncio.Task] = None
     
     def __init__(self, circuit, client: Client, coil, reg, mask, major_group=0,
                  pwmcyclereg=-1, pwmprescalereg=-1, pwmdutyreg=-1, pwmpresetreg=-1, pwmcustompresc=-1 ,
-                 legacy_mode=True, digital_only=False, modes=None):
-        self.alias = ""
-        self.devtype = DO
-        self.circuit = circuit
-        self.client = client
+                 digital_only=False, modes=None):
+        super().__init__(circuit, client, major_group)
         self.modes = modes if modes is not None else ['Simple']
         # Soft-pwm
         self.pwmpresetreg = pwmpresetreg
@@ -43,8 +41,6 @@ class DigitalOutput:
         self.pwm_prescale_val = None
         self.pwm_delay_val = None
         self.mode = None
-        self.major_group = major_group
-        self.legacy_mode = legacy_mode
         self.digital_only = digital_only
         self.coil = coil
         self.valreg = reg
@@ -68,32 +64,10 @@ class DigitalOutput:
         if self.digital_only:
             ret['pwm_freq'] = self.pwm_freq
             ret['pwm_duty'] = self.pwm_duty
-        if self.alias != '':
-            ret['alias'] = self.alias
+        self._with_alias(ret)
         if forced_value is not None:
             ret['value'] = forced_value
         return ret
-
-    def simple(self):
-        return {'dev': 'do',
-                'circuit': self.circuit,
-                'value': self.value}
-
-    def get_state(self):
-        """ Returns ( status, is_pending )
-              current on/off status is taken from last mcp value without reading it from hardware
-              is_pending is Boolean
-        """
-        return (self.value, self.pending_task is not None)
-
-    async def set_state(self, value):
-        """ Sets new on/off status. Disable pending timeouts
-        """
-        if self.pending_task is not None:
-            self.pending_task.cancel()
-            self.pending_task = None
-        await self.client.mb_client.write_single_coil(self.coil, 1 if value else 0)
-        return 1 if value else 0
 
     async def check_new_data(self):
         is_change = False
@@ -249,8 +223,7 @@ class DigitalOutput:
                 await self.client.mb_client.write_single_register(self.pwmdutyreg, tmp_pwm_duty_val)
                 self.mode = 'PWM'
 
-            if alias is not None:
-                Devices.set_alias(alias, self)
+            self.set_alias(alias)
 
             if timeout is None:
                 return self.full()
@@ -268,19 +241,13 @@ class DigitalOutput:
             logger.error(f"Error in set DO: {E}")
             raise E
 
-    def get(self):
-        return self.full()
 
+class Relay(IODevice):
 
-class Relay:
+    devtype = RO
 
-    def __init__(self, circuit, client: Client, coil, reg, mask, major_group=0, legacy_mode=True):
-        self.alias = ""
-        self.devtype = RO
-        self.circuit = circuit
-        self.client = client
-        self.major_group = major_group
-        self.legacy_mode = legacy_mode
+    def __init__(self, circuit, client: Client, coil, reg, mask, major_group=0):
+        super().__init__(circuit, client, major_group)
         self.coil = coil
         self.valreg = reg
         self.bitmask = mask
@@ -295,29 +262,10 @@ class Relay:
                'circuit': self.circuit,
                'value': self.value,
                }
-        if self.alias != '':
-            ret['alias'] = self.alias
+        self._with_alias(ret)
         if forced_value is not None:
             ret['value'] = forced_value
         return ret
-
-    def simple(self):
-        return {'dev': 'ro',
-                'circuit': self.circuit,
-                'value': self.value}
-
-    def get_state(self):
-        """ Returns ( status, is_pending )
-              current on/off status is taken from last mcp value without reading it from hardware
-              is_pending is Boolean
-        """
-        return self.value
-
-    async def set_state(self, value):
-        """ Sets new on/off status. Disable pending timeouts
-        """
-        await self.client.mb_client.write_single_coil(self.coil, 1 if value else 0)
-        return 1 if value else 0
 
     async def check_new_data(self):
         old_value = copy(self.value)
@@ -333,8 +281,7 @@ class Relay:
                 parsed_value = 1 if int(value) else 0
                 await self.client.mb_client.write_single_coil(self.coil, parsed_value)
 
-            if alias is not None:
-                Devices.set_alias(alias, self)
+            self.set_alias(alias)
 
             return self.full()
 
@@ -342,18 +289,13 @@ class Relay:
             logger.exception(f"Error in set RO: {E}")
             raise E
 
-    def get(self):
-        return self.full()
 
+class ULED(IODevice):
 
-class ULED(object):
-    def __init__(self, circuit, client: Client, post, reg, mask, coil, major_group=0, legacy_mode=True):
-        self.alias = ""
-        self.devtype = LED
-        self.circuit = circuit
-        self.client = client
-        self.major_group = major_group
-        self.legacy_mode = legacy_mode
+    devtype = LED
+
+    def __init__(self, circuit, client: Client, post, reg, mask, coil, major_group=0):
+        super().__init__(circuit, client, major_group)
         self.bitmask = mask
         self.valreg = reg
         self.regvalue = lambda: self.client.read_u16(self.valreg)
@@ -362,59 +304,34 @@ class ULED(object):
 
     def full(self):
         ret = {'dev': 'led', 'circuit': self.circuit, 'value': self.value}
-        if self.alias != '':
-            ret['alias'] = self.alias
+        self._with_alias(ret)
         return ret
-
-    def simple(self):
-        return {'dev': 'led', 'circuit': self.circuit, 'value': self.value}
-
-    def value_delta(self, new_val):
-        return (self.regvalue() ^ new_val) & self.bitmask
 
     async def check_new_data(self):
         old_value = copy(self.value)
         self.value = 1 if (self.regvalue() & self.bitmask) else 0
         return old_value != self.value
 
-    def get_state(self):
-        """ Returns ( status, is_pending )
-              current on/off status is taken from last mcp value without reading it from hardware
-              is_pending is Boolean
-        """
-        return self.value
-
-    async def set_state(self, value):
-        """ Sets new on/off status. Disable pending timeouts
-        """
-        await self.client.mb_client.write_single_coil(self.coil, 1 if value else 0)
-        return 1 if value else 0
-
     async def set(self, value=None, alias=None):
         """ Sets new on/off status. Disable pending timeouts
         """
-        if alias is not None:
-            Devices.set_alias(alias, self)
+        self.set_alias(alias)
         if value is not None:
             value = int(value)
             await self.client.mb_client.write_single_coil(self.coil, 1 if value else 0)
         return self.full()
 
-    def get(self):
-        return self.full()
 
-class DigitalInput:
+class DigitalInput(IODevice):
+
+    devtype = DI
+
     def __init__(self, circuit, client: Client, reg, mask, regcounter=None, regdebounce=None, regmode=None, regtoggle=None, regpolarity=None,
-                 major_group=0, modes=['Simple'], ds_modes=['Simple'], counter_modes=['Enabled', 'Disabled'], legacy_mode=True):
-        self.alias = ""
-        self.devtype = DI
-        self.circuit = circuit
-        self.client = client
+                 major_group=0, modes=['Simple'], ds_modes=['Simple'], counter_modes=['Enabled', 'Disabled']):
+        super().__init__(circuit, client, major_group)
         self.modes = modes
         self.ds_modes = ds_modes
         self.counter_modes = counter_modes
-        self.major_group = major_group
-        self.legacy_mode = legacy_mode
         self.bitmask = mask
         self.regcounter = regcounter
         self.regdebounce = regdebounce
@@ -472,20 +389,8 @@ class DigitalInput:
         if self.mode == 'DirectSwitch':
             ret['ds_mode'] = self.ds_mode
             ret['ds_modes'] = self.ds_modes
-        if self.alias != '':
-            ret['alias'] = self.alias
+        self._with_alias(ret)
         return ret
-
-    def simple(self):
-        if self.counter_mode == 'Enabled':
-            return {'dev': 'di',
-                    'circuit': self.circuit,
-                    'value': self.value,
-                    'counter': self.counter}
-        else:
-            return {'dev': 'di',
-                    'circuit': self.circuit,
-                    'value': self.value}
 
     async def write_config_register(self, reg, value):
         """ Write register and update the cache, so check_new_data does not see a stale value """
@@ -493,8 +398,7 @@ class DigitalInput:
         self.client.cache.set_register(reg, [value])
 
     async def set(self, debounce=None, mode=None, counter=None, counter_mode=None, ds_mode=None, alias=None):
-        if alias is not None:
-            Devices.set_alias(alias, self)
+        self.set_alias(alias)
 
         # Decide by the requested values and always read-modify-write the registers:
         # self.mode and self.ds_mode can be stale or rewritten by check_new_data()
