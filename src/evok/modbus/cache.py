@@ -26,50 +26,49 @@ class RegisterGroup:
     values: list[int] = field(init=False)
 
     def __post_init__(self):
-       self.values = [None] * self.count
-        
-    def is_member(self, address: int, count: int = 1) -> bool:
-        return self.address <= address and self.address+self.count >= address + count
+        self.values = [None] * self.count
 
-    def update(self, values, address = None):
+    def is_member(self, address: int, count: int = 1) -> bool:
+        return self.address <= address and self.address + self.count >= address + count
+
+    def update(self, values, address=None):
         offset = address - self.address if address is not None else 0
         if offset < 0:
             return
-        for i in range(0, min(len(values), len(self.values)-offset)):
-            self.values[i+offset] = values[i]
+        for i in range(0, min(len(values), len(self.values) - offset)):
+            self.values[i + offset] = values[i]
 
-    def clear_counter(self): 
+    def clear_counter(self):
         self.f_counter = 0
 
-    def tick_counter(self): 
+    def tick_counter(self):
         self.f_counter = self.f_divider - 1 if self.f_counter == 0 else \
-                         self.f_counter - 1
+            self.f_counter - 1
 
 
 class ModbusCacheMap(object):
-    
+
     def __init__(self, modbus_reg_map, modbus_client):
         self.modbus_client: AsyncModbusClient = modbus_client
         self.last_comm_time = 0
-        self.groups = [ RegisterGroup(address=mg["start_reg"],
+        self.groups = [RegisterGroup(address=mg["start_reg"],
+                                     count=mg["count"],
+                                     f_divider=mg["frequency"])
+                       for mg in modbus_reg_map
+                       if mg.get("type", "holding") == "holding"]
+        self.igroups = [RegisterGroup(address=mg["start_reg"],
                                       count=mg["count"],
-                                      f_divider=mg["frequency"]) \
-                        for mg in modbus_reg_map \
-                            if mg.get("type","holding")=="holding"]
-        self.igroups = [ RegisterGroup(address=mg["start_reg"],
-                                      count=mg["count"],
-                                      f_divider=mg["frequency"]) \
-                        for mg in modbus_reg_map \
-                            if mg.get("type","holding")=="input"]
+                                      f_divider=mg["frequency"])
+                        for mg in modbus_reg_map
+                        if mg.get("type", "holding") == "input"]
 
-
-    async def do_scan(self, initial:bool=False) -> bool:
+    async def do_scan(self, initial: bool = False) -> bool:
         if initial:
-            [ g.clear_counter() for g in self.groups ]
-            [ g.clear_counter() for g in self.igroups ]
+            [g.clear_counter() for g in self.groups]
+            [g.clear_counter() for g in self.igroups]
 
         res = await self._do_scan_groups(self.groups, self.modbus_client.read_holding_registers) and \
-              await self._do_scan_groups(self.igroups, self.modbus_client.read_input_registers)
+            await self._do_scan_groups(self.igroups, self.modbus_client.read_input_registers)
         if res:
             self.last_comm_time = time.time()
         return res
@@ -99,7 +98,7 @@ class ModbusCacheMap(object):
         group.update(vals, index)
         return vals
 
-    async def _do_scan_groups(self, groups:list[RegisterGroup], func) -> bool:
+    async def _do_scan_groups(self, groups: list[RegisterGroup], func) -> bool:
         try:
             for group in groups:
                 if (group.f_counter == 0):
@@ -111,7 +110,6 @@ class ModbusCacheMap(object):
             return False
 
         return True
-
 
 
 def raise_if_null(data, index):

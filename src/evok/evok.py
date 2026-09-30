@@ -17,9 +17,6 @@ import logging
 import logging.handlers
 from .log import logger
 
-logging.basicConfig(level=logging.WARNING)  # noqa
-logger.setLevel(logging.INFO)  # noqa
-
 from operator import methodcaller
 from tornado import websocket
 from tornado import escape
@@ -32,9 +29,13 @@ import signal
 import json
 from . import config
 from .devices import DI, RO, AI, AO, SENSOR, MODBUS_SLAVE, \
-                     RUN, OWBUS, TCPBUS, SERIALBUS
+    RUN, OWBUS, TCPBUS, SERIALBUS
 from .devices import Devices, devtype_altnames, devents
 from .devices import num_to_devtype_name
+from . import rpc_handler
+
+logging.basicConfig(level=logging.WARNING)
+logger.setLevel(logging.INFO)
 
 # from tornadows import complextypes
 
@@ -54,14 +55,13 @@ except PackageNotFoundError:
 
 wh = None
 
-from . import rpc_handler
-
 
 class UserCookieHelper:
     _passwords = []
 
     def get_current_user(self):
-        if len(self._passwords) == 0: return True
+        if len(self._passwords) == 0:
+            return True
         return self.get_secure_cookie("user")
 
 
@@ -141,7 +141,7 @@ class WsHandler(websocket.WebSocketHandler):
             message = json.loads(message)
             try:
                 cmd = message["cmd"]
-            except:
+            except Exception:
                 cmd = None
             # get FULL state of each IO
             if cmd == "all":
@@ -186,7 +186,7 @@ class WsHandler(websocket.WebSocketHandler):
                 circuit = message["circuit"]
                 try:
                     value = message["value"]
-                except:
+                except Exception:
                     value = None
                 try:
                     device = Devices.by_name(dev, circuit)
@@ -306,12 +306,12 @@ class JSONBulkHandler(tornado.web.RequestHandler):
             if 'group_queries' in js_dict:
                 result['group_queries'] = []
                 for single_query in js_dict['group_queries']:
-                    all_devs = [ dev for device_type in single_query['device_types']\
-                                     for dev in Devices.by_name(device_type)]
+                    all_devs = [dev for device_type in single_query['device_types']
+                                for dev in Devices.by_name(device_type)]
                     if (grp := single_query.get('group', None)) is not None:
-                        all_devs = [ dev for dev in all_devs if dev.major_group == str(grp)]
+                        all_devs = [dev for dev in all_devs if dev.major_group == str(grp)]
                     if (circuits := single_query.get('device_circuits', None)) is not None:
-                        all_devs = [ dev for dev in all_devs if dev.circuit in circuits]
+                        all_devs = [dev for dev in all_devs if dev.circuit in circuits]
                     result['group_queries'].append(list(map(methodcaller('full'), all_devs)))
 
             if 'group_assignments' in js_dict:
@@ -319,9 +319,9 @@ class JSONBulkHandler(tornado.web.RequestHandler):
                 for single_command in js_dict['group_assignments']:
                     all_devs = Devices.by_name(single_command['device_type'])
                     if (grp := single_command.get('group', None)) is not None:
-                        all_devs = [ dev for dev in all_devs if dev.major_group == str(grp)]
+                        all_devs = [dev for dev in all_devs if dev.major_group == str(grp)]
                     if (circuits := single_command.get('device_circuits', None)) is not None:
-                        all_devs = [ dev for dev in all_devs if dev.circuit in circuits]
+                        all_devs = [dev for dev in all_devs if dev.circuit in circuits]
                     for dev in all_devs:
                         await dev.set(**(single_command['assigned_values']))
                     result['group_assignments'].append(list(map(methodcaller('full'), all_devs)))
@@ -407,7 +407,7 @@ def config_cb(device, *kwargs):
     pass
 
 
-################################ MAIN ################################
+# ---- MAIN ----
 
 async def main():
     global config_path, alias_file, evok_config
@@ -481,7 +481,7 @@ async def main():
         handlers=api_routes
     )
 
-    #### prepare http server #####
+    # ---- prepare http server ----
     httpServerApi = tornado.httpserver.HTTPServer(app)
     httpServerApi.listen(port_api, address=address_api)
     logger.info(f"HTTP server API listening on {address_api}:{port_api}")
@@ -494,7 +494,7 @@ async def main():
         wh = WhHandler(wh_address, wh_types, wh_complex)
         wh.open()
 
-    #### prepare hardware according to config #####
+    # ---- prepare hardware according to config ----
     # prepare callbacks for config events
     devents.register_config_cb(config_cb)
     devents.register_status_cb(status_cb)

@@ -65,8 +65,8 @@ class Watchdog(IODevice):
 
     devtype = WATCHDOG
 
-    def __init__(self, circuit, client: Client, post, reg, timeout_reg, nv_save_coil=-1, reset_coil=-1, wd_reset_ro_coil=-1,
-                 major_group=0):
+    def __init__(self, circuit, client: Client, post, reg, timeout_reg, nv_save_coil=-1, reset_coil=-1,
+                 wd_reset_ro_coil=-1, major_group=0):
         super().__init__(circuit, client, major_group)
         self.nvsavvalue = 0
         self.resetvalue = 0
@@ -87,7 +87,7 @@ class Watchdog(IODevice):
                'value': self.value,
                'timeout': self.timeout,
                'was_wd_reset': self.was_wd_boot_value,
-               'nv_save' :self.nvsavvalue,
+               'nv_save': self.nvsavvalue,
                }
         self._with_alias(ret)
         return ret

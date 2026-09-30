@@ -4,4 +4,3 @@ class ModbusSlaveError(Exception):
 
 class DeviceNotFound(Exception):
     pass
-

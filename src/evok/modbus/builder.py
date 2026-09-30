@@ -7,13 +7,14 @@ Created on Fri Sep 25 16:10:02 2026
 """
 from .digital import DigitalInput, DigitalOutput, Relay, ULED
 from .special import OwPower, NvSave, Watchdog
-from .analog import  AnalogInput, AnalogOutput, AnalogOutputBrain,\
-                     Register, DataPoint
+from .analog import AnalogInput, AnalogOutput, AnalogOutputBrain,\
+    Register, DataPoint
 from ..devices import \
-                     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
-                     REGISTER, DATA_POINT, NV_SAVE, Devices
+    DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
+    REGISTER, DATA_POINT, NV_SAVE, Devices
 from ..log import logger
 from .client import Client
+
 
 class IOParser:
 
@@ -35,24 +36,29 @@ class IOParser:
             start_index = 0
             if 'start_index' in m_feature:
                 start_index = m_feature['start_index']
-            if ('ds_modes' in m_feature) and ('direct_reg' in m_feature) and ('polar_reg' in m_feature) and ('toggle_reg' in m_feature):
-                _inp = DigitalInput("%s_%02d" % (self.circuit, counter + 1 + start_index), self.client, board_val_reg, 0x1 << (counter % 16),
-                                    regdebounce=board_deboun_reg + counter, major_group=self.circuit, regcounter=board_counter_reg + (2 * counter), modes=m_feature['modes'],
-                                    ds_modes=m_feature['ds_modes'], regmode=m_feature['direct_reg'], regtoggle=m_feature['toggle_reg'],
+            if ('ds_modes' in m_feature) and ('direct_reg' in m_feature) and ('polar_reg' in m_feature) \
+                    and ('toggle_reg' in m_feature):
+                _inp = DigitalInput("%s_%02d" % (self.circuit, counter + 1 + start_index), self.client, board_val_reg,
+                                    0x1 << (counter % 16), regdebounce=board_deboun_reg + counter,
+                                    major_group=self.circuit, regcounter=board_counter_reg + (2 * counter),
+                                    modes=m_feature['modes'], ds_modes=m_feature['ds_modes'],
+                                    regmode=m_feature['direct_reg'], regtoggle=m_feature['toggle_reg'],
                                     regpolarity=m_feature['polar_reg'])
             else:
-                _inp = DigitalInput("%s_%02d" % (self.circuit, counter + 1 + start_index), self.client, board_val_reg, 0x1 << (counter % 16),
-                                    regdebounce=board_deboun_reg + counter, major_group=self.circuit, regcounter=board_counter_reg + (2 * counter), modes=m_feature['modes'])
+                _inp = DigitalInput("%s_%02d" % (self.circuit, counter + 1 + start_index), self.client, board_val_reg,
+                                    0x1 << (counter % 16), regdebounce=board_deboun_reg + counter,
+                                    major_group=self.circuit, regcounter=board_counter_reg + (2 * counter),
+                                    modes=m_feature['modes'])
             self.__register_eventable_device(_inp)
             Devices.register_device(DI, _inp)
-            counter+=1
+            counter += 1
 
     def parse_feature_ro(self, max_count, m_feature):
         counter = 0
         while counter < max_count:
             board_val_reg = m_feature['val_reg']
-            _r = Relay("%s_%02d" % (self.circuit, counter + 1), self.client, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
-                      major_group=self.circuit)
+            _r = Relay("%s_%02d" % (self.circuit, counter + 1), self.client, m_feature['val_coil'] + counter,
+                       board_val_reg, 0x1 << (counter % 16), major_group=self.circuit)
             self.__register_eventable_device(_r)
             Devices.register_device(RO, _r)
             counter += 1
@@ -63,12 +69,15 @@ class IOParser:
             board_val_reg = m_feature['val_reg']
             # Hard PWM
             if m_feature.get('pwm_reg') and m_feature.get('pwm_ps_reg') and m_feature.get('pwm_c_reg'):
-                _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self.client, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
-                                   major_group=self.circuit, pwmcyclereg=m_feature['pwm_c_reg'], pwmprescalereg=m_feature['pwm_ps_reg'], digital_only=True,
+                _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self.client,
+                                   m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
+                                   major_group=self.circuit, pwmcyclereg=m_feature['pwm_c_reg'],
+                                   pwmprescalereg=m_feature['pwm_ps_reg'], digital_only=True,
                                    pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'])
             # Soft PWM
             elif m_feature.get('pwm_reg') and m_feature.get('pwm_preset_reg') and m_feature.get('pwm_cpres_reg'):
-                _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self.client, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
+                _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self.client,
+                                   m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
                                    major_group=self.circuit, pwmpresetreg=m_feature['pwm_preset_reg'],
                                    pwmcustompresc=m_feature['pwm_cpres_reg'], digital_only=True,
                                    pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'])
@@ -82,11 +91,11 @@ class IOParser:
         counter = 0
         while counter < max_count:
             board_val_reg = m_feature['val_reg']
-            _led = ULED("%s_%02d" % (self.circuit, counter + 1), self.client, counter, board_val_reg, 0x1 << (counter % 16),
-                        m_feature['val_coil'] + counter, major_group=self.circuit)
+            _led = ULED("%s_%02d" % (self.circuit, counter + 1), self.client, counter, board_val_reg,
+                        0x1 << (counter % 16), m_feature['val_coil'] + counter, major_group=self.circuit)
             self.__register_eventable_device(_led)
             Devices.register_device(LED, _led)
-            counter+=1
+            counter += 1
 
     def parse_feature_owpower(self, m_feature):
         _owpower = OwPower(f"{self.circuit}", self.client, m_feature['val_coil'], major_group=self.circuit)
@@ -103,11 +112,12 @@ class IOParser:
         while counter < max_count:
             board_val_reg = m_feature['val_reg']
             board_timeout_reg = m_feature['timeout_reg']
-            _wd = Watchdog("%s_%02d" % (self.circuit, counter + 1), self.client, counter, board_val_reg + counter, board_timeout_reg + counter,
-                           major_group=self.circuit, nv_save_coil=m_feature['nv_sav_coil'], reset_coil=m_feature['reset_coil'])
+            _wd = Watchdog("%s_%02d" % (self.circuit, counter + 1), self.client, counter, board_val_reg + counter,
+                           board_timeout_reg + counter, major_group=self.circuit,
+                           nv_save_coil=m_feature['nv_sav_coil'], reset_coil=m_feature['reset_coil'])
             self.__register_eventable_device(_wd)
             Devices.register_device(WATCHDOG, _wd)
-            counter+=1
+            counter += 1
 
     def parse_feature_ao(self, max_count, m_feature):
         counter = 0
@@ -119,7 +129,7 @@ class IOParser:
                                major_group=self.circuit, modes=modes, regmode=reg_mode)
             self.__register_eventable_device(_ao)
             Devices.register_device(AO, _ao)
-            counter+=1
+            counter += 1
 
     def parse_feature_bao(self, max_count, m_feature):
         counter = 0
@@ -130,7 +140,7 @@ class IOParser:
                                     regmode=reg_mode, reg_res=m_feature['res_val_reg'], major_group=self.circuit)
             self.__register_eventable_device(_ao)
             Devices.register_device(AO, _ao)
-            counter+=1
+            counter += 1
 
     def parse_feature_ai(self, max_count, m_feature):
         counter = 0
@@ -139,12 +149,13 @@ class IOParser:
             board_val_reg = m_feature['val_reg'] + counter * 2
             modes = m_feature['modes']
             _ai = AnalogInput(circuit, self.client, board_val_reg,
-                              regmode=m_feature['mode_reg'] + counter if m_feature.get('mode_reg', None) is not None else None,
+                              regmode=(m_feature['mode_reg'] + counter
+                                       if m_feature.get('mode_reg', None) is not None else None),
                               major_group=self.circuit, modes=modes)
 
             self.__register_eventable_device(_ai)
             Devices.register_device(AI, _ai)
-            counter+=1
+            counter += 1
 
     def parse_feature_register(self, max_count, m_feature):
         counter = 0
@@ -158,7 +169,7 @@ class IOParser:
                 _reg = Register("%s_%d" % (self.circuit, board_val_reg + counter), self.client, counter,
                                 board_val_reg + counter, major_group=self.circuit)
             Devices.register_device(REGISTER, _reg)
-            counter+=1
+            counter += 1
 
     def parse_feature_data_point(self, max_count, m_feature):
         counter = 0
@@ -182,7 +193,7 @@ class IOParser:
 
             self.__register_eventable_device(_xgt)
             Devices.register_device(DATA_POINT, _xgt)
-            counter+=1
+            counter += 1
 
     def parse_feature(self, m_feature):
         max_count = m_feature.get('count', 1)

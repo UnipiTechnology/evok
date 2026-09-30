@@ -19,7 +19,8 @@ class NotSupportedError(Exception):
 
 
 class MySensor(object):
-    def __init__(self, addr, sensor_type, bus, interval=None, dynamic=True, circuit=None, major_group=1, is_static=False):
+    def __init__(self, addr, sensor_type, bus, interval=None, dynamic=True, circuit=None, major_group=1,
+                 is_static=False):
         self.alias = ""
         self.devtype = SENSOR
         self.type = sensor_type
@@ -64,15 +65,17 @@ class MySensor(object):
     def calc_interval(self):
         if self.lost:  # Sensor is inactive (disconnected)
             self.lostinterval *= 2
-            if self.lostinterval > MAX_LOSTINTERVAL: self.lostinterval = MAX_LOSTINTERVAL
+            if self.lostinterval > MAX_LOSTINTERVAL:
+                self.lostinterval = MAX_LOSTINTERVAL
             return self.lostinterval
         if self.is_dynamic_interval:
-            ##TODO
+            # TODO
             pass
         return self.interval
 
     def set_lost(self):
-        if self.lost: return
+        if self.lost:
+            return
         self.lost = True
         self.lostinterval = self.interval
         devents.status(self)
@@ -109,7 +112,8 @@ class DS2438(MySensor):  # vdd + vad + thermometer
                       getattr(self, 'IAD', None))
         ret = {'dev': '1wdevice',
                'circuit': self.circuit,
-               # 'humidity1':(((((float(self.value[1]) / float(self.value[0])) - 0.1515)) / 0.00636) / (1.0546 - 0.00216 * float(self.value[2]))),
+               # 'humidity1':(((((float(self.value[1]) / float(self.value[0])) - 0.1515)) / 0.00636)
+               #              / (1.0546 - 0.00216 * float(self.value[2]))),
                'humidity': getattr(self, 'HIH4000.humidity', None),
                'vdd': getattr(self, 'VDD', None),
                'vad': getattr(self, 'VAD', None),
@@ -142,7 +146,7 @@ class DS2408(MySensor):
     def __init__(self, addr, sensor_type, bus, interval=None, is_dynamic_interval=True, circuit=None, major_group=1,
                  is_static=False):
         self.type = sensor_type
-        self.circuit = circuit if circuit != None else addr
+        self.circuit = circuit if circuit is not None else addr
         self.address = addr
         self.major_group = major_group
         self.interval = bus.interval if interval is None else interval  # seconds
@@ -199,16 +203,17 @@ class DS2408(MySensor):
             setattr(self.sens, 'PIO_' + pio_alpha[pio], str(value))
 
     def register_pio(self, pio):
-        if not pio in self.pios:
+        if pio not in self.pios:
             self.pios.append(pio)
 
 
-def MySensorFabric(address, sensor_type, bus, interval=None, dynamic=True, circuit=None, major_group=1, is_static=False):
+def MySensorFabric(address, sensor_type, bus, interval=None, dynamic=True, circuit=None, major_group=1,
+                   is_static=False):
     if (sensor_type == 'DS18B20') or (sensor_type == 'DS18S20'):
         return DS18B20(address, sensor_type, bus, interval=interval, circuit=circuit)
     elif sensor_type == 'DS2438':
         return DS2438(address, sensor_type, bus, interval=interval, circuit=circuit)
-    elif (sensor_type == 'DS2408') or (sensor_type == 'DS2406') or (sensor_type == 'DS2404') or (sensor_type == 'DS2413'):
+    elif sensor_type in ('DS2408', 'DS2406', 'DS2404', 'DS2413'):
         return DS2408(address, sensor_type, bus, interval=interval, circuit=circuit, is_static=is_static)
     else:
         logger.debug("Unsupported 1wire device %s (%s) detected", sensor_type, address)
@@ -306,7 +311,7 @@ class OwBusDriver:
             delattr(self, 'scanning_scope')
 
     async def poll(self):
-        """ 
+        """
             Peridocally poll 1wire sensors, else sleep
         """
 

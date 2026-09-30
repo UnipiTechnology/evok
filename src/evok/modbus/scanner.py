@@ -27,7 +27,7 @@ import subprocess
 
 
 class ModbusScanner:
-    
+
     INITIAL_SCAN_INTERVAL = 2
 
     def __init__(self, transport: AsyncSmartTransport,
@@ -40,11 +40,11 @@ class ModbusScanner:
         is_tcp = isinstance(transport.base_transport, AsyncTcpTransport)
         self.modbus_type = 'TCP' if is_tcp else 'RTU'
         self.modbus_spec = transport.base_transport.host if is_tcp else \
-                           transport.base_transport.port
+            transport.base_transport.port
         self.name = f"{self.modbus_type}:{self.modbus_spec}:{self.modbus_address}"
         self.scan_interval = 1.0 / scan_freq if scan_freq != 0 else 0.0001
 
-        #self.boards = list()
+        # self.boards = list()
         self.scan_task: Union[None, asyncio.Task] = None
         self.scan_enabled = scan_enabled
         self.versions = []
@@ -55,7 +55,7 @@ class ModbusScanner:
                                       word_order="little")
 
         self.cache = ModbusCacheMap(hw_definition.get('modbus_register_blocks', []),
-                                     mb_client)
+                                    mb_client)
 
         self.client = Client(self.name, mb_client, self.cache)
         self.parser = IOParser(self.client, hw_definition.get('modbus_features', []), circuit)
@@ -107,7 +107,7 @@ class ModbusScanner:
                 if not err:
                     err = True
                     logger.warning(f"Slowing down device: '{self.circuit}'")
-                #exponential growth interval with limitation [s]
+                # exponential growth interval with limitation [s]
                 interval = min(interval * 2, max(120, self.scan_interval))
 
     def get(self):
@@ -121,10 +121,8 @@ class ModbusScanner:
                'modbus_spec': self.modbus_spec,
                'scan_interval': self.scan_interval,
                'last_comm': time.time() - self.cache.last_comm_time,
-        }
+               }
         if self.alias != '':
             ret['alias'] = self.alias
 
         return ret
-
-

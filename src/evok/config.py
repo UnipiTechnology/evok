@@ -18,6 +18,7 @@ from .devices import Devices, Aliases
 from .devices import OWBUS, SERIALBUS, DEVICE_INFO, TCPBUS, SENSOR, MODBUS_SLAVE
 from .log import logger
 
+
 class EvokConfigError(Exception):
     pass
 
@@ -50,7 +51,8 @@ class HWDict:
                             logger.warning(f"Empty Definition file '{file_path}'! skipping...")
                             continue
                         self.definitions[file_name] = ydata
-                        logger.debug(f"YAML Definition loaded: {file_path}, definition count {len(self.definitions) - 1}")
+                        logger.debug(f"YAML Definition loaded: {file_path}, "
+                                     f"definition count {len(self.definitions) - 1}")
 
 
 class OWSensorDevice:
@@ -72,12 +74,13 @@ class TcpBusDevice:
 
 
 class SerialBusDevice:
-    def __init__(self, circuit: str,  bus_driver: AsyncSmartTransport):
+    def __init__(self, circuit: str, bus_driver: AsyncSmartTransport):
         self.bus_driver = bus_driver
         self.circuit = circuit
 
     def switch_to_async(self):
         self._open_task = asyncio.create_task(self.bus_driver.open())
+
 
 class DeviceInfo:
     def __init__(self, name: str, family: str, model: str, sn: Union[None, int], board_count: int):
@@ -108,7 +111,7 @@ class EvokConfig:
 
     def __init__(self, conf_dir_path: str):
         self.conf_dir_path = conf_dir_path
-        data = self.__get_final_conf(scope=[conf_dir_path+'/config.yaml'])
+        data = self.__get_final_conf(scope=[conf_dir_path + '/config.yaml'])
         self.comm_channels: dict = self.__get_comm_channels(data)
         self.apis: dict = self.__get_apis_conf(data)
         self.logging: dict = self.__get_logging_conf(data)
@@ -226,7 +229,7 @@ def create_devices(evok_config: EvokConfig, hw_dict):
                 retry_on_device_busy=True,
                 retry_on_device_failure=False,
             )
-            #bus_driver = create_async_tcp_client(host=modbus_server, port=modbus_port, unit_id=0)
+            # bus_driver = create_async_tcp_client(host=modbus_server, port=modbus_port, unit_id=0)
             bus = TcpBusDevice(circuit=bus_name, bus_driver=bus_driver)
             Devices.register_device(TCPBUS, bus)
 
@@ -247,10 +250,10 @@ def create_devices(evok_config: EvokConfig, hw_dict):
                 wait_after_connect=0.0,
                 retry_on_device_busy=True,
                 retry_on_device_failure=False
-            )   
-            
-            #bus_driver = create_async_rtu_client(port=serial_port, unit_id=0, baudrate=serial_baud_rate, parity=serial_parity,
-            #                                    stopbits=serial_stopbits, timeout=0.5)
+            )
+
+            # bus_driver = create_async_rtu_client(port=serial_port, unit_id=0, baudrate=serial_baud_rate,
+            #                                      parity=serial_parity, stopbits=serial_stopbits, timeout=0.5)
             bus = SerialBusDevice(circuit=bus_name, bus_driver=bus_driver)
             Devices.register_device(SERIALBUS, bus)
 
@@ -335,8 +338,8 @@ def load_aliases(path):
     version = alias_conf.get("version", None)
     if version == "1.0":
         # transform array to dict and rename dev_type -> devtype if version 1.0
-        result = dict(((rec["name"], {"circuit": rec.get("circuit", None), "devtype": rec.get("dev_type", None)})\
-                       for rec in alias_conf.get("aliases", {})\
+        result = dict(((rec["name"], {"circuit": rec.get("circuit", None), "devtype": rec.get("dev_type", None)})
+                       for rec in alias_conf.get("aliases", {})
                        if rec.get("name", None) is not None))
     elif version == "2.0":
         result = alias_conf.get("aliases", {})

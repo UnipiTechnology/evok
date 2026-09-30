@@ -62,7 +62,7 @@ class Client:
         return self._read32(FLOAT32_WORD_ORDER, index, is_input, word_order)
 
     def read_u32(self, index: int, is_input: bool = False,
-                    word_order: Literal["big", "little"] = "little") -> int:
+                 word_order: Literal["big", "little"] = "little") -> int:
         """ Return the cached value of a 32-bit unsigned integer in two registers,
             word_order "little" = low word first, "big" = high word first
         """

@@ -45,10 +45,9 @@ class Register(IODevice):
         try:
             if self.regvalue():
                 return self.regvalue()
-        except:
+        except Exception:
             pass
         return 0
-
 
     async def set(self, value=None, alias=None):
         """ Sets new on/off status. Disable pending timeouts
@@ -66,22 +65,22 @@ class AnalogOutputBrain(IODevice):
     devtype = AO
 
     modes = {
-            'Voltage': {
-                'value': 0,
-                'unit': 'V',
-                'range': [0, 10]
-            },
-            'Current': {
-                'value': 1,
-                'unit': 'mA',
-                'range': [0, 20]
-            },
-            'Resistance':{
-                'value': 3,
-                'unit': 'Ohm',
-                'range': [0, 2000]
-            }
+        'Voltage': {
+            'value': 0,
+            'unit': 'V',
+            'range': [0, 10]
+        },
+        'Current': {
+            'value': 1,
+            'unit': 'mA',
+            'range': [0, 20]
+        },
+        'Resistance': {
+            'value': 3,
+            'unit': 'Ohm',
+            'range': [0, 2000]
         }
+    }
 
     def __init__(self, circuit, client: Client, reg, regmode=None, reg_res=0, major_group=0):
         super().__init__(circuit, client, major_group)
@@ -101,7 +100,8 @@ class AnalogOutputBrain(IODevice):
         self.unit_name = data.get('unit', None)
 
     def reload_mode(self, mode_value: int):
-        mode, data = next(itertools.chain(filter(lambda t: t[1]['value']==mode_value, self.modes.items()),[(None,None)]))
+        mode, data = next(itertools.chain(filter(lambda t: t[1]['value'] == mode_value, self.modes.items()),
+                                          [(None, None)]))
         if not data:
             logger.warning(f'Undefined mode "{mode_value}" in mode setting for AO {self.circuit}')
         self._apply_mode_data(data)
@@ -119,11 +119,11 @@ class AnalogOutputBrain(IODevice):
         old_res_value = copy(self.res_value)
         try:
             self.value = round(self.client.read_float32(self.reg), 3)
-        except:
+        except Exception:
             self.value = 0
         try:
             self.res_value = round(self.client.read_float32(self.reg_res), 3)
-        except:
+        except Exception:
             self.res_value = 0
         return self.value != old_value or self.res_value != old_res_value or has_changed
 
@@ -134,7 +134,7 @@ class AnalogOutputBrain(IODevice):
                'modes': self.modes,
                'unit': self.unit_name,
                'value': self.value if self.mode != 'Resistance' else self.res_value
-        }
+               }
 
         self._with_alias(ret)
         return ret
@@ -186,7 +186,8 @@ class AnalogOutput(IODevice):
         self.unit_name = data.get('unit', None)
 
     def reload_mode(self, mode_value: int):
-        mode, data = next(itertools.chain(filter(lambda t: t[1]['value']==mode_value, self.modes.items()),[(None,None)]))
+        mode, data = next(itertools.chain(filter(lambda t: t[1]['value'] == mode_value, self.modes.items()),
+                                          [(None, None)]))
         if not data:
             logger.warning(f'Undefined mode "{mode_value}" in mode setting for AO {self.circuit}')
         self._apply_mode_data(data)
@@ -259,11 +260,11 @@ class AnalogInput(IODevice):
         self.value = None
         self.transformation = lambda index: round(float(self.client.read_float32(index)), 3)
 
-        #logger.debug(f"AnalogInput.__init__ called, instance content {vars(self)}")
-
+        # logger.debug(f"AnalogInput.__init__ called, instance content {vars(self)}")
 
     def reload_mode(self, mode_value: int):
-        mode, data = next(itertools.chain(filter(lambda t: t[1]['value']==mode_value, self.modes.items()),[(None,None)]))
+        mode, data = next(itertools.chain(filter(lambda t: t[1]['value'] == mode_value, self.modes.items()),
+                                          [(None, None)]))
         if data:
             self.range = data.get('range', None)
             self.unit_name = data.get('unit', None)
@@ -274,18 +275,18 @@ class AnalogInput(IODevice):
             logger.debug(f"Aplying transformation on analog input {self.circuit}: {datatype}  {decimals}")
             if datatype == "float32":
                 self.transformation = lambda index:\
-                            round(float(self.client.read_float32(index)) * ratio, decimals)
+                    round(float(self.client.read_float32(index)) * ratio, decimals)
             elif datatype == "int32":
                 self.transformation = lambda index:\
-                            self.client.read_i32(index) * ratio
+                    self.client.read_i32(index) * ratio
 
-            elif datatype == "uint32" and isinstance(ratio, float) :
+            elif datatype == "uint32" and isinstance(ratio, float):
                 self.transformation = lambda index:\
-                            round(float(self.client.read_u32(index)) * ratio, decimals)
+                    round(float(self.client.read_u32(index)) * ratio, decimals)
 
             elif datatype == "uint32":
                 self.transformation = lambda index:\
-                            int(self.client.read_u32(index) * ratio)
+                    int(self.client.read_u32(index) * ratio)
             else:
                 logger.warning(f'Unknown datatype "{datatype}" in transformation for AI {self.circuit}')
                 self.transformation = lambda index: None
@@ -335,11 +336,13 @@ class AnalogInput(IODevice):
         self._with_alias(ret)
         return ret
 
+
 class DataPoint(IODevice):
 
     devtype = DATA_POINT
 
-    def __init__(self, circuit, client: Client, reg, reg_type=None, major_group=0, datatype=None, unit=None, offset=0, factor=1, valid_mask_reg=None, valid_mask=None, name=None, post_write=None):
+    def __init__(self, circuit, client: Client, reg, reg_type=None, major_group=0, datatype=None, unit=None,
+                 offset=0, factor=1, valid_mask_reg=None, valid_mask=None, name=None, post_write=None):
         # TODO - valid mask reg
         super().__init__(circuit, client, major_group)
         self.valreg = reg

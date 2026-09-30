@@ -67,9 +67,11 @@ class Aliases:
         if alias != device.alias:
             self.validate(alias)
         # delete old alias
-        if device.alias: self.delete(device.alias)
+        if device.alias:
+            self.delete(device.alias)
         # delete alias from initial_dict
-        if alias: self.delete(alias)
+        if alias:
+            self.delete(alias)
         # create new alias
         self.alias_dict[alias] = device
         if file_update:
@@ -94,7 +96,7 @@ class Aliases:
                 self.set_dirty()
 
     def get_aliases_by_circuit(self, devtype: int, circuit: str):
-        return list((alias for alias, rec in self.initial_dict.items() \
+        return list((alias for alias, rec in self.initial_dict.items()
                      if (rec.get("devtype", None) == devtype) and (rec.get("circuit", None) == circuit)))
 
     def get_dict_to_save(self) -> dict[str, dict[str, str]]:
@@ -105,8 +107,8 @@ class Aliases:
 
     @property
     def aliases(self) -> dict:
-        return {k:{"circuit": f"{v.devtype}_{v.circuit}",
-                   "devtype": v.devtype}
+        return {k: {"circuit": f"{v.devtype}_{v.circuit}",
+                    "devtype": v.devtype}
                 for k, v in self.alias_dict.items()}
 
     def full(self):
@@ -216,7 +218,8 @@ class DeviceList(dict):
         try:
             if alias != device.alias:
                 if alias == '' or alias is None:
-                    if device.alias: self.aliases.delete(device.alias, file_update)
+                    if device.alias:
+                        self.aliases.delete(device.alias, file_update)
                     device.alias = alias
                     logger.debug(f"Reset alias of {device.devtype}[{device.circuit}]")
                 elif alias != device.alias:
@@ -314,4 +317,3 @@ unit_altnames = {
     'mA': 'miliampere',
     'Ohm': 'ohm'
 }
-

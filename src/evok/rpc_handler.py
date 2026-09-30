@@ -58,7 +58,8 @@ class UserBasicHelper(JSONRPCHandler):
         self.finish()
 
     def get_current_user(self):
-        if len(self._passwords) == 0: return True
+        if len(self._passwords) == 0:
+            return True
         auth_header = self.request.headers.get('Authorization')
         if auth_header is None or not auth_header.startswith('Basic '):
             return False
@@ -103,7 +104,7 @@ class Handler(UserBasicHelper):
             return
         await JSONRPCHandler.post(self)
 
-    ###### Input ######
+    # ---- Input ----
     def input_get(self, circuit):
         inp = Devices.by_int(DI, str(circuit))
         return inp.get()
@@ -116,7 +117,7 @@ class Handler(UserBasicHelper):
         inp = Devices.by_int(DI, str(circuit))
         return inp.set(debounce=debounce)
 
-    ###### Relay ######
+    # ---- Relay ----
     def relay_get(self, circuit):
         relay = Devices.by_int(RO, str(circuit))
         return relay.get()['value']
@@ -144,7 +145,7 @@ class Handler(UserBasicHelper):
             raise Exception('Invalid timeout %s' % str(timeout))
         return await relay.set(value, timeout)
 
-    ###### Analog Input ######
+    # ---- Analog Input ----
     def ai_get(self, circuit):
         ai = Devices.by_int(AI, str(circuit))
         return ai.get()
@@ -167,7 +168,7 @@ class Handler(UserBasicHelper):
 
     # def ai_measure(self, circuit):
 
-    ###### Analog Output (0-10V) ######
+    # ---- Analog Output (0-10V) ----
     async def ao_set_value(self, circuit, value):
         ao = Devices.by_int(AO, str(circuit))
         return await ao.set_value(value)
@@ -176,7 +177,7 @@ class Handler(UserBasicHelper):
         ao = Devices.by_int(AO, str(circuit))
         return await ao.set(value, frequency)
 
-    ###### OwBus (1wire bus) ######
+    # ---- OwBus (1wire bus) ----
     def owbus_get(self, circuit):
         ow = Devices.by_int(OWBUS, str(circuit))
         return ow.bus_driver.scan_interval
@@ -193,7 +194,7 @@ class Handler(UserBasicHelper):
         ow = Devices.by_int(OWBUS, str(circuit))
         return ow.bus_driver.list()
 
-    ###### Sensors (1wire thermo,humidity) ######
+    # ---- Sensors (1wire thermo,humidity) ----
     def sensor_set(self, circuit, interval):
         sens = Devices.by_int(SENSOR, str(circuit))
         return sens.set(interval=interval)
@@ -205,4 +206,3 @@ class Handler(UserBasicHelper):
     def sensor_get_value(self, circuit):
         sens = Devices.by_int(SENSOR, str(circuit))
         return sens.get_value()
-

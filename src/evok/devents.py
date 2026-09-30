@@ -2,15 +2,16 @@
 
 
 def _status(device, **kwarg):
-    #print device.full()
+    # print device.full()
     pass
 
 
 def _config(device, **kwarg):
-    #print device.full()
+    # print device.full()
     pass
 
 # function variables holding current callbacks
+
 
 status = _status
 config = _config
@@ -22,7 +23,7 @@ def register_status_cb(callback):
         def newstatus(device, **kwarg):
             try:
                 callback(device, kwarg)
-            except:
+            except Exception:
                 pass
 
         status = newstatus
@@ -36,10 +37,9 @@ def register_config_cb(callback):
         def newconfig(device, **kwarg):
             try:
                 callback(device, kwarg)
-            except:
+            except Exception:
                 pass
 
         config = newconfig
     else:
         config = _config
-

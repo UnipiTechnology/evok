@@ -21,9 +21,9 @@ class DigitalOutput(IODevice):
 
     devtype = DO
     pending_task: Union[None, asyncio.Task] = None
-    
+
     def __init__(self, circuit, client: Client, coil, reg, mask, major_group=0,
-                 pwmcyclereg=-1, pwmprescalereg=-1, pwmdutyreg=-1, pwmpresetreg=-1, pwmcustompresc=-1 ,
+                 pwmcyclereg=-1, pwmprescalereg=-1, pwmdutyreg=-1, pwmpresetreg=-1, pwmcustompresc=-1,
                  digital_only=False, modes=None):
         super().__init__(circuit, client, major_group)
         self.modes = modes if modes is not None else ['Simple']
@@ -49,18 +49,18 @@ class DigitalOutput(IODevice):
         self.value = None
         self.block_pwm = False
 
-        self.preset_map = {0: 1000, 1:100, 2:0}
+        self.preset_map = {0: 1000, 1: 100, 2: 0}
 
         self.forced_changes = False  # force_immediate_state_changes
 
     def full(self, forced_value=None):
-        ret =  {'dev': 'do',
-                'circuit': self.circuit,
-                'value': self.value,
-                'pending': self.pending_task is not None,
-                'mode': self.mode,
-                'modes': self.modes,
-                }
+        ret = {'dev': 'do',
+               'circuit': self.circuit,
+               'value': self.value,
+               'pending': self.pending_task is not None,
+               'mode': self.mode,
+               'modes': self.modes,
+               }
         if self.digital_only:
             ret['pwm_freq'] = self.pwm_freq
             ret['pwm_duty'] = self.pwm_duty
@@ -73,7 +73,7 @@ class DigitalOutput(IODevice):
         is_change = False
         if self.pwmdutyreg >= 0:  # This instance supports PWM mode
             if not self.block_pwm:
-                if self.pwmpresetreg >=0:
+                if self.pwmpresetreg >= 0:
                     old_prescale_val = copy(self.pwm_prescale_val)
                     old_cycle_val = copy(self.pwm_cycle_val)
                     self.pwm_prescale_val = self.client.read_u16(self.pwmpresetreg)
@@ -82,7 +82,7 @@ class DigitalOutput(IODevice):
                         if (self.pwm_prescale_val in self.preset_map) and self.preset_map[self.pwm_prescale_val] != 0:
                             self.pwm_freq = self.preset_map[self.pwm_prescale_val]
                         else:
-                            self.pwm_freq = round(1000 / (1 + self.pwm_cycle_val),1)
+                            self.pwm_freq = round(1000 / (1 + self.pwm_cycle_val), 1)
                         is_change = True
 
                 else:
@@ -107,7 +107,7 @@ class DigitalOutput(IODevice):
                     if self.pwm_duty_val == 0:
                         self.pwm_duty = 0
                         self.mode = 'Simple'  # Mode field is for backward compatibility, will be deprecated soon
-                    elif self.pwmpresetreg >=0:
+                    elif self.pwmpresetreg >= 0:
                         self.pwm_duty = self.pwm_duty_val
                         self.mode = 'PWM'  # Mode field is for backward compatibility, will be deprecated soon
                     else:
@@ -134,7 +134,7 @@ class DigitalOutput(IODevice):
             if pwm_freq is not None:
                 pwm_freq = float(pwm_freq)
 
-            #if pwm_duty is not None and self.mode == 'PWM' and float(pwm_duty) <= 0.01:
+            # if pwm_duty is not None and self.mode == 'PWM' and float(pwm_duty) <= 0.01:
             #    mode = 'Simple'
             # New system - mode field will no longer be used
 
@@ -143,7 +143,7 @@ class DigitalOutput(IODevice):
                 self.block_pwm = True
 
                 # Soft PWM
-                if self.pwmpresetreg >=0:
+                if self.pwmpresetreg >= 0:
                     pwm_preset_val = 0
                     if pwm_freq in self.preset_map.values():
                         pwm_preset_val = [preset for preset, freq in self.preset_map.items() if freq == pwm_freq][0]
@@ -152,7 +152,7 @@ class DigitalOutput(IODevice):
                         pwm_prescaler = round((1000 / pwm_freq) - 1)
                         if pwm_prescaler < 0:
                             raise ValueError("Frequency out of range!")
-                        self.pwm_freq = round(1000 / (1 + pwm_prescaler),1)
+                        self.pwm_freq = round(1000 / (1 + pwm_prescaler), 1)
                         await self.client.mb_client.write_single_register(self.pwmpresetreg, 2)
                         await self.client.mb_client.write_single_register(self.pwmcustompresc, pwm_prescaler)
 
@@ -198,7 +198,8 @@ class DigitalOutput(IODevice):
                 parsed_value = 1 if int(value) else 0
 
                 if pwm_duty is not None:
-                    if (pwm_duty == 100 and parsed_value == 1) or (pwm_duty == 0 and parsed_value == 0): # No conflict in this case
+                    # No conflict in this case
+                    if (pwm_duty == 100 and parsed_value == 1) or (pwm_duty == 0 and parsed_value == 0):
                         pass
                     else:
                         raise Exception('Set value conflict: Cannot set both value and pwm_duty at once.')
@@ -210,7 +211,8 @@ class DigitalOutput(IODevice):
                 await self.client.mb_client.write_single_coil(self.coil, parsed_value)
                 if self.pwm_duty is not None and self.pwm_duty != 0:
                     self.pwm_duty = 0
-                    await self.client.mb_client.write_single_register(self.pwmdutyreg, round(self.pwm_duty)) # Turn off PWM
+                    # Turn off PWM
+                    await self.client.mb_client.write_single_register(self.pwmdutyreg, round(self.pwm_duty))
 
             # Set PWM Duty
             elif pwm_duty is not None and 0.0 <= pwm_duty <= 100.0:
@@ -326,7 +328,8 @@ class DigitalInput(IODevice):
 
     devtype = DI
 
-    def __init__(self, circuit, client: Client, reg, mask, regcounter=None, regdebounce=None, regmode=None, regtoggle=None, regpolarity=None,
+    def __init__(self, circuit, client: Client, reg, mask, regcounter=None, regdebounce=None, regmode=None,
+                 regtoggle=None, regpolarity=None,
                  major_group=0, modes=['Simple'], ds_modes=['Simple'], counter_modes=['Enabled', 'Disabled']):
         super().__init__(circuit, client, major_group)
         self.modes = modes

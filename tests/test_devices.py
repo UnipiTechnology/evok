@@ -166,7 +166,7 @@ AI_MODES = {
 
 def make_ai(mode_value, regs):
     client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}],
-                   {0: regs[0], 1: regs[1], 2: mode_value})
+                         {0: regs[0], 1: regs[1], 2: mode_value})
     return client, AnalogInput('x', client, 0, regmode=2, modes=AI_MODES)
 
 
@@ -249,7 +249,7 @@ async def test_analog_without_modes():
 async def test_analog_output_brain_float():
     f, r = to_registers(FLOAT32_LE, 2.5), to_registers(FLOAT32_LE, 100.0)
     client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}],
-                   {0: f[0], 1: f[1], 2: r[0], 3: r[1], 4: 3})
+                         {0: f[0], 1: f[1], 2: r[0], 3: r[1], 4: 3})
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
@@ -261,7 +261,7 @@ async def test_analog_output_brain_float():
 async def test_analog_output_brain_set_mode():
     f = to_registers(FLOAT32_LE, 2.5)
     client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}],
-                   {0: f[0], 1: f[1], 4: 0})
+                         {0: f[0], 1: f[1], 4: 0})
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
@@ -278,8 +278,8 @@ async def test_analog_output_brain_set_mode():
 
 async def test_register_holding_and_input():
     client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1},
-                    {'start_reg': 0, 'count': 1, 'frequency': 1, 'type': 'input'}],
-                   holding={0: 11}, inputs={0: 22})
+                          {'start_reg': 0, 'count': 1, 'frequency': 1, 'type': 'input'}],
+                         holding={0: 11}, inputs={0: 22})
     hreg = Register('h', client, 0, 0)
     ireg = Register('i', client, 0, 0, reg_type='input')
     assert hreg.regvalue() is None          # not scanned yet
@@ -291,7 +291,7 @@ async def test_register_holding_and_input():
 
 def make_dp(regs, **kw):
     client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}],
-                   dict(enumerate(regs)))
+                         dict(enumerate(regs)))
     return client, DataPoint('x', client, 0, **kw)
 
 
