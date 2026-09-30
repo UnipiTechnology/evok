@@ -1,0 +1,91 @@
+modbus_register_blocks:
+  # DI, DO / 20ms
+  - start_reg   : 0
+    count       : 2
+    frequency   : 1
+
+  # AI / 1s
+  - start_reg   : 2
+    count       : 10
+    frequency   : 50
+
+  # MWD status, CNT, PWM / 1s
+  - start_reg   : 12
+    count       : 11
+    frequency   : 50
+
+  # Configuation / 5s
+  - start_reg   : 1008
+    count       : 16
+    frequency   : 250
+
+ # ULED / 300 ms
+  - start_reg   : 3998
+    count       : 2
+    frequency   : 15
+
+modbus_features:
+  - type        : DI
+    count       : 4
+    modes       :
+      - Simple
+      - DirectSwitch
+    ds_modes    :
+      - Simple
+      - Inverted
+      - Toggle
+    val_reg     : 0
+    counter_reg : 13
+    deboun_reg  : 1010
+    direct_reg  : 1014
+    polar_reg   : 1015
+    toggle_reg  : 1016
+
+  - type        : DO
+    count       : 2
+    modes       :
+      - Simple
+      - PWM
+    val_reg     : 1
+    val_coil    : 0
+    pwm_reg     : 21
+    pwm_ps_reg  : 1017
+    pwm_c_reg   : 1018
+
+  - type        : AI
+    count       : 5
+    modes       :
+      Disabled:
+        value: 0
+      Voltage:
+        value: 1
+        unit: 'V'
+        range: [0, 10]
+      Voltage2V5:
+        value: 2
+        unit: 'V'
+        range: [0, 2.5]
+      Current:
+        value: 3
+        unit: 'mA'
+        range: [0, 20]
+      Resistance:
+        value: 4
+        unit: 'Ohm'
+        range: [0, 2000]
+    val_reg   : 2
+    mode_reg  : 1019
+
+  - type        : WD
+    count       : 1
+    val_reg     : 12
+    timeout_reg : 1008
+    nv_sav_coil : 1003
+    reset_coil  : 1002
+
+  - type        : NV_SAVE
+    val_coil    : 1003
+  - type        : LED
+    count       : 3
+    val_coil    : 3000
+    val_reg     : 3998

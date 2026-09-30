@@ -41,3 +41,10 @@ evok = "evok.evok:run"
 "Homepage" = "https://github.com/UnipiTechnology/evok"
 "Documentation" = "https://evok.readthedocs.io/"
 "Bug Tracker" = "https://github.com/UnipiTechnology/evok/issues"
+
+[project.optional-dependencies]
+test = ['pytest', 'pytest-asyncio']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
