@@ -7,6 +7,7 @@ from tmodbus.exceptions import ModbusConnectionError
 
 from evok.devices import Devices
 from evok.modbus.cache import ModbusCacheMap
+from evok.modbus.client import Client
 
 FIXTURES = Path(__file__).parent / 'fixtures'
 
@@ -52,24 +53,15 @@ class FakeModbus:
         self.holding[address + 1] = value >> 16
 
 
-class FakeArm:
-    """ What the devices see as `arm`: a register cache and a client for writes """
-
-    def __init__(self, cache, client):
-        self.cache = cache
-        self.client = client
-        self.mb_client = client     # IOParser takes the client from here
-        self.eventable_devices = []
-
-    async def scan(self, initial=False):
-        """ One scan cycle: refresh the cache, then let devices pick up new data """
-        assert await self.cache.do_scan(initial=initial)
-        return [d for d in self.eventable_devices if await d.check_new_data()]
-
-
-def make_arm(blocks, holding=None, inputs=None):
+def make_client(blocks, holding=None, inputs=None):
     mb = FakeModbus(holding, inputs)
-    return FakeArm(ModbusCacheMap(blocks, mb), mb)
+    return Client('test', mb, ModbusCacheMap(blocks, mb))
+
+
+async def scan(client, initial=False):
+    """ One scan cycle: refresh the cache, then let devices pick up new data """
+    assert await client.cache.do_scan(initial=initial)
+    return [d for d in client.eventable_devices if await d.check_new_data()]
 
 
 @pytest.fixture

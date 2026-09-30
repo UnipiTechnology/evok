@@ -107,7 +107,7 @@ class ModbusCacheMap(object):
                     group.update(vals)
                 group.tick_counter()
 
-        except ModbusConnectionError:
+        except (ModbusConnectionError, TimeoutError):
             return False
 
         return True

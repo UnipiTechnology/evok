@@ -11,9 +11,9 @@ from copy import copy
 from math import sqrt
 from typing import Union
 
-from ..devices import DI, DO, RO, OWPOWER, LED, WATCHDOG, \
-                     NV_SAVE, Devices
+from ..devices import DI, DO, RO, LED, Devices
 from ..log import logger
+from .client import Client
 
 
 
@@ -21,13 +21,13 @@ class DigitalOutput:
     
     pending_task: Union[None, asyncio.Task] = None
     
-    def __init__(self, circuit, arm, coil, reg, mask, major_group=0,
+    def __init__(self, circuit, client: Client, coil, reg, mask, major_group=0,
                  pwmcyclereg=-1, pwmprescalereg=-1, pwmdutyreg=-1, pwmpresetreg=-1, pwmcustompresc=-1 ,
                  legacy_mode=True, digital_only=False, modes=None):
         self.alias = ""
         self.devtype = DO
         self.circuit = circuit
-        self.arm = arm
+        self.client = client
         self.modes = modes if modes is not None else ['Simple']
         # Soft-pwm
         self.pwmpresetreg = pwmpresetreg
@@ -49,7 +49,7 @@ class DigitalOutput:
         self.coil = coil
         self.valreg = reg
         self.bitmask = mask
-        self.regvalue = lambda: self.arm.cache.get_register(1, self.valreg)[0]
+        self.regvalue = lambda: self.client.read_u16(self.valreg)
         self.value = None
         self.block_pwm = False
 
@@ -92,7 +92,7 @@ class DigitalOutput:
         if self.pending_task is not None:
             self.pending_task.cancel()
             self.pending_task = None
-        await self.arm.client.write_single_coil(self.coil, 1 if value else 0)
+        await self.client.mb_client.write_single_coil(self.coil, 1 if value else 0)
         return 1 if value else 0
 
     async def check_new_data(self):
@@ -102,8 +102,8 @@ class DigitalOutput:
                 if self.pwmpresetreg >=0:
                     old_prescale_val = copy(self.pwm_prescale_val)
                     old_cycle_val = copy(self.pwm_cycle_val)
-                    self.pwm_prescale_val = (self.arm.cache.get_register(1, self.pwmpresetreg))[0]
-                    self.pwm_cycle_val = (self.arm.cache.get_register(1, self.pwmcustompresc))[0]
+                    self.pwm_prescale_val = self.client.read_u16(self.pwmpresetreg)
+                    self.pwm_cycle_val = self.client.read_u16(self.pwmcustompresc)
                     if old_prescale_val != self.pwm_prescale_val or old_cycle_val != self.pwm_cycle_val:
                         if (self.pwm_prescale_val in self.preset_map) and self.preset_map[self.pwm_prescale_val] != 0:
                             self.pwm_freq = self.preset_map[self.pwm_prescale_val]
@@ -115,8 +115,8 @@ class DigitalOutput:
                     old_cycle_val = copy(self.pwm_cycle_val)
                     old_prescale_val = copy(self.pwm_prescale_val)
 
-                    self.pwm_cycle_val = ((self.arm.cache.get_register(1, self.pwmcyclereg))[0] + 1)
-                    self.pwm_prescale_val = ((self.arm.cache.get_register(1, self.pwmprescalereg))[0] + 1)
+                    self.pwm_cycle_val = (self.client.read_u16(self.pwmcyclereg) + 1)
+                    self.pwm_prescale_val = (self.client.read_u16(self.pwmprescalereg) + 1)
 
                     if (old_cycle_val != self.pwm_cycle_val) or (old_prescale_val != self.pwm_prescale_val):
                         is_change = True
@@ -127,7 +127,7 @@ class DigitalOutput:
 
                 # PWM duty_val handling is almost same for both soft and hard PWM
                 old_duty_val = copy(self.pwm_duty_val)
-                self.pwm_duty_val = (self.arm.cache.get_register(1, self.pwmdutyreg))[0]
+                self.pwm_duty_val = self.client.read_u16(self.pwmdutyreg)
                 if is_change or old_duty_val != self.pwm_duty_val:
                     is_change = True
                     if self.pwm_duty_val == 0:
@@ -173,14 +173,14 @@ class DigitalOutput:
                     pwm_preset_val = 0
                     if pwm_freq in self.preset_map.values():
                         pwm_preset_val = [preset for preset, freq in self.preset_map.items() if freq == pwm_freq][0]
-                        await self.arm.client.write_single_register(self.pwmpresetreg, pwm_preset_val)
+                        await self.client.mb_client.write_single_register(self.pwmpresetreg, pwm_preset_val)
                     else:
                         pwm_prescaler = round((1000 / pwm_freq) - 1)
                         if pwm_prescaler < 0:
                             raise ValueError("Frequency out of range!")
                         self.pwm_freq = round(1000 / (1 + pwm_prescaler),1)
-                        await self.arm.client.write_single_register(self.pwmpresetreg, 2)
-                        await self.arm.client.write_single_register(self.pwmcustompresc, pwm_prescaler)
+                        await self.client.mb_client.write_single_register(self.pwmpresetreg, 2)
+                        await self.client.mb_client.write_single_register(self.pwmcustompresc, pwm_prescaler)
 
                     other_devs = {dev: dev.pwm_duty for dev in Devices.by_int(DO, major_group=self.major_group)}
 
@@ -206,8 +206,8 @@ class DigitalOutput:
                         tmp_pwm_cycle_val = round(tmp_pwm_prescale_val)
                     other_devs = {dev: float(dev.pwm_duty) for dev in Devices.by_int(DO, major_group=self.major_group)}
 
-                    await self.arm.client.write_single_register(self.pwmcyclereg, tmp_pwm_cycle_val - 1)
-                    await self.arm.client.write_single_register(self.pwmprescalereg, tmp_pwm_prescale_val - 1)
+                    await self.client.mb_client.write_single_register(self.pwmcyclereg, tmp_pwm_cycle_val - 1)
+                    await self.client.mb_client.write_single_register(self.pwmprescalereg, tmp_pwm_prescale_val - 1)
 
                     for other_dev, other_pwm_duty in other_devs.items():
                         other_dev.pwm_freq = pwm_freq
@@ -233,10 +233,10 @@ class DigitalOutput:
                     timeout = float(timeout)
 
                 self.mode = 'Simple'
-                await self.arm.client.write_single_coil(self.coil, parsed_value)
+                await self.client.mb_client.write_single_coil(self.coil, parsed_value)
                 if self.pwm_duty is not None and self.pwm_duty != 0:
                     self.pwm_duty = 0
-                    await self.arm.client.write_single_register(self.pwmdutyreg, round(self.pwm_duty)) # Turn off PWM
+                    await self.client.mb_client.write_single_register(self.pwmdutyreg, round(self.pwm_duty)) # Turn off PWM
 
             # Set PWM Duty
             elif pwm_duty is not None and 0.0 <= pwm_duty <= 100.0:
@@ -245,8 +245,8 @@ class DigitalOutput:
                 else:
                     tmp_pwm_duty_val = round(float(self.pwm_cycle_val) * pwm_duty / 100.0)
                 if self.value != 0:
-                    await self.arm.client.write_single_coil(self.coil, 0)
-                await self.arm.client.write_single_register(self.pwmdutyreg, tmp_pwm_duty_val)
+                    await self.client.mb_client.write_single_coil(self.coil, 0)
+                await self.client.mb_client.write_single_register(self.pwmdutyreg, tmp_pwm_duty_val)
                 self.mode = 'PWM'
 
             if alias is not None:
@@ -258,7 +258,7 @@ class DigitalOutput:
             async def timercallback():
                 await asyncio.sleep(float(timeout))
                 self.pending_task = None
-                await self.arm.client.write_single_coil(self.coil, 0 if value else 1)
+                await self.client.mb_client.write_single_coil(self.coil, 0 if value else 1)
 
             self.pending_task = asyncio.create_task(timercallback())
 
@@ -274,17 +274,17 @@ class DigitalOutput:
 
 class Relay:
 
-    def __init__(self, circuit, arm, coil, reg, mask, major_group=0, legacy_mode=True):
+    def __init__(self, circuit, client: Client, coil, reg, mask, major_group=0, legacy_mode=True):
         self.alias = ""
         self.devtype = RO
         self.circuit = circuit
-        self.arm = arm
+        self.client = client
         self.major_group = major_group
         self.legacy_mode = legacy_mode
         self.coil = coil
         self.valreg = reg
         self.bitmask = mask
-        self.regvalue = lambda: self.arm.cache.get_register(1, self.valreg)[0]
+        self.regvalue = lambda: self.client.read_u16(self.valreg)
         self.value = None
         self.block_pwm = False
 
@@ -316,7 +316,7 @@ class Relay:
     async def set_state(self, value):
         """ Sets new on/off status. Disable pending timeouts
         """
-        await self.arm.client.write_single_coil(self.coil, 1 if value else 0)
+        await self.client.mb_client.write_single_coil(self.coil, 1 if value else 0)
         return 1 if value else 0
 
     async def check_new_data(self):
@@ -331,7 +331,7 @@ class Relay:
             # Set Binary value
             if value is not None:
                 parsed_value = 1 if int(value) else 0
-                await self.arm.client.write_single_coil(self.coil, parsed_value)
+                await self.client.mb_client.write_single_coil(self.coil, parsed_value)
 
             if alias is not None:
                 Devices.set_alias(alias, self)
@@ -346,81 +346,17 @@ class Relay:
         return self.full()
 
 
-class OwPower(object):
-    def __init__(self, circuit, arm, coil, major_group=0):
-        self.alias = ""
-        self.devtype = OWPOWER
-        self.circuit = circuit
-        self.arm = arm
-        self.major_group = major_group
-        self.coil = coil
-        self.value = 0
-        self.simple = self.full
-
-    def full(self):
-        ret = {'dev': 'owpower', 'circuit': self.circuit, 'value': self.value}
-        if self.alias != '':
-            ret['alias'] = self.alias
-        return ret
-
-    async def set(self, value=None, alias=None):
-        """ Sets new on/off status. Disable pending timeouts
-        """
-        if alias is not None:
-            Devices.set_alias(alias, self)
-        if value is not None:
-            value = bool(int(value))
-            self.value = value
-            await self.arm.client.write_single_coil(self.coil, 1 if value else 0)
-        return self.full()
-
-    def get(self):
-        return self.full()
-
-
-class NvSave(object):
-    def __init__(self, circuit, arm, coil, major_group=0):
-        self.alias = ""
-        self.devtype = NV_SAVE
-        self.circuit = circuit
-        self.arm = arm
-        self.major_group = major_group
-        self.coil = coil
-        self.value = 0
-        self.simple = self.full
-
-    def full(self):
-        ret = {'dev': 'nv_save', 'circuit': self.circuit, 'value': self.value}
-        if self.alias != '':
-            ret['alias'] = self.alias
-        return ret
-
-    async def set(self, value=None, alias=None):
-        """ Sets new on/off status. Disable pending timeouts
-        """
-        if alias is not None:
-            Devices.set_alias(alias, self)
-        if value is not None:
-            value = bool(int(value))
-            self.value = value
-            await self.arm.client.write_single_coil(self.coil, 1 if value else 0)
-        return self.full()
-
-    def get(self):
-        return self.full()
-
-
 class ULED(object):
-    def __init__(self, circuit, arm, post, reg, mask, coil, major_group=0, legacy_mode=True):
+    def __init__(self, circuit, client: Client, post, reg, mask, coil, major_group=0, legacy_mode=True):
         self.alias = ""
         self.devtype = LED
         self.circuit = circuit
-        self.arm = arm
+        self.client = client
         self.major_group = major_group
         self.legacy_mode = legacy_mode
         self.bitmask = mask
         self.valreg = reg
-        self.regvalue = lambda: self.arm.cache.get_register(1, self.valreg)[0]
+        self.regvalue = lambda: self.client.read_u16(self.valreg)
         self.coil = coil
         self.value = None
 
@@ -451,7 +387,7 @@ class ULED(object):
     async def set_state(self, value):
         """ Sets new on/off status. Disable pending timeouts
         """
-        await self.arm.client.write_single_coil(self.coil, 1 if value else 0)
+        await self.client.mb_client.write_single_coil(self.coil, 1 if value else 0)
         return 1 if value else 0
 
     async def set(self, value=None, alias=None):
@@ -461,19 +397,19 @@ class ULED(object):
             Devices.set_alias(alias, self)
         if value is not None:
             value = int(value)
-            await self.arm.client.write_single_coil(self.coil, 1 if value else 0)
+            await self.client.mb_client.write_single_coil(self.coil, 1 if value else 0)
         return self.full()
 
     def get(self):
         return self.full()
 
 class DigitalInput:
-    def __init__(self, circuit, arm, reg, mask, regcounter=None, regdebounce=None, regmode=None, regtoggle=None, regpolarity=None,
+    def __init__(self, circuit, client: Client, reg, mask, regcounter=None, regdebounce=None, regmode=None, regtoggle=None, regpolarity=None,
                  major_group=0, modes=['Simple'], ds_modes=['Simple'], counter_modes=['Enabled', 'Disabled'], legacy_mode=True):
         self.alias = ""
         self.devtype = DI
         self.circuit = circuit
-        self.arm = arm
+        self.client = client
         self.modes = modes
         self.ds_modes = ds_modes
         self.counter_modes = counter_modes
@@ -486,12 +422,12 @@ class DigitalInput:
         self.regtoggle = regtoggle
         self.regpolarity = regpolarity
         self.reg = reg
-        self.regvalue = lambda: self.arm.cache.get_register(1, self.reg)[0]
+        self.regvalue = lambda: self.client.read_u16(self.reg)
         self.regcountervalue = self.regdebouncevalue = lambda: None
         if regcounter is not None:
-            self.regcountervalue = lambda: self.arm.cache.get_register(1, regcounter)[0] + (self.arm.cache.get_register(1, regcounter + 1)[0] << 16)
+            self.regcountervalue = lambda: self.client.read_u32(regcounter)
         if regdebounce is not None:
-            self.regdebouncevalue = lambda: self.arm.cache.get_register(1, regdebounce)[0]
+            self.regdebouncevalue = lambda: self.client.read_u16(regdebounce)
         self.mode = 'Simple'
         self.ds_mode = 'Simple'
         self.counter_mode = "Enabled"
@@ -501,11 +437,11 @@ class DigitalInput:
 
     async def check_new_data(self):
         if 'DirectSwitch' in self.modes:
-            curr_ds = self.arm.cache.get_register(1, self.regmode)[0]
+            curr_ds = self.client.read_u16(self.regmode)
             if (curr_ds & self.bitmask) > 0:
                 self.mode = 'DirectSwitch'
-                curr_ds_pol = self.arm.cache.get_register(1, self.regpolarity)[0]
-                curr_ds_tgl = self.arm.cache.get_register(1, self.regtoggle)[0]
+                curr_ds_pol = self.client.read_u16(self.regpolarity)
+                curr_ds_tgl = self.client.read_u16(self.regtoggle)
                 if curr_ds_pol & self.bitmask:
                     self.ds_mode = 'Inverted'
                 elif curr_ds_tgl & self.bitmask:
@@ -553,8 +489,8 @@ class DigitalInput:
 
     async def write_config_register(self, reg, value):
         """ Write register and update the cache, so check_new_data does not see a stale value """
-        await self.arm.client.write_single_register(reg, value)
-        self.arm.cache.set_register(reg, [value])
+        await self.client.mb_client.write_single_register(reg, value)
+        self.client.cache.set_register(reg, [value])
 
     async def set(self, debounce=None, mode=None, counter=None, counter_mode=None, ds_mode=None, alias=None):
         if alias is not None:
@@ -568,20 +504,20 @@ class DigitalInput:
         else:
             self.mode = mode
             if mode == 'DirectSwitch':
-                curr_ds = await self.arm.cache.get_register_async(1, self.regmode)
+                curr_ds = await self.client.cache.get_register_async(1, self.regmode)
                 curr_ds_val = curr_ds[0]
                 curr_ds_val = curr_ds_val | int(self.bitmask)
                 await self.write_config_register(self.regmode, curr_ds_val)
             else:
-                curr_ds = await self.arm.cache.get_register_async(1, self.regmode)
+                curr_ds = await self.client.cache.get_register_async(1, self.regmode)
                 curr_ds_val = curr_ds[0]
                 curr_ds_val = curr_ds_val & (~int(self.bitmask))
                 await self.write_config_register(self.regmode, curr_ds_val)
 
         if mode == 'DirectSwitch' and ds_mode is not None and ds_mode in self.ds_modes:
             self.ds_mode = ds_mode
-            curr_ds_pol = await self.arm.cache.get_register_async(1, self.regpolarity)
-            curr_ds_tgl = await self.arm.cache.get_register_async(1, self.regtoggle)
+            curr_ds_pol = await self.client.cache.get_register_async(1, self.regpolarity)
+            curr_ds_tgl = await self.client.cache.get_register_async(1, self.regtoggle)
             curr_ds_pol_val = curr_ds_pol[0]
             curr_ds_tgl_val = curr_ds_tgl[0]
             if ds_mode == 'Inverted':
@@ -604,7 +540,7 @@ class DigitalInput:
                 await self.write_config_register(self.regdebounce, int(float(debounce)))
         if counter is not None:
             if self.regcounter is not None:
-                await self.arm.client.write_uint32(self.regcounter, int(float(counter)))
+                await self.client.mb_client.write_uint32(self.regcounter, int(float(counter)))
         return self.full()
 
     def get(self):
@@ -618,99 +554,3 @@ class DigitalInput:
               current on/off value is taken from last value without reading it from hardware
         """
         return self.value
-
-class Watchdog(object):
-    def __init__(self, circuit, arm, post, reg, timeout_reg, nv_save_coil=-1, reset_coil=-1, wd_reset_ro_coil=-1,
-                 major_group=0, legacy_mode=True):
-        self.alias = ""
-        self.devtype = WATCHDOG
-        self.circuit = circuit
-        self.arm = arm
-        self.major_group = major_group
-        self.legacy_mode = legacy_mode
-        self.timeoutvalue = lambda: self.arm.cache.get_register(1, self.toreg)
-        self.regvalue = lambda: self.arm.cache.get_register(1, self.valreg)[0]
-        self.nvsavvalue = 0
-        self.resetvalue = 0
-        self.nv_save_coil = nv_save_coil
-        self.reset_coil = reset_coil
-        self.wd_reset_ro_coil = wd_reset_ro_coil
-        self.wdwasresetvalue = 0
-        self.valreg = reg
-        self.toreg = timeout_reg
-
-        self.value = None
-        self.timeout = None
-        self.was_wd_boot_value = None
-
-    def full(self):
-        ret = {'dev': 'wd',
-               'circuit': self.circuit,
-               'value': self.value,
-               'timeout': self.timeout,
-               'was_wd_reset': self.was_wd_boot_value,
-               'nv_save' :self.nvsavvalue,
-               }
-        if self.alias != '':
-            ret['alias'] = self.alias
-        return ret
-
-    def get(self):
-        return self.full()
-
-    def simple(self):
-        return {'dev': 'wd',
-                'circuit': self.circuit,
-                'value': self.value}
-
-    async def check_new_data(self):
-        old_value = copy(self.value)
-        self.value = self.regvalue() & 0x03  # Only the two lowest bits contains watchdog status
-        self.timeout = self.timeoutvalue()[0] if self.timeoutvalue() else 0
-        self.was_wd_boot_value = 1 if self.regvalue() & 0b10 else 0
-        return old_value != self.value
-
-    def get_state(self):
-        """ Returns ( status, is_pending )
-              current on/off status is taken from last mcp value without reading it from hardware
-              is_pending is Boolean
-        """
-        return (self.value, self.timeout)
-
-    async def set_state(self, value):
-        """ Sets new on/off status. Disable pending timeouts
-        """
-        await self.arm.client.write_single_register(self.valreg, 1 if value else 0)
-        return 1 if value else 0
-
-    async def set(self, value=None, timeout=None, reset=None, nv_save=None, alias=None):
-        """ Sets new on/off status. Disable pending timeouts
-        """
-        if alias is not None:
-            Devices.set_alias(alias, self)
-
-        if value is not None:
-            value = int(value)
-            await self.arm.client.write_single_register(self.valreg, 1 if value else 0)
-
-        if timeout is not None:
-            timeout = int(timeout)
-            if timeout > 65535:
-                timeout = 65535
-            await self.arm.client.write_single_register(self.toreg, timeout)
-
-        if self.nv_save_coil >= 0 and nv_save is not None and nv_save != self.nvsavvalue:
-            if nv_save != 0:
-                self.nvsavvalue = 1
-            else:
-                self.nvsavvalue = 0
-            await self.arm.client.write_single_coil(self.nv_save_coil, 1)
-
-        if self.reset_coil >= 0 and reset is not None:
-            if reset != 0:
-                self.nvsavvalue = 0
-                await self.arm.client.write_single_coil(self.reset_coil, 1)
-                logger.info("Performed reset of board %s" % self.circuit)
-
-        return self.full()
-

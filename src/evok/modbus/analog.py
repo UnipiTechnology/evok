@@ -5,39 +5,23 @@ Created on Tue Sep 29 09:46:51 2026
 
 @author: bokula
 """
-import struct
+import itertools
 
 from copy import copy
 from math import isnan
-from tmodbus.utils.order_aware_struct import OrderAwareStruct
 
 from ..devices import AI, AO, REGISTER, DATA_POINT, Devices
 from ..log import logger
 from .cache import ENoCacheRegister
-
-FLOAT32_BE = OrderAwareStruct(">f")
-FLOAT32_LE = OrderAwareStruct(">f", word_order="little")
-INT32_LE = OrderAwareStruct(">i", word_order="little")
-UINT32_LE = OrderAwareStruct(">I", word_order="little")
-
-
-def from_registers(fmt: struct.Struct, registers):
-    """ Decode a value from a list of 16-bit registers """
-    return fmt.unpack(struct.pack(f">{len(registers)}H", *registers))[0]
-
-
-def to_registers(fmt: struct.Struct, value):
-    """ Encode a value into a list of 16-bit registers """
-    data = fmt.pack(value)
-    return list(struct.unpack(f">{len(data) // 2}H", data))
+from .client import Client, FLOAT32_LE, to_registers
 
 
 class Register:
-    def __init__(self, circuit, arm, post, reg, reg_type="holding", major_group=0, legacy_mode=True):
+    def __init__(self, circuit, client: Client, post, reg, reg_type="holding", major_group=0, legacy_mode=True):
         self.alias = ""
         self.devtype = REGISTER
         self.circuit = circuit
-        self.arm = arm
+        self.client = client
         self.major_group = major_group
         self.legacy_mode = legacy_mode
         self.valreg = reg
@@ -45,10 +29,7 @@ class Register:
 
     def regvalue(self):
         try:
-            if self.reg_type == "input":
-                return self.arm.cache.get_register(1, self.valreg, is_input=True)[0]
-            else:
-                return self.arm.cache.get_register(1, self.valreg, is_input=False)[0]
+            return self.client.read_u16(self.valreg, is_input=self.reg_type == "input")
         except ENoCacheRegister:
             return None
 
@@ -89,7 +70,7 @@ class Register:
     async def set_state(self, value):
         """ Sets new on/off status. Disable pending timeouts
         """
-        await self.arm.client.write_single_register(self.valreg, value if value else 0)
+        await self.client.mb_client.write_single_register(self.valreg, value if value else 0)
         return value if value else 0
 
     async def set(self, value=None, alias=None):
@@ -99,7 +80,7 @@ class Register:
             Devices.set_alias(alias, self)
         if value is not None:
             value = int(value)
-            await self.arm.client.write_single_register(self.valreg, value if value else 0)
+            await self.client.mb_client.write_single_register(self.valreg, value if value else 0)
 
         return self.full()
 
@@ -107,14 +88,8 @@ class Register:
 
 
 class AnalogOutputBrain:
-    def __init__(self, circuit, arm, reg, regmode=None, reg_res=0, major_group=0):
-        self.alias = ""
-        self.devtype = AO
-        self.circuit = circuit
-        self.reg = reg
-        self.regmode = regmode
-        self.reg_res = reg_res
-        self.modes = {
+
+    modes = {
             'Voltage': {
                 'value': 0,
                 'unit': 'V',
@@ -126,64 +101,69 @@ class AnalogOutputBrain:
                 'range': [0, 20]
             },
             'Resistance':{
-                'value': 2,
+                'value': 3,
                 'unit': 'Ohm',
                 'range': [0, 2000]
             }
         }
-        self.arm = arm
+
+    def __init__(self, circuit, client: Client, reg, regmode=None, reg_res=0, major_group=0):
+        self.alias = ""
+        self.devtype = AO
+        self.circuit = circuit
+        self.reg = reg
+        self.regmode = regmode
+        self.reg_res = reg_res
+        self.client = client
         self.major_group = major_group
-        self.is_voltage = lambda: bool(self.arm.cache.get_register(1, self.regmode)[0] == 0)
         self.value = None
         self.res_value = None
         self.mode = None
-        self.unit = None
+        self.mode_value = None
+        self._apply_mode_data({})
+
+    def _apply_mode_data(self, data):
+        """ Set unit and range of the mode, reset them for an unknown mode """
+        data = data or {}
+        self.range = data.get('range', None)
+        self.unit_name = data.get('unit', None)
+
+    def reload_mode(self, mode_value: int):
+        mode, data = next(itertools.chain(filter(lambda t: t[1]['value']==mode_value, self.modes.items()),[(None,None)]))
+        if not data:
+            logger.warning(f'Undefined mode "{mode_value}" in mode setting for AO {self.circuit}')
+        self._apply_mode_data(data)
+        return mode
 
     async def check_new_data(self):
-        if self.is_voltage():
-            self.mode = 'Voltage'
-        elif self.arm.cache.get_register(1, self.regmode)[0] == 1:
-            self.mode = 'Current'
-        else:
-            self.mode = 'Resistance'
-        self.unit = self.modes[self.mode]['unit']
+        has_changed = False
+        new_mode = self.client.read_u16(self.regmode)
+        if new_mode != self.mode_value:
+            self.mode_value = new_mode
+            self.mode = self.reload_mode(self.mode_value)
+            has_changed = True
 
         old_value = copy(self.value)
         old_res_value = copy(self.res_value)
-        self.value = self.regvalue()
-        self.res_value = self.regres_value()
-        return self.value != old_value or self.res_value != old_res_value
-
-    def regvalue(self):
         try:
-            regs = self.arm.cache.get_register(2, self.reg)
-            ret = from_registers(FLOAT32_LE, regs)
-            #ret = BinaryPayloadDecoder.fromRegisters(ret, Endian.BIG, Endian.LITTLE).decode_32bit_float()
-            return round(float(ret), 3)
+            self.value = round(self.client.read_float32(self.reg), 3)
         except:
-            return 0
-
-    def regres_value(self):
+            self.value = 0
         try:
-            regs = self.arm.cache.get_register(2, self.reg_res)
-            ret = from_registers(FLOAT32_LE, regs)
-            #ret = BinaryPayloadDecoder.fromRegisters(ret, Endian.BIG, Endian.LITTLE).decode_32bit_float()
-            return round(float(ret), 3)
+            self.res_value = round(self.client.read_float32(self.reg_res), 3)
         except:
-            return 0
+            self.res_value = 0
+        return self.value != old_value or self.res_value != old_res_value or has_changed
 
     def full(self):
         ret = {'dev': 'ao',
                'circuit': self.circuit,
                'mode': self.mode,
                'modes': self.modes,
-               'unit': self.unit
+               'unit': self.unit_name,
+               'value': self.value if self.mode != 'Resistance' else self.res_value
         }
 
-        if self.mode == 'Resistance':
-            ret['value'] = self.res_value
-        else:
-            ret['value'] = self.value
         if self.alias != '':
             ret['alias'] = self.alias
         return ret
@@ -204,11 +184,8 @@ class AnalogOutputBrain:
         # TODO: omezenit horni hodnoty!!!
 
         value_set = to_registers(FLOAT32_LE, float(value))
-        #builder = BinaryPayloadBuilder(byteorder=Endian.BIG, wordorder=Endian.LITTLE)
-        #builder.add_32bit_float(float(value))
-        #value_set = builder.to_registers()
 
-        await self.arm.client.write_multiple_registers(self.reg, values=value_set)
+        await self.client.mb_client.write_multiple_registers(self.reg, values=value_set)
         return value
 
     async def set(self, value=None, mode=None, alias=None):
@@ -216,16 +193,11 @@ class AnalogOutputBrain:
             Devices.set_alias(alias, self)
 
         if mode is not None and mode in self.modes and self.regmode is not None:
-            val = self.arm.cache.get_register(1, self.regmode)[0]
             cur_val = self.value
-            if mode == "Voltage":
-                val = 0
-            elif mode == "Current":
-                val = 1
-            elif mode == "Resistance":
-                val = 3
+            mdata = self.modes[mode]
+            await self.client.mb_client.write_single_register(self.regmode, mdata['value'])
             self.mode = mode
-            await self.arm.client.write_single_register(self.regmode, val)
+            self._apply_mode_data(mdata)
             if mode == "Voltage" or mode == "Current":
                 await self.set_value(cur_val)        # Restore original value (i.e. 1.5V becomes 1.5mA)
         if value is not None:
@@ -237,51 +209,47 @@ class AnalogOutputBrain:
 
 
 class AnalogOutput:
-    def __init__(self, circuit, arm, reg, regmode=None, modes=None, major_group=0):
+    def __init__(self, circuit, client: Client, reg, regmode=None, modes=None, major_group=0):
         self.alias = ""
         self.devtype = AO
         self.circuit = circuit
         self.reg = reg
-        self.regvalue = lambda: self.arm.cache.get_register(1, self.reg)[0]
         self.regmode = regmode
-        self.modes = modes if modes is not None else {}
-        self.arm = arm
+        self.modes = modes or {}
+        self.client = client
         self.major_group = major_group
-        self.offset = 0
         self.value = None
-        self.res_value = None
-        self.mode = list(modes.keys())[0] if len(modes) == 1 and self.regmode is None else None
+        self.mode_value = None
+        self.mode = list(self.modes.keys())[0] if len(self.modes) == 1 and self.regmode is None else None
+        self._apply_mode_data(self.modes.get(self.mode))
 
-    def get_mode_by_regvalue(self, regvalue: int):
-        for mode, data in self.modes.items():
-            if regvalue == data['value']:
-                return mode
-        return None
+    def _apply_mode_data(self, data):
+        """ Set unit and range of the mode, reset them for an unknown mode """
+        data = data or {}
+        self.range = data.get('range', None)
+        self.unit_name = data.get('unit', None)
 
-    @property
-    def unit_name(self):
-        if self.mode in self.modes:
-            return self.modes[self.mode].get('unit', None)
-        else:
-            return None
-
-    @property
-    def range(self):
-        if self.mode in self.modes:
-            return self.modes[self.mode].get('range', None)
-        else:
-            return None
+    def reload_mode(self, mode_value: int):
+        mode, data = next(itertools.chain(filter(lambda t: t[1]['value']==mode_value, self.modes.items()),[(None,None)]))
+        if not data:
+            logger.warning(f'Undefined mode "{mode_value}" in mode setting for AO {self.circuit}')
+        self._apply_mode_data(data)
+        return mode
 
     async def check_new_data(self):
+        has_changed = False
         if self.regmode is not None:
-            mode_value = self.arm.cache.get_register(1, self.regmode)[0]
-            self.mode = self.get_mode_by_regvalue(mode_value)
-
-        old_value = copy(self.value)
-        old_res_value = copy(self.res_value)
-        self.value = round(self.regvalue() * 0.0025, 3)
-        self.res_value = round(float(self.regvalue()) * 0.0025, 3)
-        return self.value != old_value or self.res_value != old_res_value
+            new_mode = self.client.read_u16(self.regmode)
+            if new_mode != self.mode_value:
+                self.mode_value = new_mode
+                self.mode = self.reload_mode(self.mode_value)
+                has_changed = True
+        old_value = self.value
+        try:
+            self.value = round(self.client.read_u16(self.reg) * 0.0025, 3)
+        except ENoCacheRegister:
+            self.value = None
+        return self.value != old_value or has_changed
 
     def full(self):
         ret = {'dev': 'ao',
@@ -307,7 +275,7 @@ class AnalogOutput:
             valuei = 0
         elif valuei > 4095:
             valuei = 4095
-        await self.arm.client.write_single_register(self.reg, valuei)
+        await self.client.mb_client.write_single_register(self.reg, valuei)
         return float(valuei) * 0.0025
 
     async def set(self, value=None, mode=None, alias=None):
@@ -319,7 +287,7 @@ class AnalogOutput:
             if 'value' not in mdata:
                 raise ValueError("AnalogOutput: this device cant switch mode!")
             mvalue = int(mdata['value'])
-            await self.arm.client.write_single_register(self.regmode, mvalue)
+            await self.client.mb_client.write_single_register(self.regmode, mvalue)
 
         if value is not None:
             await self.set_value(value)
@@ -331,103 +299,86 @@ class AnalogOutput:
 
 class AnalogInput:
 
-    def __init__(self, circuit, arm, reg, regmode=None, major_group=0, legacy_mode=True, modes=None):
+    def __init__(self, circuit, client: Client, reg, regmode=None, major_group=0, legacy_mode=True, modes=None):
         self.alias = ""
         self.devtype = AI
         self.circuit = circuit
         self.valreg = reg
-        self.arm = arm
+        self.client = client
         self.legacy_mode = legacy_mode
         self.regmode = regmode
-        self.modes = modes if modes is not None else {}
-        self.mode = list(modes.keys())[0] if len(modes) == 1 and self.regmode is None else None
+        self.modes = modes or {}
+        self.mode = list(self.modes.keys())[0] if len(self.modes) == 1 and self.regmode is None else None
         self.mode_value = None
+        self.range = None
+        self.unit_name = None
         self.major_group = major_group
-        self.is_voltage = lambda: True
         self.value = None
-        self.transformation = lambda registers: \
-              round(float(from_registers(FLOAT32_LE, registers)), 3)
+        self.transformation = lambda index: round(float(self.client.read_float32(index)), 3)
 
         #logger.debug(f"AnalogInput.__init__ called, instance content {vars(self)}")
 
-    def get_mode_by_regvalue(self, regvalue: int):
-        for mode, data in self.modes.items():
-            if regvalue == data['value']:
-                return mode
-        return None
 
     def reload_mode(self, mode_value: int):
-        for mode, data in self.modes.items():
-            if mode_value == data['value']:
-                if data.get("transformation"):
-                    #logger.debug(f"Mode: {data['value']} -> {data['transformation']}")
-                    datatype = data["transformation"].get("datatype", "float32")
-                    decimals = data["transformation"].get("decimals", 3)
-                    ratio = data["transformation"].get("ratio", 1)
-                    logger.debug(f"Aplying transformation on analog input {self.circuit}: {datatype}  {decimals}")
-                    if datatype == "float32":
-                        self.transformation = lambda registers:\
-                            round(float(from_registers(FLOAT32_LE, registers)) * ratio, decimals)
+        mode, data = next(itertools.chain(filter(lambda t: t[1]['value']==mode_value, self.modes.items()),[(None,None)]))
+        if data:
+            self.range = data.get('range', None)
+            self.unit_name = data.get('unit', None)
+            transformation = data.get('transformation', {})
+            datatype = transformation.get("datatype", "float32")
+            decimals = transformation.get("decimals", 3)
+            ratio = transformation.get("ratio", 1)
+            logger.debug(f"Aplying transformation on analog input {self.circuit}: {datatype}  {decimals}")
+            if datatype == "float32":
+                self.transformation = lambda index:\
+                            round(float(self.client.read_float32(index)) * ratio, decimals)
+            elif datatype == "int32":
+                self.transformation = lambda index:\
+                            self.client.read_i32(index) * ratio
 
-                    elif datatype == "int32":
-                        self.transformation = lambda registers:\
-                            int(from_registers(INT32_LE, registers)) * ratio
+            elif datatype == "uint32" and isinstance(ratio, float) :
+                self.transformation = lambda index:\
+                            round(float(self.client.read_u32(index)) * ratio, decimals)
 
-                    elif datatype == "uint32" and isinstance(ratio, float) :
-                        self.transformation = lambda registers:\
-                            round(int(from_registers(UINT32_LE, registers)) * ratio, decimals)
-
-                    elif datatype == "uint32":
-                        self.transformation = lambda registers:\
-                            int(from_registers(UINT32_LE, registers)) * ratio
-                return mode
-        return None
-
-    @property
-    def unit_name(self):
-        if self.mode in self.modes:
-            return self.modes[self.mode].get('unit', None)
+            elif datatype == "uint32":
+                self.transformation = lambda index:\
+                            int(self.client.read_u32(index) * ratio)
+            else:
+                logger.warning(f'Unknown datatype "{datatype}" in transformation for AI {self.circuit}')
+                self.transformation = lambda index: None
         else:
-            return None
-
-    @property
-    def range(self):
-        if self.mode in self.modes:
-            return self.modes[self.mode].get('range', None)
-        else:
-            return None
+            logger.warning(f'Undefined mode "{mode_value}" in mode setting for AI {self.circuit}')
+            self.transformation = lambda index: None
+        return mode
 
     async def check_new_data(self):
         has_changed = False
         if self.regmode is not None:
-            old_mode_value = copy(self.mode_value)
-            self.mode_value = self.arm.cache.get_register(1, self.regmode)[0]
-            if old_mode_value != self.mode_value:
+            new_mode = self.client.read_u16(self.regmode)
+            if new_mode != self.mode_value:
+                self.mode_value = new_mode
                 self.mode = self.reload_mode(self.mode_value)
                 has_changed = True
 
-        old_value = copy(self.value)
-        self.value = self.regvalue()
-        return self.value != old_value or has_changed
-
-    def regvalue(self):
+        old_value = self.value
         try:
-            # TODO adaptive data length
-            ret = self.arm.cache.get_register(2, self.valreg)
-            return self.transformation(ret)
+            self.value = self.transformation(self.valreg)
         except ENoCacheRegister:
-            return None
+            self.value = None
+        return self.value != old_value or has_changed
 
     async def set(self, mode=None, alias=None):
         if alias is not None:
             Devices.set_alias(alias, self)
 
-        if mode is not None and mode in self.modes:
+        if mode is not None:
+            if mode not in self.modes:
+                raise ValueError(f'AnalogInput: unknown mode "{mode}"!')
             mdata = self.modes[mode]
             if 'value' not in mdata:
                 raise ValueError("AnalogInput: this device cant switch mode!")
             mvalue = int(mdata['value'])
-            await self.arm.client.write_single_register(self.regmode, mvalue)
+            await self.client.mb_client.write_single_register(self.regmode, mvalue)
         return self.full()
 
     def full(self):
@@ -451,18 +402,14 @@ class AnalogInput:
                 'circuit': self.circuit,
                 'value': self.value}
 
-    @property
-    def voltage(self):
-        return self.value
-
 class DataPoint:
 
-    def __init__(self, circuit, arm, reg, reg_type=None, major_group=0, datatype=None, unit=None, offset=0, factor=1, valid_mask_reg=None, valid_mask=None, name=None, post_write=None):
+    def __init__(self, circuit, client: Client, reg, reg_type=None, major_group=0, datatype=None, unit=None, offset=0, factor=1, valid_mask_reg=None, valid_mask=None, name=None, post_write=None):
         # TODO - valid mask reg
         self.alias = ""
         self.devtype = DATA_POINT
         self.circuit = circuit
-        self.arm = arm
+        self.client = client
         self.major_group = major_group
         self.valreg = reg
         self.offset = offset
@@ -488,7 +435,7 @@ class DataPoint:
         if self.valid_mask_reg is None:
             return 0
         try:
-            val = self.arm.cache.get_register(1, self.valid_mask_reg, is_input=self.is_input)[0]
+            val = self.client.read_u16(self.valid_mask_reg, is_input=self.is_input)
             return bool(val & self.valid_mask)
         except ENoCacheRegister:
             return 0
@@ -496,9 +443,11 @@ class DataPoint:
     def read_value(self):
         try:
             if self.datatype is None or self.datatype == "signed16":
-                value = self.arm.cache.get_register(1, self.valreg, is_input=self.is_input)[0]
+                value = self.client.read_u16(self.valreg, is_input=self.is_input)
             elif self.datatype == "float32":
-                value = self.__parse_float32(self.arm.cache.get_register(2, self.valreg, is_input=self.is_input))
+                value = self.client.read_float32(self.valreg, is_input=self.is_input, word_order="big")
+                if isnan(value):
+                    value = 'NaN'
             else:
                 logger.warning(f"Data point: Unsupported datatype {self.datatype}")
                 return None
@@ -508,11 +457,6 @@ class DataPoint:
                 return (value * self.factor) + self.offset
         except ENoCacheRegister:
             return None
-
-    def __parse_float32(self, raw_regs):
-        ret = from_registers(FLOAT32_BE, raw_regs)
-        #ret = float(BinaryPayloadDecoder.fromRegisters(raw_regs, Endian.BIG, Endian.BIG).decode_32bit_float())
-        return ret if not isnan(ret) else 'NaN'
 
     async def set(self, value=None, alias=None, **kwargs):
         """ Sets new on/off status. Disable pending timeouts """
