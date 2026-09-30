@@ -5,8 +5,6 @@ Created on Fri Sep 25 16:10:02 2026
 
 @author: bokula
 """
-import logging
-
 from .digital import DigitalInput, DigitalOutput, Relay, ULED, OwPower,\
                      NvSave, Watchdog
 from .analog import  AnalogInput, AnalogOutput, AnalogOutputBrain,\
@@ -14,6 +12,7 @@ from .analog import  AnalogInput, AnalogOutput, AnalogOutputBrain,\
 from ..devices import \
                      DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
                      REGISTER, DATA_POINT, NV_SAVE, Devices
+from ..log import logger
 
 class IOParser:
 
@@ -76,14 +75,9 @@ class IOParser:
             board_val_reg = m_feature['val_reg']
             # Hard PWM
             if m_feature.get('pwm_reg') and m_feature.get('pwm_ps_reg') and m_feature.get('pwm_c_reg'):
-                if not self.legacy_mode:
-                    _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
-                                       major_group=self.circuit, pwmcyclereg=m_feature['pwm_c_reg'], pwmprescalereg=m_feature['pwm_ps_reg'], digital_only=True,
-                                       pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'], legacy_mode=self.legacy_mode)
-                else:
-                    _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
-                                       major_group=self.circuit, pwmcyclereg=m_feature['pwm_c_reg'], pwmprescalereg=m_feature['pwm_ps_reg'], digital_only=True,
-                                       pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'], legacy_mode=self.legacy_mode)
+                _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
+                                   major_group=self.circuit, pwmcyclereg=m_feature['pwm_c_reg'], pwmprescalereg=m_feature['pwm_ps_reg'], digital_only=True,
+                                   pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'], legacy_mode=self.legacy_mode)
             # Soft PWM
             elif m_feature.get('pwm_reg') and m_feature.get('pwm_preset_reg') and m_feature.get('pwm_cpres_reg'):
                 _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self, m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
@@ -232,7 +226,7 @@ class IOParser:
         elif m_feature['type'] == 'NV_SAVE':
             self.parse_feature_nv_save(m_feature)
         else:
-            logging.warning("Unknown feature: " + str(m_feature['type']) + " at board: " + str(self.circuit))
+            logger.warning(f"Unknown feature: {m_feature['type']} at board: {self.circuit}")
 
     def populate(self):
         for m_feature in self.hw_features:

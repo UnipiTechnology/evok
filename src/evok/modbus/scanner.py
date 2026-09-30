@@ -7,8 +7,6 @@ Created on Tue Sep 29 09:58:27 2026
 """
 
 import asyncio
-import logging
-import traceback
 import time
 
 from tmodbus import (
@@ -16,14 +14,13 @@ from tmodbus import (
     AsyncTcpTransport,
     AsyncSmartTransport
 )
-from tmodbus.exceptions import TModbusError, ModbusConnectionError
 from typing import Union
 
 
 from ..devices import MODBUS_SLAVE
 from ..log import logger
 from .builder import IOParser
-from .cache import ModbusCacheMap, ENoCacheRegister
+from .cache import ModbusCacheMap
 from .client import Client
 
 import subprocess

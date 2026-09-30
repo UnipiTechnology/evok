@@ -7,8 +7,7 @@ Created on Tue Sep 29 13:40:31 2026
 """
 
 from tmodbus import (
-    AsyncModbusClient,
-    AsyncSmartTransport
+    AsyncModbusClient
 )
 
 from .cache import ModbusCacheMap

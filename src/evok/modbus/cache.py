@@ -39,7 +39,7 @@ class RegisterGroup:
             self.values[i+offset] = values[i]
 
     def clear_counter(self): 
-        self.f_counter = 0;
+        self.f_counter = 0
 
     def tick_counter(self): 
         self.f_counter = self.f_divider - 1 if self.f_counter == 0 else \

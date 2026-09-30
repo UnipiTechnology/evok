@@ -6,18 +6,14 @@ Created on Tue Sep 29 09:34:57 2026
 @author: bokula
 """
 import asyncio
-import logging
 
 from copy import copy
 from math import sqrt
 from typing import Union
 
-from ..devices import MODBUS_SLAVE, \
-                     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
-                     REGISTER, DATA_POINT, BOARD, NV_SAVE, Devices
-from ..errors import ModbusSlaveError
+from ..devices import DI, DO, RO, OWPOWER, LED, WATCHDOG, \
+                     NV_SAVE, Devices
 from ..log import logger
-from .cache import ENoCacheRegister
 
 
 
@@ -233,7 +229,7 @@ class DigitalOutput:
                     else:
                         raise Exception('Set value conflict: Cannot set both value and pwm_duty at once.')
 
-                if not (timeout is None):
+                if timeout is not None:
                     timeout = float(timeout)
 
                 self.mode = 'Simple'
@@ -343,7 +339,7 @@ class Relay:
             return self.full()
 
         except Exception as E:
-            logging.exception(f"Error in set RO: {E}")
+            logger.exception(f"Error in set RO: {E}")
             raise E
 
     def get(self):
@@ -366,9 +362,6 @@ class OwPower(object):
         if self.alias != '':
             ret['alias'] = self.alias
         return ret
-
-    def simple(self):
-        return {'dev': 'owpower', 'circuit': self.circuit, 'value': self.value}
 
     async def set(self, value=None, alias=None):
         """ Sets new on/off status. Disable pending timeouts
@@ -495,8 +488,10 @@ class DigitalInput:
         self.reg = reg
         self.regvalue = lambda: self.arm.cache.get_register(1, self.reg)[0]
         self.regcountervalue = self.regdebouncevalue = lambda: None
-        if not (regcounter is None): self.regcountervalue = lambda: self.arm.cache.get_register(1, regcounter)[0] + (self.arm.cache.get_register(1, regcounter + 1)[0] << 16)
-        if not (regdebounce is None): self.regdebouncevalue = lambda: self.arm.cache.get_register(1, regdebounce)[0]
+        if regcounter is not None:
+            self.regcountervalue = lambda: self.arm.cache.get_register(1, regcounter)[0] + (self.arm.cache.get_register(1, regcounter + 1)[0] << 16)
+        if regdebounce is not None:
+            self.regdebouncevalue = lambda: self.arm.cache.get_register(1, regdebounce)[0]
         self.mode = 'Simple'
         self.ds_mode = 'Simple'
         self.counter_mode = "Enabled"
@@ -698,7 +693,7 @@ class Watchdog(object):
             value = int(value)
             await self.arm.client.write_single_register(self.valreg, 1 if value else 0)
 
-        if not (timeout is None):
+        if timeout is not None:
             timeout = int(timeout)
             if timeout > 65535:
                 timeout = 65535

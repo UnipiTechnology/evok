@@ -5,19 +5,13 @@ Created on Tue Sep 29 09:46:51 2026
 
 @author: bokula
 """
-import asyncio
-import logging
 import struct
 
 from copy import copy
-from math import sqrt, isnan
-from typing import Union
+from math import isnan
 from tmodbus.utils.order_aware_struct import OrderAwareStruct
 
-from ..devices import MODBUS_SLAVE, \
-                     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
-                     REGISTER, DATA_POINT, BOARD, NV_SAVE, Devices
-from ..errors import ModbusSlaveError
+from ..devices import AI, AO, REGISTER, DATA_POINT, Devices
 from ..log import logger
 from .cache import ENoCacheRegister
 
@@ -234,7 +228,7 @@ class AnalogOutputBrain:
             await self.arm.client.write_single_register(self.regmode, val)
             if mode == "Voltage" or mode == "Current":
                 await self.set_value(cur_val)        # Restore original value (i.e. 1.5V becomes 1.5mA)
-        if not (value is None):
+        if value is not None:
             await self.set_value(float(value))  # Restore original value (i.e. 1.5V becomes 1.5mA)
         return self.full()
 
@@ -327,7 +321,7 @@ class AnalogOutput:
             mvalue = int(mdata['value'])
             await self.arm.client.write_single_register(self.regmode, mvalue)
 
-        if not (value is None):
+        if value is not None:
             await self.set_value(value)
         return self.full()
 
