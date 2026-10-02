@@ -117,3 +117,119 @@ class Proxy(object):
 
     def fullcache(self):
         return self.result
+
+
+class Reader:
+    """ Reads a value of a given datatype from the cache of a Client
+        and applies the linear transformation val * ratio + offset
+        and rounding to decimals. Base class reads nothing (unknown datatype).
+    """
+    datatype = None
+
+    def __init__(self, index: int, is_input: bool = False, *,
+                 ratio=1, offset=0, decimals=None):
+        self.index = index
+        self.is_input = is_input
+        self.ratio = ratio
+        self.offset = offset
+        self.decimals = decimals
+
+    def params(self) -> dict:
+        return dict(is_input=self.is_input, ratio=self.ratio,
+                    offset=self.offset, decimals=self.decimals)
+
+    def refactor(self, datatype: str = 'uint16', ratio=1, offset=0, decimals=None,
+                 word_order=None) -> "Reader":
+        """ Return a new reader of the same register. Only index and is_input
+            are taken from this reader, the other parameters come from the call.
+        """
+        return ReaderFactory.get(self.index, datatype, is_input=self.is_input, ratio=ratio,
+                                 offset=offset, decimals=decimals, word_order=word_order)
+
+    def read_raw(self, client: Client) -> int | float | None:
+        return None
+
+    def read(self, client: Client) -> int | float | None:
+        val = self.read_raw(client)
+        if val is None:
+            return None
+        if self.ratio != 1 or self.offset != 0:
+            val = val * self.ratio + self.offset
+        if self.decimals is not None:
+            val = round(val, self.decimals)
+        return val
+
+
+class ReaderU16(Reader):
+    datatype = 'uint16'
+
+    def read_raw(self, client: Client) -> int:
+        return client.read_u16(self.index, is_input=self.is_input)
+
+
+class ReaderI16(Reader):
+    datatype = 'int16'
+
+    def read_raw(self, client: Client) -> int:
+        return client.read_i16(self.index, is_input=self.is_input)
+
+
+class Reader32(Reader):
+    """ Base for values in two registers, see Client.read_u32 for word_order """
+
+    def __init__(self, index: int, is_input: bool = False, *,
+                 word_order: Literal["big", "little"] = "little", **kwargs):
+        if word_order not in ("big", "little"):
+            raise ValueError(f"Unknown word order '{word_order}'")
+        super().__init__(index, is_input, **kwargs)
+        self.word_order = word_order
+
+    def params(self) -> dict:
+        return dict(super().params(), word_order=self.word_order)
+
+
+class ReaderU32(Reader32):
+    datatype = 'uint32'
+
+    def read_raw(self, client: Client) -> int:
+        return client.read_u32(self.index, is_input=self.is_input, word_order=self.word_order)
+
+
+class ReaderI32(Reader32):
+    datatype = 'int32'
+
+    def read_raw(self, client: Client) -> int:
+        return client.read_i32(self.index, is_input=self.is_input, word_order=self.word_order)
+
+
+class ReaderFloat32(Reader32):
+    datatype = 'float32'
+
+    def read_raw(self, client: Client) -> float:
+        return client.read_float32(self.index, is_input=self.is_input, word_order=self.word_order)
+
+
+class ReaderFactory:
+    reader_classes = {
+        'uint16': ReaderU16,
+        'int16': ReaderI16,
+        'signed16': ReaderI16,  # name used by data_point in hw definitions
+        'uint32': ReaderU32,
+        'int32': ReaderI32,
+        'float32': ReaderFloat32,
+    }
+
+    @classmethod
+    def get(cls, index: int, datatype: str = 'uint16', *, is_input: bool = False,
+            ratio=1, offset=0, decimals=None, word_order=None) -> Reader:
+        """ word_order is accepted only by 32-bit datatypes """
+        kwargs = dict(ratio=ratio, offset=offset, decimals=decimals)
+        reader_cls = cls.reader_classes.get(datatype)
+        if reader_cls is None:
+            logger.warning(f'Unknown datatype "{datatype}" in ReaderFactory index={index}')
+            return Reader(index, is_input, **kwargs)
+        if word_order is not None:
+            if not issubclass(reader_cls, Reader32):
+                raise ValueError(f'Datatype "{datatype}" does not support word_order')
+            kwargs['word_order'] = word_order
+        return reader_cls(index, is_input, **kwargs)
