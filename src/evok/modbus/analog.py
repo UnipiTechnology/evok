@@ -5,8 +5,6 @@ Created on Tue Sep 29 09:46:51 2026
 
 @author: bokula
 """
-import itertools
-
 from copy import copy
 from math import isnan
 
@@ -15,6 +13,7 @@ from ..log import logger
 from .cache import ENoCacheRegister
 from .base import IODevice
 from .client import Client, FLOAT32_LE, to_registers
+from .iomode import IOMode, WithIOMode
 
 
 class Register(IODevice):
@@ -60,7 +59,7 @@ class Register(IODevice):
         return self.full()
 
 
-class AnalogOutputBrain(IODevice):
+class AnalogOutputBrain(WithIOMode, IODevice):
 
     devtype = AO
 
@@ -84,39 +83,17 @@ class AnalogOutputBrain(IODevice):
 
     def __init__(self, circuit, client: Client, reg, regmode=None, reg_res=0, major_group=0):
         super().__init__(circuit, client, major_group)
+        self.iomode = IOMode(client, regmode, AnalogOutputBrain.modes, f"AO {circuit}")
         self.reg = reg
-        self.regmode = regmode
         self.reg_res = reg_res
         self.value = None
         self.res_value = None
-        self.mode = None
-        self.mode_value = None
-        self._apply_mode_data({})
-
-    def _apply_mode_data(self, data):
-        """ Set unit and range of the mode, reset them for an unknown mode """
-        data = data or {}
-        self.range = data.get('range', None)
-        self.unit_name = data.get('unit', None)
-
-    def reload_mode(self, mode_value: int):
-        mode, data = next(itertools.chain(filter(lambda t: t[1]['value'] == mode_value, self.modes.items()),
-                                          [(None, None)]))
-        if not data:
-            logger.warning(f'Undefined mode "{mode_value}" in mode setting for AO {self.circuit}')
-        self._apply_mode_data(data)
-        return mode
 
     async def check_new_data(self):
-        has_changed = False
-        new_mode = self.client.read_u16(self.regmode)
-        if new_mode != self.mode_value:
-            self.mode_value = new_mode
-            self.mode = self.reload_mode(self.mode_value)
-            has_changed = True
+        has_changed = self.iomode.update()
 
-        old_value = copy(self.value)
-        old_res_value = copy(self.res_value)
+        old_value = self.value
+        old_res_value = self.res_value
         try:
             self.value = round(self.client.read_float32(self.reg), 3)
         except Exception:
@@ -152,12 +129,11 @@ class AnalogOutputBrain(IODevice):
     async def set(self, value=None, mode=None, alias=None):
         self.set_alias(alias)
 
-        if mode is not None and mode in self.modes and self.regmode is not None:
+        if mode is not None:
             cur_val = self.value
-            mdata = self.modes[mode]
-            await self.client.mb_client.write_single_register(self.regmode, mdata['value'])
-            self.mode = mode
-            self._apply_mode_data(mdata)
+            await self.iomode.set(mode)
+            # Report the new mode at once, mode_value is kept so the next scan still reports the change
+            self.iomode.mode = mode
             if mode == "Voltage" or mode == "Current":
                 await self.set_value(cur_val)        # Restore original value (i.e. 1.5V becomes 1.5mA)
         if value is not None:
@@ -165,42 +141,18 @@ class AnalogOutputBrain(IODevice):
         return self.full()
 
 
-class AnalogOutput(IODevice):
+class AnalogOutput(WithIOMode, IODevice):
 
     devtype = AO
 
     def __init__(self, circuit, client: Client, reg, regmode=None, modes=None, major_group=0):
         super().__init__(circuit, client, major_group)
+        self.iomode = IOMode(client, regmode, modes, f"AO {circuit}")
         self.reg = reg
-        self.regmode = regmode
-        self.modes = modes or {}
         self.value = None
-        self.mode_value = None
-        self.mode = list(self.modes.keys())[0] if len(self.modes) == 1 and self.regmode is None else None
-        self._apply_mode_data(self.modes.get(self.mode))
-
-    def _apply_mode_data(self, data):
-        """ Set unit and range of the mode, reset them for an unknown mode """
-        data = data or {}
-        self.range = data.get('range', None)
-        self.unit_name = data.get('unit', None)
-
-    def reload_mode(self, mode_value: int):
-        mode, data = next(itertools.chain(filter(lambda t: t[1]['value'] == mode_value, self.modes.items()),
-                                          [(None, None)]))
-        if not data:
-            logger.warning(f'Undefined mode "{mode_value}" in mode setting for AO {self.circuit}')
-        self._apply_mode_data(data)
-        return mode
 
     async def check_new_data(self):
-        has_changed = False
-        if self.regmode is not None:
-            new_mode = self.client.read_u16(self.regmode)
-            if new_mode != self.mode_value:
-                self.mode_value = new_mode
-                self.mode = self.reload_mode(self.mode_value)
-                has_changed = True
+        has_changed = self.iomode.update()
         old_value = self.value
         try:
             self.value = round(self.client.read_u16(self.reg) * 0.0025, 3)
@@ -232,77 +184,49 @@ class AnalogOutput(IODevice):
     async def set(self, value=None, mode=None, alias=None):
         self.set_alias(alias)
 
-        if mode is not None and mode in self.modes and self.regmode is not None:
-            mdata = self.modes[mode]
-            if 'value' not in mdata:
-                raise ValueError("AnalogOutput: this device cant switch mode!")
-            mvalue = int(mdata['value'])
-            await self.client.mb_client.write_single_register(self.regmode, mvalue)
+        if mode is not None:
+            await self.iomode.set(mode)
 
         if value is not None:
             await self.set_value(value)
         return self.full()
 
 
-class AnalogInput(IODevice):
+class AnalogInput(WithIOMode, IODevice):
 
     devtype = AI
 
     def __init__(self, circuit, client: Client, reg, regmode=None, major_group=0, modes=None):
         super().__init__(circuit, client, major_group)
+        self.iomode = IOMode(client, regmode, modes, f"AI {circuit}")
         self.valreg = reg
-        self.regmode = regmode
-        self.modes = modes or {}
-        self.mode = list(self.modes.keys())[0] if len(self.modes) == 1 and self.regmode is None else None
-        self.mode_value = None
-        self.range = None
-        self.unit_name = None
         self.value = None
         self.transformation = lambda index: round(float(self.client.read_float32(index)), 3)
 
-        # logger.debug(f"AnalogInput.__init__ called, instance content {vars(self)}")
-
-    def reload_mode(self, mode_value: int):
-        mode, data = next(itertools.chain(filter(lambda t: t[1]['value'] == mode_value, self.modes.items()),
-                                          [(None, None)]))
-        if data:
-            self.range = data.get('range', None)
-            self.unit_name = data.get('unit', None)
-            transformation = data.get('transformation', {})
-            datatype = transformation.get("datatype", "float32")
-            decimals = transformation.get("decimals", 3)
-            ratio = transformation.get("ratio", 1)
-            logger.debug(f"Aplying transformation on analog input {self.circuit}: {datatype}  {decimals}")
-            if datatype == "float32":
-                self.transformation = lambda index:\
-                    round(float(self.client.read_float32(index)) * ratio, decimals)
-            elif datatype == "int32":
-                self.transformation = lambda index:\
-                    self.client.read_i32(index) * ratio
-
-            elif datatype == "uint32" and isinstance(ratio, float):
-                self.transformation = lambda index:\
-                    round(float(self.client.read_u32(index)) * ratio, decimals)
-
-            elif datatype == "uint32":
-                self.transformation = lambda index:\
-                    int(self.client.read_u32(index) * ratio)
-            else:
-                logger.warning(f'Unknown datatype "{datatype}" in transformation for AI {self.circuit}')
-                self.transformation = lambda index: None
-        else:
-            logger.warning(f'Undefined mode "{mode_value}" in mode setting for AI {self.circuit}')
-            self.transformation = lambda index: None
-        return mode
+    def _make_transformation(self):
+        """ Return the function reading the value in the current mode """
+        if self.mode is None:
+            return lambda index: None
+        transformation = self.iomode.data.get('transformation', {})
+        datatype = transformation.get("datatype", "float32")
+        decimals = transformation.get("decimals", 3)
+        ratio = transformation.get("ratio", 1)
+        logger.debug(f"Aplying transformation on analog input {self.circuit}: {datatype}  {decimals}")
+        if datatype == "float32":
+            return lambda index: round(float(self.client.read_float32(index)) * ratio, decimals)
+        elif datatype == "int32":
+            return lambda index: self.client.read_i32(index) * ratio
+        elif datatype == "uint32" and isinstance(ratio, float):
+            return lambda index: round(float(self.client.read_u32(index)) * ratio, decimals)
+        elif datatype == "uint32":
+            return lambda index: int(self.client.read_u32(index) * ratio)
+        logger.warning(f'Unknown datatype "{datatype}" in transformation for AI {self.circuit}')
+        return lambda index: None
 
     async def check_new_data(self):
-        has_changed = False
-        if self.regmode is not None:
-            new_mode = self.client.read_u16(self.regmode)
-            if new_mode != self.mode_value:
-                self.mode_value = new_mode
-                self.mode = self.reload_mode(self.mode_value)
-                has_changed = True
+        has_changed = self.iomode.update()
+        if has_changed:
+            self.transformation = self._make_transformation()
 
         old_value = self.value
         try:
@@ -315,13 +239,7 @@ class AnalogInput(IODevice):
         self.set_alias(alias)
 
         if mode is not None:
-            if mode not in self.modes:
-                raise ValueError(f'AnalogInput: unknown mode "{mode}"!')
-            mdata = self.modes[mode]
-            if 'value' not in mdata:
-                raise ValueError("AnalogInput: this device cant switch mode!")
-            mvalue = int(mdata['value'])
-            await self.client.mb_client.write_single_register(self.regmode, mvalue)
+            await self.iomode.set(mode)
         return self.full()
 
     def full(self):
@@ -377,7 +295,7 @@ class DataPoint(IODevice):
     def read_value(self):
         try:
             if self.datatype is None or self.datatype == "signed16":
-                value = self.client.read_u16(self.valreg, is_input=self.is_input)
+                value = self.client.read_i16(self.valreg, is_input=self.is_input)
             elif self.datatype == "float32":
                 value = self.client.read_float32(self.valreg, is_input=self.is_input, word_order="big")
                 if isnan(value):

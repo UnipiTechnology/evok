@@ -318,7 +318,6 @@ async def test_data_point_valid_mask():
         await dp.set(value=1)
 
 
-@pytest.mark.xfail(strict=True, reason="signed16 returns the raw unsigned register value")
 async def test_data_point_signed16():
     client, dp = make_dp([0xffff], datatype='signed16')
     await client.cache.do_scan(initial=True)

@@ -23,6 +23,7 @@ INT32_BE = OrderAwareStruct(">i")
 INT32_LE = OrderAwareStruct(">i", word_order="little")
 UINT32_BE = OrderAwareStruct(">I")
 UINT32_LE = OrderAwareStruct(">I", word_order="little")
+INT16 = OrderAwareStruct(">h")
 
 FLOAT32_WORD_ORDER = {"big": FLOAT32_BE, "little": FLOAT32_LE}
 UINT32_WORD_ORDER = {"big": UINT32_BE, "little": UINT32_LE}
@@ -53,6 +54,10 @@ class Client:
     def read_u16(self, index: int, is_input: bool = False) -> int:
         """ Return the cached value of a 16-bit register """
         return self.cache.get_register(1, index, is_input=is_input)[0]
+
+    def read_i16(self, index: int, is_input: bool = False) -> int:
+        """ Return the cached value of a 16-bit register as signed int"""
+        return from_registers(INT16, self.cache.get_register(1, index, is_input=is_input))
 
     def read_float32(self, index: int, is_input: bool = False,
                      word_order: Literal["big", "little"] = "little") -> float:

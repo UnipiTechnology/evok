@@ -1,0 +1,56 @@
+import pytest
+
+from evok.modbus.iomode import IOMode
+
+from conftest import make_client
+
+MODES = {'Voltage': {'value': 0, 'unit': 'V', 'range': [0, 10]},
+         'Current': {'value': 1, 'unit': 'mA', 'range': [0, 20]},
+         'Fixed': {'unit': 'x'}}
+
+
+async def make_iomode(mode_value, regmode=0, modes=MODES):
+    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1}], {0: mode_value})
+    await client.cache.do_scan(initial=True)
+    return client, IOMode(client, regmode, modes, 'AI x')
+
+
+async def test_update_reports_change_once():
+    client, iomode = await make_iomode(1)
+    assert (iomode.mode, iomode.unit, iomode.range) == (None, None, None)
+    assert iomode.update()
+    assert (iomode.mode, iomode.mode_value, iomode.unit, iomode.range) == ('Current', 1, 'mA', [0, 20])
+    assert not iomode.update()
+
+
+async def test_undefined_mode_value():
+    client, iomode = await make_iomode(7)
+    assert iomode.update()
+    assert (iomode.mode, iomode.mode_value, iomode.data) == (None, 7, {})
+
+
+async def test_fixed_mode_without_register():
+    client, iomode = await make_iomode(0, regmode=None, modes={'Voltage': MODES['Voltage']})
+    assert iomode.mode == 'Voltage'
+    assert not iomode.update()
+    assert await iomode.set('Voltage') == MODES['Voltage']
+    assert client.mb_client.writes == []
+
+
+async def test_set_writes_register_and_waits_for_scan():
+    client, iomode = await make_iomode(0)
+    iomode.update()
+    assert await iomode.set('Current') == MODES['Current']
+    assert client.mb_client.holding[0] == 1
+    assert iomode.mode == 'Voltage'
+    await client.cache.do_scan()
+    assert iomode.update() and iomode.mode == 'Current'
+
+
+async def test_set_invalid_mode():
+    client, iomode = await make_iomode(0)
+    with pytest.raises(ValueError):
+        await iomode.set('Unknown')
+    with pytest.raises(ValueError):
+        await iomode.set('Fixed')
+    assert client.mb_client.writes == []
