@@ -4,7 +4,7 @@ import math
 import pytest
 
 from evok.devices import Devices, DI, DO, AI, LED, WATCHDOG
-from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, Register
+from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
 from evok.modbus.builder import IOParser
 from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
 
@@ -194,6 +194,30 @@ async def test_ai_mode_without_transformation_uses_default():
     assert (ai.mode, ai.value) == ('Raw', 3.0)
 
 
+@pytest.mark.parametrize('transformation, regs, expected', [
+    ({}, to_registers(FLOAT32_LE, 1.23456), 1.235),                  # float32, 3 decimals
+    ({'datatype': 'float32', 'ratio': 2}, to_registers(FLOAT32_LE, 1.23456), 2.469),
+    ({'datatype': 'int32', 'ratio': 3}, [0xfffe, 0xffff], -6),
+    ({'datatype': 'uint32', 'ratio': 0.0001}, [12345, 0], pytest.approx(1.2345)),  # no rounding
+    ({'datatype': 'uint32', 'ratio': 0.001, 'decimals': 1}, [12345, 0], 12.3),
+    ({'datatype': 'bogus'}, [1, 0], None),
+])
+async def test_ai_transformation_datatypes(transformation, regs, expected):
+    client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}],
+                         {0: regs[0], 1: regs[1], 2: 1})
+    ai = AnalogInput('x', client, 0, regmode=2, modes={'M': {'value': 1, 'transformation': transformation}})
+    await client.cache.do_scan(initial=True)
+    await ai.check_new_data()
+    assert (ai.mode, ai.value) == ('M', expected)
+
+
+async def test_ai_unknown_mode_reads_none():
+    client, ai = make_ai(9, [1, 0])
+    await client.cache.do_scan(initial=True)
+    await ai.check_new_data()
+    assert (ai.mode, ai.value) == (None, None)
+
+
 # --- Watchdog, LED ----------------------------------------------------------
 
 async def test_watchdog(unit):
@@ -254,8 +278,25 @@ async def test_analog_output_brain_float():
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
     assert (ao.mode, ao.full()['value']) == ('Resistance', 100.0)
-    await ao.set(value=1.25)
+    # the value cannot be set in Resistance mode
+    with pytest.raises(ValueError):
+        await ao.set(value=1.25)
+    assert client.mb_client.writes == []
+    await ao.set(mode='Voltage', value=1.25)
     assert client.mb_client.writes[-1] == ('regs', 0, to_registers(FLOAT32_LE, 1.25))
+    with pytest.raises(ValueError):
+        await ao.set(value=11)
+
+
+async def test_analog_output_brain_set_value_unknown_mode():
+    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 7})
+    ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
+    await client.cache.do_scan(initial=True)
+    await ao.check_new_data()
+    assert ao.range is None
+    with pytest.raises(ValueError):
+        await ao.set_value(1.0)
+    assert client.mb_client.writes == []
 
 
 async def test_analog_output_brain_set_mode():
@@ -266,8 +307,8 @@ async def test_analog_output_brain_set_mode():
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
     res = await ao.set(mode='Current')
-    # mode register is written, the value is restored in the new mode
-    assert client.mb_client.writes == [('reg', 4, 1), ('regs', 0, f)]
+    # mode register is written, the value is reset to 0 in the new mode
+    assert client.mb_client.writes == [('reg', 4, 1), ('regs', 0, to_registers(FLOAT32_LE, 0.0))]
     assert (res['mode'], res['unit']) == ('Current', 'mA')
     await ao.set(mode='Resistance')
     assert client.mb_client.holding[4] == 3
@@ -309,13 +350,30 @@ async def test_data_point_nan():
     assert dp.value == 'NaN'
 
 
-async def test_data_point_valid_mask():
-    client, dp = make_dp([7, 0, 0b10], valid_mask_reg=2, valid_mask=0b10)
+async def test_data_point_read_only_without_valid():
+    client, dp = make_dp([7])
     await client.cache.do_scan(initial=True)
-    await dp.check_new_data()
-    assert dp.full()['valid'] is True
+    assert await dp.check_new_data()
+    assert dp.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 7}
+    assert not await dp.check_new_data()
     with pytest.raises(Exception, match='read-only'):
         await dp.set(value=1)
+
+
+async def test_ow_temperature_valid_mask():
+    client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}], {0: 2150, 2: 0b10})
+    t = OwTemperature('x', client, 0, 2, 0b10, factor=0.01, unit='C')
+    assert await t.check_new_data()     # not scanned yet, is_valid None -> 0
+    assert (t.value, t.is_valid) == (None, 0)
+    await client.cache.do_scan(initial=True)
+    assert await t.check_new_data()
+    assert t.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 21.5, 'unit': 'C', 'valid': True}
+    # only the validity changes
+    client.mb_client.holding[2] = 0b01
+    await client.cache.do_scan()
+    assert await t.check_new_data()
+    assert (t.value, t.full()['valid']) == (21.5, False)
+    assert not await t.check_new_data()
 
 
 async def test_data_point_signed16():
@@ -323,3 +381,37 @@ async def test_data_point_signed16():
     await client.cache.do_scan(initial=True)
     await dp.check_new_data()
     assert dp.value == -1
+
+
+@pytest.mark.parametrize('regs, kw, expected', [
+    ([0xfffe], {}, -2),                                         # default is signed16
+    ([0xfffe], {'datatype': 'int16', 'factor': 0.5, 'offset': 1}, 0.0),
+    ([0xfffe], {'datatype': 'uint16'}, 0xfffe),
+    ([0x1234, 0x5678], {'datatype': 'uint32'}, 0x12345678),     # high word first
+    ([0xffff, 0xfffe], {'datatype': 'int32'}, -2),
+])
+async def test_data_point_datatypes(regs, kw, expected):
+    client, dp = make_dp(regs, **kw)
+    await client.cache.do_scan(initial=True)
+    assert await dp.check_new_data()
+    assert dp.value == expected
+
+
+async def test_data_point_input_register():
+    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1, 'type': 'input'}],
+                         inputs={0: 0xffff})
+    dp = DataPoint('x', client, 0, reg_type='input')
+    await client.cache.do_scan(initial=True)
+    await dp.check_new_data()
+    assert dp.value == -1
+
+
+async def test_data_point_not_scanned_and_unknown_datatype(caplog):
+    client, dp = make_dp([5])
+    await dp.check_new_data()
+    assert dp.value is None
+    client, dp = make_dp([5], datatype='bogus')
+    assert 'Unknown datatype "bogus"' in caplog.text
+    await client.cache.do_scan(initial=True)
+    await dp.check_new_data()
+    assert dp.value is None

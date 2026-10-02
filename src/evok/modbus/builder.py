@@ -8,7 +8,7 @@ Created on Fri Sep 25 16:10:02 2026
 from .digital import DigitalInput, DigitalOutput, Relay, ULED
 from .special import OwPower, NvSave, Watchdog
 from .analog import AnalogInput, AnalogOutput, AnalogOutputBrain,\
-    Register, DataPoint
+    Register, DataPoint, OwTemperature
 from ..devices import \
     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
     REGISTER, DATA_POINT, NV_SAVE, Devices
@@ -181,15 +181,17 @@ class IOParser:
             _unit = m_feature.get("unit")
             _name = m_feature.get("name")
             _valid_mask_reg = m_feature.get('valid_mask_reg')
-            _post_write_action = m_feature.get('post_write')
             _datatype = m_feature.get('datatype')
             _reg_type = m_feature.get("reg_type", None)
 
-            _xgt = DataPoint("{}_{}".format(self.circuit, board_val_reg + counter), self.client,
-                             board_val_reg + counter, reg_type=_reg_type, datatype=_datatype,
-                             major_group=self.circuit, offset=_offset, factor=_factor, unit=_unit,
-                             valid_mask=1 << counter, valid_mask_reg=_valid_mask_reg, name=_name,
-                             post_write=_post_write_action)
+            _circuit = "{}_{}".format(self.circuit, board_val_reg + counter)
+            _kwargs = dict(reg_type=_reg_type, datatype=_datatype, major_group=self.circuit,
+                           offset=_offset, factor=_factor, unit=_unit, name=_name)
+            if _valid_mask_reg is not None:
+                _xgt = OwTemperature(_circuit, self.client, board_val_reg + counter,
+                                     _valid_mask_reg, 1 << counter, **_kwargs)
+            else:
+                _xgt = DataPoint(_circuit, self.client, board_val_reg + counter, **_kwargs)
 
             self.__register_eventable_device(_xgt)
             Devices.register_device(DATA_POINT, _xgt)

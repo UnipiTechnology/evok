@@ -2,7 +2,8 @@ from evok.devices import Devices, DI, DO, AI, LED, WATCHDOG, NV_SAVE
 from evok.modbus.builder import IOParser
 from evok.modbus.digital import DigitalInput, DigitalOutput, ULED
 from evok.modbus.special import Watchdog, NvSave
-from evok.modbus.analog import AnalogInput
+from evok.devices import DATA_POINT
+from evok.modbus.analog import AnalogInput, DataPoint, OwTemperature
 
 from conftest import make_client, scan
 
@@ -52,7 +53,7 @@ def test_l0306_register_layout(l0306):
     assert (do.coil, do.valreg, do.bitmask, do.pwmdutyreg) == (1, 1, 0b10, 22)
     assert (do.pwmcyclereg, do.pwmprescalereg) == (1018, 1017)
     ai = Devices.by_name(AI, '1_05')
-    assert (ai.valreg, ai.regmode) == (10, 1023)
+    assert (ai.reader.index, ai.regmode) == (10, 1023)
     led = Devices.by_name(LED, '1_03')
     assert (led.coil, led.valreg, led.bitmask) == (3002, 3998, 0b100)
 
@@ -69,3 +70,24 @@ async def test_all_device_registers_are_covered_by_blocks(l0306):
     client = populate(l0306)
     changed = await scan(client, initial=True)
     assert len(changed) == len(client.eventable_devices)
+
+
+def data_point_hw(**feature):
+    return {'modbus_register_blocks': [{'start_reg': 1, 'count': 9, 'frequency': 1}],
+            'modbus_features': [dict(type='DATA_POINT', count=3, value_reg=1, **feature)]}
+
+
+def test_data_point_without_valid_mask_reg():
+    populate(data_point_hw(datatype='signed16'))
+    assert circuits(DATA_POINT) == ['1_1', '1_2', '1_3']
+    assert all(type(d) is DataPoint for d in Devices[DATA_POINT].values())
+
+
+def test_data_point_with_valid_mask_reg_is_ow_temperature():
+    """ xG18: 8 thermometers with the validity bits in one register """
+    populate(data_point_hw(valid_mask_reg=9, factor=0.01, unit='C', name='temperature'))
+    devs = [Devices[DATA_POINT][c] for c in circuits(DATA_POINT)]
+    assert all(type(d) is OwTemperature for d in devs)
+    assert [(d.reader.index, d.valid_mask_reg, d.valid_mask) for d in devs] == \
+        [(1, 9, 0b001), (2, 9, 0b010), (3, 9, 0b100)]
+    assert devs[0].reader.ratio == 0.01 and devs[0].unit == 'C' and devs[0].major_group == '1'
