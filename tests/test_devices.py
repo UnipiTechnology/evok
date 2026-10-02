@@ -321,13 +321,18 @@ async def test_register_holding_and_input():
     client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1},
                           {'start_reg': 0, 'count': 1, 'frequency': 1, 'type': 'input'}],
                          holding={0: 11}, inputs={0: 22})
-    hreg = Register('h', client, 0, 0)
-    ireg = Register('i', client, 0, 0, reg_type='input')
-    assert hreg.regvalue() is None          # not scanned yet
+    hreg = Register('h', client, 0)
+    ireg = Register('i', client, 0, reg_type='input')
+    assert hreg.full()['value'] is None          # not scanned yet
     await client.cache.do_scan(initial=True)
-    assert (hreg.value, ireg.value) == (11, 22)
+    assert await hreg.check_new_data() and await ireg.check_new_data()
+    assert (hreg.full()['value'], ireg.full()['value']) == (11, 22)
+    assert not await hreg.check_new_data()
     await hreg.set(value='5')
     assert client.mb_client.holding[0] == 5
+    await client.cache.do_scan()
+    assert await hreg.check_new_data()
+    assert hreg.full() == {'dev': 'register', 'circuit': 'h', 'value': 5}
 
 
 def make_dp(regs, **kw):

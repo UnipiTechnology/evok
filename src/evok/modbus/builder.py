@@ -162,12 +162,13 @@ class IOParser:
         while counter < max_count:
             board_val_reg = m_feature['start_reg']
             if 'reg_type' in m_feature and m_feature['reg_type'] == 'input':
-                _reg = Register("%s_%d_inp" % (self.circuit, board_val_reg + counter), self.client, counter,
+                _reg = Register("%s_%d_inp" % (self.circuit, board_val_reg + counter), self.client,
                                 board_val_reg + counter, reg_type='input',
                                 major_group=self.circuit)
             else:
-                _reg = Register("%s_%d" % (self.circuit, board_val_reg + counter), self.client, counter,
+                _reg = Register("%s_%d" % (self.circuit, board_val_reg + counter), self.client,
                                 board_val_reg + counter, major_group=self.circuit)
+            self.__register_eventable_device(_reg)
             Devices.register_device(REGISTER, _reg)
             counter += 1
 

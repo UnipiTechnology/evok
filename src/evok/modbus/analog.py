@@ -15,49 +15,6 @@ from .client import Client, FLOAT32_LE, Reader, Reader32, ReaderFactory, to_regi
 from .iomode import IOMode, WithIOMode
 
 
-class Register(IODevice):
-
-    devtype = REGISTER
-
-    def __init__(self, circuit, client: Client, post, reg, reg_type="holding", major_group=0):
-        super().__init__(circuit, client, major_group)
-        self.valreg = reg
-        self.reg_type = reg_type
-
-    def regvalue(self):
-        try:
-            return self.client.read_u16(self.valreg, is_input=self.reg_type == "input")
-        except ENoCacheRegister:
-            return None
-
-    def full(self):
-        ret = {'dev': 'register',
-               'circuit': self.circuit,
-               'value': self.regvalue(),
-               }
-        self._with_alias(ret)
-        return ret
-
-    @property
-    def value(self):
-        try:
-            if self.regvalue():
-                return self.regvalue()
-        except Exception:
-            pass
-        return 0
-
-    async def set(self, value=None, alias=None):
-        """ Sets new on/off status. Disable pending timeouts
-        """
-        self.set_alias(alias)
-        if value is not None:
-            value = int(value)
-            await self.client.mb_client.write_single_register(self.valreg, value if value else 0)
-
-        return self.full()
-
-
 class AnalogInput(WithIOMode, IODevice):
 
     devtype = AI
@@ -265,6 +222,29 @@ class DataPoint(IODevice):
 
         self._with_alias(ret)
         return ret
+
+
+class Register(DataPoint):
+    """ Raw 16-bit register """
+
+    devtype = REGISTER
+
+    def __init__(self, circuit, client: Client, reg, reg_type="holding", major_group=0):
+        super().__init__(circuit, client, reg, reg_type=reg_type, major_group=major_group, datatype='uint16')
+
+    def full(self):
+        ret = {'dev': 'register',
+               'circuit': self.circuit,
+               'value': self.value,
+               }
+        self._with_alias(ret)
+        return ret
+
+    async def set(self, value=None, alias=None, **kwargs):
+        self.set_alias(alias)
+        if value is not None:
+            await self.client.mb_client.write_single_register(self.reader.index, int(value))
+        return self.full()
 
 
 class OwTemperature(DataPoint):
