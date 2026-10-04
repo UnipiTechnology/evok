@@ -107,11 +107,12 @@ class Handler(UserBasicHelper):
     # ---- Input ----
     def input_get(self, circuit):
         inp = Devices.by_int(DI, str(circuit))
-        return inp.get()
+        state = inp.get()
+        return state['value'], state['debounce']
 
     def input_get_value(self, circuit):
         inp = Devices.by_int(DI, str(circuit))
-        return inp.get_value()
+        return inp.get()['value']
 
     def input_set(self, circuit, debounce):
         inp = Devices.by_int(DI, str(circuit))

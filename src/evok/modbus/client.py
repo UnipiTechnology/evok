@@ -86,6 +86,11 @@ class Client:
             raise ValueError(f"Unknown word order '{word_order}'")
         return from_registers(fmt, self.cache.get_register(2, index, is_input=is_input))
 
+    async def write_u16(self, index: int, value: int):
+        """ Write a holding register and update the cache, so the next check does not see a stale value """
+        await self.mb_client.write_single_register(index, value)
+        self.cache.set_register(index, [value])
+
     async def do_scan(self):
 
         if not await self.cache.do_scan():
@@ -172,6 +177,21 @@ class ReaderI16(Reader):
 
     def read_raw(self, client: Client) -> int:
         return client.read_i16(self.index, is_input=self.is_input)
+
+
+class ReaderBit(Reader):
+    """ Reads a bit selected by mask from a 16-bit register, returns 1 if any masked bit is set, else 0 """
+    datatype = 'bit'
+
+    def __init__(self, index: int, mask: int, is_input: bool = False, **kwargs):
+        super().__init__(index, is_input, **kwargs)
+        self.mask = mask
+
+    def params(self) -> dict:
+        return dict(super().params(), mask=self.mask)
+
+    def read_raw(self, client: Client) -> int:
+        return 1 if client.read_u16(self.index, is_input=self.is_input) & self.mask else 0
 
 
 class Reader32(Reader):

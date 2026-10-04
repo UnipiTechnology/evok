@@ -4,7 +4,7 @@ import pytest
 
 from evok.modbus.cache import ENoCacheRegister
 from evok.modbus.client import (
-    FLOAT32_BE, FLOAT32_LE, Reader, ReaderFactory, ReaderFloat32, ReaderI16,
+    FLOAT32_BE, FLOAT32_LE, Reader, ReaderBit, ReaderFactory, ReaderFloat32, ReaderI16,
     ReaderI32, ReaderU16, ReaderU32, to_registers,
 )
 
@@ -142,3 +142,11 @@ def test_refactor_word_order_only_for_32bit():
     with pytest.raises(ValueError):
         reader.refactor('uint16', word_order='big')
     assert type(reader.refactor('bogus')) is Reader
+
+
+async def test_read_bit():
+    client = await make_client(holding={0: 0b0101}, inputs={1: 0x8000})
+    assert [ReaderBit(0, 1 << i).read(client) for i in range(4)] == [1, 0, 1, 0]
+    assert ReaderBit(1, 0x8000, is_input=True).read(client) == 1
+    assert ReaderBit(1, 0x8000).read(client) == 0
+    assert ReaderBit(0, 0b0101).params()['mask'] == 0b0101

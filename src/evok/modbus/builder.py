@@ -14,6 +14,7 @@ from ..devices import \
     REGISTER, DATA_POINT, NV_SAVE, Devices
 from ..log import logger
 from .client import Client
+from .pwm import HardPwmFrequency, SoftPwmFrequency
 
 
 class IOParser:
@@ -64,25 +65,18 @@ class IOParser:
             counter += 1
 
     def parse_feature_do(self, max_count, m_feature):
+        if m_feature.get('pwm_reg') and m_feature.get('pwm_ps_reg') and m_feature.get('pwm_c_reg'):
+            pwm = HardPwmFrequency(self.client, m_feature['pwm_c_reg'], m_feature['pwm_ps_reg'])
+        elif m_feature.get('pwm_reg') and m_feature.get('pwm_preset_reg') and m_feature.get('pwm_cpres_reg'):
+            pwm = SoftPwmFrequency(self.client, m_feature['pwm_preset_reg'], m_feature['pwm_cpres_reg'])
+        else:
+            raise ValueError(f"Unexpected feature  {m_feature['type']}")
         counter = 0
         while counter < max_count:
-            board_val_reg = m_feature['val_reg']
-            # Hard PWM
-            if m_feature.get('pwm_reg') and m_feature.get('pwm_ps_reg') and m_feature.get('pwm_c_reg'):
-                _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self.client,
-                                   m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
-                                   major_group=self.circuit, pwmcyclereg=m_feature['pwm_c_reg'],
-                                   pwmprescalereg=m_feature['pwm_ps_reg'], digital_only=True,
-                                   pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'])
-            # Soft PWM
-            elif m_feature.get('pwm_reg') and m_feature.get('pwm_preset_reg') and m_feature.get('pwm_cpres_reg'):
-                _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self.client,
-                                   m_feature['val_coil'] + counter, board_val_reg, 0x1 << (counter % 16),
-                                   major_group=self.circuit, pwmpresetreg=m_feature['pwm_preset_reg'],
-                                   pwmcustompresc=m_feature['pwm_cpres_reg'], digital_only=True,
-                                   pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'])
-            else:
-                raise ValueError(f"Unexpected feature  {m_feature['type']}")
+            _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self.client,
+                               m_feature['val_coil'] + counter, m_feature['val_reg'], 0x1 << (counter % 16),
+                               major_group=self.circuit, pwm=pwm,
+                               pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'])
             self.__register_eventable_device(_r)
             Devices.register_device(DO, _r)
             counter += 1
@@ -91,8 +85,8 @@ class IOParser:
         counter = 0
         while counter < max_count:
             board_val_reg = m_feature['val_reg']
-            _led = ULED("%s_%02d" % (self.circuit, counter + 1), self.client, counter, board_val_reg,
-                        0x1 << (counter % 16), m_feature['val_coil'] + counter, major_group=self.circuit)
+            _led = ULED("%s_%02d" % (self.circuit, counter + 1), self.client, m_feature['val_coil'] + counter,
+                        board_val_reg, 0x1 << (counter % 16), major_group=self.circuit)
             self.__register_eventable_device(_led)
             Devices.register_device(LED, _led)
             counter += 1

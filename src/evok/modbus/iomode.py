@@ -102,3 +102,112 @@ class WithIOMode:
     @property
     def range(self):
         return self.iomode.range
+
+
+class DIMode:
+    """ Mode of a digital input selected by its bit in shared mode registers
+
+        `modes` lists the modes of the input, e.g. ['Simple', 'DirectSwitch'].
+        In the 'DirectSwitch' mode the input drives an output directly, the
+        behaviour is selected by `ds_mode` from `ds_modes`: 'Simple', 'Inverted'
+        (bit in the polarity register) or 'Toggle' (bit in the toggle register).
+
+        The registers are shared by all inputs of a group, each input owns
+        the bit `bitmask` in them.
+    """
+
+    def __init__(self, client: Client, bitmask: int, regmode=None, regpolarity=None, regtoggle=None,
+                 modes=None, ds_modes=None, name=''):
+        self.client = client
+        self.bitmask = bitmask
+        self.regmode = regmode
+        self.regpolarity = regpolarity
+        self.regtoggle = regtoggle
+        self.modes = modes if modes is not None else ['Simple']
+        self.ds_modes = ds_modes if ds_modes is not None else ['Simple']
+        self.name = name
+        self.mode = 'Simple'
+        self.ds_mode = 'Simple'
+
+    @property
+    def has_direct_switch(self) -> bool:
+        return 'DirectSwitch' in self.modes and self.regmode is not None
+
+    def _bit(self, reg) -> bool:
+        return bool(self.client.read_u16(reg) & self.bitmask)
+
+    def update(self) -> bool:
+        """ Read the mode registers from the cache, return True if the mode has changed """
+        if not self.has_direct_switch:
+            return False
+        old = (self.mode, self.ds_mode)
+        if self._bit(self.regmode):
+            self.mode = 'DirectSwitch'
+            if self._bit(self.regpolarity):
+                self.ds_mode = 'Inverted'
+            elif self._bit(self.regtoggle):
+                self.ds_mode = 'Toggle'
+            else:
+                self.ds_mode = 'Simple'
+        else:
+            self.mode = 'Simple'
+        return old != (self.mode, self.ds_mode)
+
+    async def _write_bit(self, reg, value: bool):
+        """ Read-modify-write the bit of this input in a shared register """
+        curr = (await self.client.cache.get_register_async(1, reg))[0]
+        curr = curr | self.bitmask if value else curr & ~self.bitmask
+        await self.client.write_u16(reg, curr)
+
+    async def set(self, mode=None, ds_mode=None):
+        """ Write the mode and the DirectSwitch mode, unknown values are ignored
+
+            Decide by the requested values and always read-modify-write the registers:
+            self.mode and self.ds_mode can be stale or rewritten by update()
+            in the scan task while this coroutine awaits.
+        """
+        if mode in self.modes:
+            self.mode = mode
+            if self.regmode is not None:
+                await self._write_bit(self.regmode, mode == 'DirectSwitch')
+        else:
+            mode = self.mode
+
+        if mode == 'DirectSwitch' and ds_mode in self.ds_modes:
+            self.ds_mode = ds_mode
+            await self._write_bit(self.regpolarity, ds_mode == 'Inverted')
+            await self._write_bit(self.regtoggle, ds_mode == 'Toggle')
+
+
+class WithDIMode:
+    """ Mixin for the devices with a DIMode in `self.dimode` """
+
+    dimode: DIMode
+
+    @property
+    def mode(self):
+        return self.dimode.mode
+
+    @property
+    def modes(self):
+        return self.dimode.modes
+
+    @property
+    def ds_mode(self):
+        return self.dimode.ds_mode
+
+    @property
+    def ds_modes(self):
+        return self.dimode.ds_modes
+
+    @property
+    def regmode(self):
+        return self.dimode.regmode
+
+    @property
+    def regpolarity(self):
+        return self.dimode.regpolarity
+
+    @property
+    def regtoggle(self):
+        return self.dimode.regtoggle

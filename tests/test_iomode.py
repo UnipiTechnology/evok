@@ -1,6 +1,6 @@
 import pytest
 
-from evok.modbus.iomode import IOMode
+from evok.modbus.iomode import DIMode, IOMode
 
 from conftest import make_client
 
@@ -54,3 +54,34 @@ async def test_set_invalid_mode():
     with pytest.raises(ValueError):
         await iomode.set('Fixed')
     assert client.mb_client.writes == []
+
+
+async def make_dimode(holding, bitmask=0b10, modes=('Simple', 'DirectSwitch')):
+    client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}], holding)
+    await client.cache.do_scan(initial=True)
+    return client, DIMode(client, bitmask, 0, 1, 2, list(modes), ['Simple', 'Inverted', 'Toggle'], 'DI x')
+
+
+async def test_dimode_update_reports_change_once():
+    client, dimode = await make_dimode({0: 0b10, 1: 0, 2: 0b10})
+    assert dimode.update()
+    assert (dimode.mode, dimode.ds_mode) == ('DirectSwitch', 'Toggle')
+    assert not dimode.update()
+
+
+async def test_dimode_without_direct_switch_ignores_registers():
+    client, dimode = await make_dimode({0: 0b10, 1: 0b10}, modes=('Simple',))
+    assert not dimode.update()
+    await dimode.set('Simple', 'Inverted')
+    assert (dimode.mode, dimode.ds_mode) == ('Simple', 'Simple')
+    assert client.mb_client.writes == [('reg', 0, 0)]
+
+
+async def test_dimode_set_keeps_other_bits():
+    client, dimode = await make_dimode({0: 0b01, 1: 0b01, 2: 0b11})
+    await dimode.set('DirectSwitch', 'Inverted')
+    assert [client.mb_client.holding[i] for i in range(3)] == [0b11, 0b11, 0b01]
+    # cache is updated, so the next update does not flip the mode back
+    assert not dimode.update()
+    await dimode.set('Unknown', 'Unknown')
+    assert (dimode.mode, dimode.ds_mode) == ('DirectSwitch', 'Inverted')
