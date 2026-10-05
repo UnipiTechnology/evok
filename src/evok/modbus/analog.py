@@ -202,10 +202,11 @@ class DataPoint(IODevice):
         return value
 
     async def set(self, value=None, alias=None, **kwargs):
-        """ Sets new on/off status. Disable pending timeouts """
+        """ Data point is read-only, only the alias can be changed """
+        if value is not None:
+            raise ValueError("Data point object is read-only")
         self.set_alias(alias)
-
-        raise Exception("Data point object is read-only")
+        return self.full()
 
     def full(self):
 

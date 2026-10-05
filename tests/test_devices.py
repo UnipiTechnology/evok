@@ -361,8 +361,10 @@ async def test_data_point_read_only_without_valid():
     assert await dp.check_new_data()
     assert dp.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 7}
     assert not await dp.check_new_data()
-    with pytest.raises(Exception, match='read-only'):
+    with pytest.raises(ValueError, match='read-only'):
         await dp.set(value=1)
+    assert client.mb_client.writes == []
+    assert await dp.set() == {'dev': 'data_point', 'circuit': 'x', 'value': 7}
 
 
 async def test_ow_temperature_valid_mask():

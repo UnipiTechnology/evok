@@ -58,6 +58,7 @@ class MySensor(object):
             devents.config(self)
         if alias is not None:
             Devices.set_alias(alias, self)
+        return self.full()
 
     async def read_val_from_sens(self, sens):
         raise NotImplementedError("Please Implement this method")
