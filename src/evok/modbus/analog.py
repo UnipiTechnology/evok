@@ -11,7 +11,7 @@ from ..devices import AI, AO, REGISTER, DATA_POINT
 from ..log import logger
 from .cache import ENoCacheRegister
 from .base import IODevice
-from .client import Client, FLOAT32_LE, Reader, Reader32, ReaderFactory, to_registers
+from .client import Client, FLOAT32_LE, Accessor, Accessor32, AccessorFactory, to_registers
 from .iomode import IOMode, WithIOMode
 
 
@@ -23,32 +23,32 @@ class AnalogInput(WithIOMode, IODevice):
         super().__init__(circuit, client, major_group)
         self.iomode = IOMode(client, regmode, modes, f"{self.devtype.upper()} {circuit}")
         self.value = None
-        self.reader = self._default_reader(reg)
+        self.accessor = self._default_accessor(reg)
 
     @staticmethod
-    def _default_reader(reg) -> Reader:
-        """ Return the reader used before a mode is known """
-        return ReaderFactory.get(reg, 'float32', decimals=3)
+    def _default_accessor(reg) -> Accessor:
+        """ Return the accessor used before a mode is known """
+        return AccessorFactory.get(reg, 'float32', decimals=3)
 
-    def _make_reader(self) -> Reader:
-        """ Return the reader of the value in the current mode """
+    def _make_accessor(self) -> Accessor:
+        """ Return the accessor of the value in the current mode """
         if self.mode is None:
-            return Reader(self.reader.index, self.reader.is_input)
+            return Accessor(self.accessor.index, self.accessor.is_input)
         transformation = self.iomode.data.get('transformation', {})
         datatype = transformation.get("datatype", "float32")
         decimals = transformation.get("decimals", 3 if datatype == "float32" else None)
         logger.debug(f"Applying transformation on analog input {self.circuit}: {datatype} {decimals}")
-        return self.reader.refactor(datatype, ratio=transformation.get("ratio", 1),
+        return self.accessor.refactor(datatype, ratio=transformation.get("ratio", 1),
                                     decimals=decimals)
 
     async def check_new_data(self):
         has_changed = self.iomode.update()
         if has_changed:
-            self.reader = self._make_reader()
+            self.accessor = self._make_accessor()
 
         old_value = self.value
         try:
-            self.value = self.reader.read(self.client)
+            self.value = self.accessor.read(self.client)
         except ENoCacheRegister:
             self.value = None
         return self.value != old_value or has_changed
@@ -81,12 +81,12 @@ class AnalogOutput(AnalogInput):
         super().__init__(circuit, client, reg, regmode=regmode, major_group=major_group, modes=modes)
 
     @staticmethod
-    def _default_reader(reg) -> Reader:
-        return ReaderFactory.get(reg, 'uint16', ratio=0.0025, decimals=3)
+    def _default_accessor(reg) -> Accessor:
+        return AccessorFactory.get(reg, 'uint16', ratio=0.0025, decimals=3)
 
-    def _make_reader(self) -> Reader:
+    def _make_accessor(self) -> Accessor:
         """ The scaling of the output value does not depend on the mode """
-        return self.reader
+        return self.accessor
 
     async def set_value(self, value):
         valuei = int((float(value) / 0.0025))
@@ -94,7 +94,7 @@ class AnalogOutput(AnalogInput):
             valuei = 0
         elif valuei > 4095:
             valuei = 4095
-        await self.client.mb_client.write_single_register(self.reader.index, valuei)
+        await self.client.mb_client.write_single_register(self.accessor.index, valuei)
         return float(valuei) * 0.0025
 
     async def set(self, value=None, mode=None, alias=None):
@@ -133,11 +133,11 @@ class AnalogOutputBrain(AnalogInput):
     def __init__(self, circuit, client: Client, reg, regmode=None, reg_res=0, major_group=0):
         super().__init__(circuit, client, reg, regmode=regmode, major_group=major_group,
                          modes=AnalogOutputBrain.modes)
-        self.ao_reader = ReaderFactory.get(reg, 'float32', decimals=3)
-        self.res_reader = ReaderFactory.get(reg_res, 'float32', decimals=3)
+        self.ao_accessor = AccessorFactory.get(reg, 'float32', decimals=3)
+        self.res_accessor = AccessorFactory.get(reg_res, 'float32', decimals=3)
 
-    def _make_reader(self) -> Reader:
-        return self.res_reader if self.mode == "Resistance" else self.ao_reader
+    def _make_accessor(self) -> Accessor:
+        return self.res_accessor if self.mode == "Resistance" else self.ao_accessor
 
     async def set_value(self, value: float):
         if self.range is None:
@@ -148,7 +148,7 @@ class AnalogOutputBrain(AnalogInput):
 
         value_set = to_registers(FLOAT32_LE, value)
 
-        await self.client.mb_client.write_multiple_registers(self.ao_reader.index, values=value_set)
+        await self.client.mb_client.write_multiple_registers(self.ao_accessor.index, values=value_set)
         return value
 
     async def set(self, value=None, mode=None, alias=None):
@@ -177,14 +177,14 @@ class DataPoint(IODevice):
         self.unit = unit
         self.name = name
         self.value = None
-        self.reader = self._make_reader(reg, reg_type == "input", datatype, factor, offset)
+        self.accessor = self._make_accessor(reg, reg_type == "input", datatype, factor, offset)
 
-    def _make_reader(self, reg, is_input, datatype, factor, offset):
+    def _make_accessor(self, reg, is_input, datatype, factor, offset):
         """ 16-bit datatypes are signed by default, 32-bit ones are high word first """
         datatype = datatype or 'signed16'
-        reader_cls = ReaderFactory.reader_classes.get(datatype)
-        word_order = 'big' if reader_cls is not None and issubclass(reader_cls, Reader32) else None
-        return ReaderFactory.get(reg, datatype, is_input=is_input, ratio=factor,
+        accessor_cls = AccessorFactory.accessor_classes.get(datatype)
+        word_order = 'big' if accessor_cls is not None and issubclass(accessor_cls, Accessor32) else None
+        return AccessorFactory.get(reg, datatype, is_input=is_input, ratio=factor,
                                  offset=offset, word_order=word_order)
 
     async def check_new_data(self):
@@ -194,7 +194,7 @@ class DataPoint(IODevice):
 
     def read_value(self):
         try:
-            value = self.reader.read(self.client)
+            value = self.accessor.read(self.client)
         except ENoCacheRegister:
             return None
         if isinstance(value, float) and isnan(value):
@@ -244,7 +244,7 @@ class Register(DataPoint):
     async def set(self, value=None, alias=None, **kwargs):
         self.set_alias(alias)
         if value is not None:
-            await self.client.mb_client.write_single_register(self.reader.index, int(value))
+            await self.client.mb_client.write_single_register(self.accessor.index, int(value))
         return self.full()
 
 
@@ -265,7 +265,7 @@ class OwTemperature(DataPoint):
 
     def read_is_valid(self):
         try:
-            val = self.client.read_u16(self.valid_mask_reg, is_input=self.reader.is_input)
+            val = self.client.read_u16(self.valid_mask_reg, is_input=self.accessor.is_input)
             return bool(val & self.valid_mask)
         except ENoCacheRegister:
             return 0

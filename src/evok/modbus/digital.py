@@ -12,7 +12,7 @@ from typing import Union
 from ..devices import DI, DO, RO, LED, Devices
 from ..log import logger
 from .base import IODevice
-from .client import Client, Reader, ReaderBit, ReaderU16, ReaderU32
+from .client import Client, Accessor, AccessorBit, AccessorU16, AccessorU32
 from .iomode import DIMode, WithDIMode
 from .pwm import PwmFrequency
 
@@ -34,7 +34,7 @@ class DigitalOutput(IODevice):
         self.pwm_freq = None
         self.mode = None
         self.coil = coil
-        self.reader = ReaderBit(reg, mask)
+        self.accessor = AccessorBit(reg, mask)
         self.value = None
 
         self.forced_changes = False  # force_immediate_state_changes
@@ -67,7 +67,7 @@ class DigitalOutput(IODevice):
         self.mode = 'PWM' if self.pwm_duty else 'Simple'
 
         old_value = self.value
-        self.value = self.reader.read(self.client)
+        self.value = self.accessor.read(self.client)
         return is_change or old_value != self.value
 
     async def set(self, value=None, timeout=None, mode=None, pwm_freq=None, pwm_duty=None, alias=None):
@@ -158,7 +158,7 @@ class Relay(IODevice):
     def __init__(self, circuit, client: Client, coil, reg, mask, major_group=0):
         super().__init__(circuit, client, major_group)
         self.coil = coil
-        self.reader = ReaderBit(reg, mask)
+        self.accessor = AccessorBit(reg, mask)
         self.value = None
 
         self.forced_changes = False  # force_immediate_state_changes
@@ -175,7 +175,7 @@ class Relay(IODevice):
 
     async def check_new_data(self):
         old_value = self.value
-        self.value = self.reader.read(self.client)
+        self.value = self.accessor.read(self.client)
         return old_value != self.value
 
     async def set(self, value=None, alias=None):
@@ -211,11 +211,11 @@ class DigitalInput(WithDIMode, IODevice):
                              f"{self.devtype.upper()} {circuit}")
         self.counter_modes = counter_modes if counter_modes is not None else ['Enabled', 'Disabled']
         self.counter_mode = "Enabled"
-        self.reader = ReaderBit(reg, mask)
+        self.accessor = AccessorBit(reg, mask)
         self.regcounter = regcounter
-        self.reader_counter = ReaderU32(regcounter) if regcounter is not None else Reader(None)
+        self.accessor_counter = AccessorU32(regcounter) if regcounter is not None else Accessor(None)
         self.regdebounce = regdebounce
-        self.reader_debounce = ReaderU16(regdebounce) if regdebounce is not None else Reader(None)
+        self.accessor_debounce = AccessorU16(regdebounce) if regdebounce is not None else Accessor(None)
         self.value = None
         self.counter = None
         self.debounce = None
@@ -225,13 +225,13 @@ class DigitalInput(WithDIMode, IODevice):
 
         old_value = self.value
         old_counter = self.counter
-        self.value = self.reader.read(self.client)
+        self.value = self.accessor.read(self.client)
         self.counter = self.read_counter()
-        self.debounce = self.reader_debounce.read(self.client)
+        self.debounce = self.accessor_debounce.read(self.client)
         return mode_changed or old_counter != self.counter or old_value != self.value
 
     def read_counter(self):
-        return self.reader_counter.read(self.client) if self.counter_mode == "Enabled" else 0
+        return self.accessor_counter.read(self.client) if self.counter_mode == "Enabled" else 0
 
     def full(self):
         ret = {'dev': 'di',

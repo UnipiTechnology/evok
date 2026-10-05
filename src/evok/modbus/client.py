@@ -124,7 +124,7 @@ class Proxy(object):
         return self.result
 
 
-class Reader:
+class Accessor:
     """ Reads a value of a given datatype from the cache of a Client
         and applies the linear transformation val * ratio + offset
         and rounding to decimals. Base class reads nothing (unknown datatype).
@@ -144,11 +144,11 @@ class Reader:
                     offset=self.offset, decimals=self.decimals)
 
     def refactor(self, datatype: str = 'uint16', ratio=1, offset=0, decimals=None,
-                 word_order=None) -> "Reader":
-        """ Return a new reader of the same register. Only index and is_input
-            are taken from this reader, the other parameters come from the call.
+                 word_order=None) -> "Accessor":
+        """ Return a new accessor of the same register. Only index and is_input
+            are taken from this accessor, the other parameters come from the call.
         """
-        return ReaderFactory.get(self.index, datatype, is_input=self.is_input, ratio=ratio,
+        return AccessorFactory.get(self.index, datatype, is_input=self.is_input, ratio=ratio,
                                  offset=offset, decimals=decimals, word_order=word_order)
 
     def read_raw(self, client: Client) -> int | float | None:
@@ -165,21 +165,21 @@ class Reader:
         return val
 
 
-class ReaderU16(Reader):
+class AccessorU16(Accessor):
     datatype = 'uint16'
 
     def read_raw(self, client: Client) -> int:
         return client.read_u16(self.index, is_input=self.is_input)
 
 
-class ReaderI16(Reader):
+class AccessorI16(Accessor):
     datatype = 'int16'
 
     def read_raw(self, client: Client) -> int:
         return client.read_i16(self.index, is_input=self.is_input)
 
 
-class ReaderBit(Reader):
+class AccessorBit(Accessor):
     """ Reads a bit selected by mask from a 16-bit register, returns 1 if any masked bit is set, else 0 """
     datatype = 'bit'
 
@@ -194,7 +194,7 @@ class ReaderBit(Reader):
         return 1 if client.read_u16(self.index, is_input=self.is_input) & self.mask else 0
 
 
-class Reader32(Reader):
+class Accessor32(Accessor):
     """ Base for values in two registers, see Client.read_u32 for word_order """
 
     def __init__(self, index: int, is_input: bool = False, *,
@@ -208,48 +208,48 @@ class Reader32(Reader):
         return dict(super().params(), word_order=self.word_order)
 
 
-class ReaderU32(Reader32):
+class AccessorU32(Accessor32):
     datatype = 'uint32'
 
     def read_raw(self, client: Client) -> int:
         return client.read_u32(self.index, is_input=self.is_input, word_order=self.word_order)
 
 
-class ReaderI32(Reader32):
+class AccessorI32(Accessor32):
     datatype = 'int32'
 
     def read_raw(self, client: Client) -> int:
         return client.read_i32(self.index, is_input=self.is_input, word_order=self.word_order)
 
 
-class ReaderFloat32(Reader32):
+class AccessorFloat32(Accessor32):
     datatype = 'float32'
 
     def read_raw(self, client: Client) -> float:
         return client.read_float32(self.index, is_input=self.is_input, word_order=self.word_order)
 
 
-class ReaderFactory:
-    reader_classes = {
-        'uint16': ReaderU16,
-        'int16': ReaderI16,
-        'signed16': ReaderI16,  # name used by data_point in hw definitions
-        'uint32': ReaderU32,
-        'int32': ReaderI32,
-        'float32': ReaderFloat32,
+class AccessorFactory:
+    accessor_classes = {
+        'uint16': AccessorU16,
+        'int16': AccessorI16,
+        'signed16': AccessorI16,  # name used by data_point in hw definitions
+        'uint32': AccessorU32,
+        'int32': AccessorI32,
+        'float32': AccessorFloat32,
     }
 
     @classmethod
     def get(cls, index: int, datatype: str = 'uint16', *, is_input: bool = False,
-            ratio=1, offset=0, decimals=None, word_order=None) -> Reader:
+            ratio=1, offset=0, decimals=None, word_order=None) -> Accessor:
         """ word_order is accepted only by 32-bit datatypes """
         kwargs = dict(ratio=ratio, offset=offset, decimals=decimals)
-        reader_cls = cls.reader_classes.get(datatype)
-        if reader_cls is None:
-            logger.warning(f'Unknown datatype "{datatype}" in ReaderFactory index={index}')
-            return Reader(index, is_input, **kwargs)
+        accessor_cls = cls.accessor_classes.get(datatype)
+        if accessor_cls is None:
+            logger.warning(f'Unknown datatype "{datatype}" in AccessorFactory index={index}')
+            return Accessor(index, is_input, **kwargs)
         if word_order is not None:
-            if not issubclass(reader_cls, Reader32):
+            if not issubclass(accessor_cls, Accessor32):
                 raise ValueError(f'Datatype "{datatype}" does not support word_order')
             kwargs['word_order'] = word_order
-        return reader_cls(index, is_input, **kwargs)
+        return accessor_cls(index, is_input, **kwargs)

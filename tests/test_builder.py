@@ -47,16 +47,16 @@ def test_l0306_eventable_devices(l0306):
 def test_l0306_register_layout(l0306):
     populate(l0306)
     di = Devices.by_name(DI, '1_03')
-    assert (di.reader.index, di.reader.mask, di.regcounter, di.regdebounce) == (0, 0b100, 17, 1012)
+    assert (di.accessor.index, di.accessor.mask, di.regcounter, di.regdebounce) == (0, 0b100, 17, 1012)
     assert (di.regmode, di.regpolarity, di.regtoggle) == (1014, 1015, 1016)
     do = Devices.by_name(DO, '1_02')
-    assert (do.coil, do.reader.index, do.reader.mask, do.pwmdutyreg) == (1, 1, 0b10, 22)
+    assert (do.coil, do.accessor.index, do.accessor.mask, do.pwmdutyreg) == (1, 1, 0b10, 22)
     assert (do.pwm.regcycle, do.pwm.regprescale) == (1018, 1017)
     assert do.pwm is Devices.by_name(DO, '1_01').pwm
     ai = Devices.by_name(AI, '1_05')
-    assert (ai.reader.index, ai.regmode) == (10, 1023)
+    assert (ai.accessor.index, ai.regmode) == (10, 1023)
     led = Devices.by_name(LED, '1_03')
-    assert (led.coil, led.reader.index, led.reader.mask) == (3002, 3998, 0b100)
+    assert (led.coil, led.accessor.index, led.accessor.mask) == (3002, 3998, 0b100)
 
 
 def test_unknown_feature_is_skipped(l0306):
@@ -89,6 +89,6 @@ def test_data_point_with_valid_mask_reg_is_ow_temperature():
     populate(data_point_hw(valid_mask_reg=9, factor=0.01, unit='C', name='temperature'))
     devs = [Devices[DATA_POINT][c] for c in circuits(DATA_POINT)]
     assert all(type(d) is OwTemperature for d in devs)
-    assert [(d.reader.index, d.valid_mask_reg, d.valid_mask) for d in devs] == \
+    assert [(d.accessor.index, d.valid_mask_reg, d.valid_mask) for d in devs] == \
         [(1, 9, 0b001), (2, 9, 0b010), (3, 9, 0b100)]
-    assert devs[0].reader.ratio == 0.01 and devs[0].unit == 'C' and devs[0].major_group == '1'
+    assert devs[0].accessor.ratio == 0.01 and devs[0].unit == 'C' and devs[0].major_group == '1'
