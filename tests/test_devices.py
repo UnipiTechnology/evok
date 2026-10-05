@@ -69,9 +69,13 @@ async def test_di_set_direct_switch_keeps_other_bits(unit):
 
 async def test_di_set_counter_and_debounce(unit):
     client = await unit()
-    await dev(DI, '1_02').set(counter='70000', debounce='12.0')
-    assert ('uint32', 15, 70000) in client.mb_client.writes
+    di = dev(DI, '1_02')
+    await di.set(counter='70000', debounce='12.0')
+    assert ('regs', 15, [70000 & 0xffff, 70000 >> 16]) in client.mb_client.writes   # low word first
     assert client.mb_client.holding[1011] == 12
+    # cache is updated, the new values are seen without a scan
+    await di.check_new_data()
+    assert (di.counter, di.debounce) == (70000, 12)
 
 
 async def test_di_counter_mode_disabled_zeroes_counter(unit):
@@ -227,6 +231,8 @@ async def test_watchdog(unit):
     await wd.set(value=0, timeout=70000)
     assert client.mb_client.holding[12] == 0
     assert client.mb_client.holding[1008] == 65535
+    await wd.check_new_data()
+    assert (wd.value, wd.timeout) == (0, 65535)
 
 
 async def test_led(unit):
@@ -244,8 +250,11 @@ async def test_analog_output_scaling_and_clamp():
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
     assert (ao.value, ao.mode, ao.unit_name) == (5.0, 'Voltage', 'V')
-    assert await ao.set_value(20) == 4095 * 0.0025
+    assert await ao.set_value(20) == 10.238
+    assert client.mb_client.holding[0] == 4095
     assert await ao.set_value(-1) == 0
+    assert await ao.set_value('1.23456') == 1.235     # rounded to the nearest step
+    assert client.mb_client.holding[0] == 494
 
 
 async def test_analog_output_mode_register():
@@ -330,9 +339,13 @@ async def test_register_holding_and_input():
     assert not await hreg.check_new_data()
     await hreg.set(value='5')
     assert client.mb_client.holding[0] == 5
-    await client.cache.do_scan()
-    assert await hreg.check_new_data()
+    assert await hreg.check_new_data()            # cache is updated without a scan
     assert hreg.full() == {'dev': 'register', 'circuit': 'h', 'value': 5}
+    with pytest.raises(ValueError, match='read-only'):
+        await ireg.set(value=1)
+    with pytest.raises(ValueError, match='out of range'):
+        await hreg.set(value=-1)
+    assert client.mb_client.writes == [('reg', 0, 5)]
 
 
 def make_dp(regs, **kw):

@@ -7,7 +7,7 @@ from copy import copy
 from ..devices import OWPOWER, WATCHDOG, NV_SAVE
 from ..log import logger
 from .base import IODevice
-from .client import Client
+from .client import Client, AccessorU16
 
 
 class OwPower(IODevice):
@@ -74,8 +74,8 @@ class Watchdog(IODevice):
         self.reset_coil = reset_coil
         self.wd_reset_ro_coil = wd_reset_ro_coil
         self.wdwasresetvalue = 0
-        self.valreg = reg
-        self.toreg = timeout_reg
+        self.accessor = AccessorU16(reg)
+        self.accessor_timeout = AccessorU16(timeout_reg)
 
         self.value = None
         self.timeout = None
@@ -94,8 +94,8 @@ class Watchdog(IODevice):
 
     async def check_new_data(self):
         old_value = copy(self.value)
-        self.value = self.client.read_u16(self.valreg) & 0x03  # Only the two lowest bits contains watchdog status
-        self.timeout = self.client.read_u16(self.toreg)
+        self.value = self.accessor.read(self.client) & 0x03  # Only the two lowest bits contains watchdog status
+        self.timeout = self.accessor_timeout.read(self.client)
         self.was_wd_boot_value = 1 if self.value & 0b10 else 0
         return old_value != self.value
 
@@ -106,11 +106,11 @@ class Watchdog(IODevice):
 
         if value is not None:
             value = int(value)
-            await self.client.mb_client.write_single_register(self.valreg, 1 if value else 0)
+            await self.accessor.write(self.client, 1 if value else 0)
 
         if timeout is not None:
             timeout = min(int(timeout), 65535)
-            await self.client.mb_client.write_single_register(self.toreg, timeout)
+            await self.accessor_timeout.write(self.client, timeout)
 
         if self.nv_save_coil >= 0 and nv_save is not None and nv_save != self.nvsavvalue:
             if nv_save != 0:

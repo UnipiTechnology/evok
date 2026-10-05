@@ -11,7 +11,7 @@ from ..devices import AI, AO, REGISTER, DATA_POINT
 from ..log import logger
 from .cache import ENoCacheRegister
 from .base import IODevice
-from .client import Client, FLOAT32_LE, Accessor, Accessor32, AccessorFactory, to_registers
+from .client import Client, Accessor, Accessor32, AccessorFactory
 from .iomode import IOMode, WithIOMode
 
 
@@ -39,7 +39,7 @@ class AnalogInput(WithIOMode, IODevice):
         decimals = transformation.get("decimals", 3 if datatype == "float32" else None)
         logger.debug(f"Applying transformation on analog input {self.circuit}: {datatype} {decimals}")
         return self.accessor.refactor(datatype, ratio=transformation.get("ratio", 1),
-                                    decimals=decimals)
+                                      decimals=decimals)
 
     async def check_new_data(self):
         has_changed = self.iomode.update()
@@ -89,13 +89,10 @@ class AnalogOutput(AnalogInput):
         return self.accessor
 
     async def set_value(self, value):
-        valuei = int((float(value) / 0.0025))
-        if valuei < 0:
-            valuei = 0
-        elif valuei > 4095:
-            valuei = 4095
-        await self.client.mb_client.write_single_register(self.accessor.index, valuei)
-        return float(valuei) * 0.0025
+        """ The value is clamped to the 12-bit range of the output, return the value written """
+        value = min(max(float(value), 0.0), 4095 * self.accessor.ratio)
+        await self.accessor.write(self.client, value)
+        return self.accessor.read(self.client)
 
     async def set(self, value=None, mode=None, alias=None):
         self.set_alias(alias)
@@ -146,9 +143,7 @@ class AnalogOutputBrain(AnalogInput):
         if low > value or value > high:
             raise ValueError(f'AO {self.circuit}: value "{value}" is out of limit <{low}..{high}>')
 
-        value_set = to_registers(FLOAT32_LE, value)
-
-        await self.client.mb_client.write_multiple_registers(self.ao_accessor.index, values=value_set)
+        await self.ao_accessor.write(self.client, value)
         return value
 
     async def set(self, value=None, mode=None, alias=None):
@@ -185,7 +180,7 @@ class DataPoint(IODevice):
         accessor_cls = AccessorFactory.accessor_classes.get(datatype)
         word_order = 'big' if accessor_cls is not None and issubclass(accessor_cls, Accessor32) else None
         return AccessorFactory.get(reg, datatype, is_input=is_input, ratio=factor,
-                                 offset=offset, word_order=word_order)
+                                   offset=offset, word_order=word_order)
 
     async def check_new_data(self):
         old_value = self.value
@@ -244,7 +239,7 @@ class Register(DataPoint):
     async def set(self, value=None, alias=None, **kwargs):
         self.set_alias(alias)
         if value is not None:
-            await self.client.mb_client.write_single_register(self.accessor.index, int(value))
+            await self.accessor.write(self.client, int(value))
         return self.full()
 
 

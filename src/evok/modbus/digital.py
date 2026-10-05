@@ -29,6 +29,7 @@ class DigitalOutput(IODevice):
         self.modes = modes if modes is not None else ['Simple']
         self.pwm = pwm
         self.pwmdutyreg = pwmdutyreg
+        self.accessor_pwm_duty = AccessorU16(pwmdutyreg) if pwm is not None else Accessor(None)
         self.pwm_duty = None
         self.pwm_duty_val = None
         self.pwm_freq = None
@@ -60,7 +61,7 @@ class DigitalOutput(IODevice):
             self.pwm.update()
             old_pwm = (self.pwm_freq, self.pwm_duty)
             self.pwm_freq = self.pwm.freq
-            self.pwm_duty_val = self.client.read_u16(self.pwmdutyreg)
+            self.pwm_duty_val = self.accessor_pwm_duty.read(self.client)
             self.pwm_duty = self.pwm.duty(self.pwm_duty_val)
             is_change = old_pwm != (self.pwm_freq, self.pwm_duty)
         # Mode field is for backward compatibility, will be deprecated soon
@@ -110,13 +111,13 @@ class DigitalOutput(IODevice):
                 if self.pwm_duty:
                     self.pwm_duty = 0
                     # Turn off PWM
-                    await self.client.mb_client.write_single_register(self.pwmdutyreg, 0)
+                    await self.accessor_pwm_duty.write(self.client, 0)
 
             # Set PWM Duty
             elif pwm_duty is not None and 0.0 <= pwm_duty <= 100.0:
                 if self.value != 0:
                     await self.client.mb_client.write_single_coil(self.coil, 0)
-                await self.client.mb_client.write_single_register(self.pwmdutyreg, self.pwm.duty_raw(pwm_duty))
+                await self.accessor_pwm_duty.write(self.client, self.pwm.duty_raw(pwm_duty))
                 self.mode = 'PWM'
 
             self.set_alias(alias)
@@ -147,7 +148,7 @@ class DigitalOutput(IODevice):
             if dev.pwm_duty:
                 raw = self.pwm.duty_raw(dev.pwm_duty)
                 if raw != dev.pwm_duty_val:
-                    await self.client.write_u16(dev.pwmdutyreg, raw)
+                    await dev.accessor_pwm_duty.write(self.client, raw)
                     dev.pwm_duty_val = raw
 
 
@@ -261,8 +262,8 @@ class DigitalInput(WithDIMode, IODevice):
 
         if debounce is not None:
             if self.regdebounce is not None:
-                await self.client.write_u16(self.regdebounce, int(float(debounce)))
+                await self.accessor_debounce.write(self.client, int(float(debounce)))
         if counter is not None:
             if self.regcounter is not None:
-                await self.client.mb_client.write_uint32(self.regcounter, int(float(counter)))
+                await self.accessor_counter.write(self.client, int(float(counter)))
         return self.full()
