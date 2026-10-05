@@ -1,4 +1,6 @@
-from evok.devices import Devices, DI, DO, AI, LED, WATCHDOG, NV_SAVE
+import pytest
+
+from evok.devices import Devices, DI, DO, RO, AI, LED, WATCHDOG, NV_SAVE
 from evok.modbus.builder import IOParser
 from evok.modbus.digital import DigitalInput, DigitalOutput, ULED
 from evok.modbus.special import Watchdog, NvSave
@@ -57,6 +59,29 @@ def test_l0306_register_layout(l0306):
     assert (ai.accessor.index, ai.regmode) == (10, 1023)
     led = Devices.by_name(LED, '1_03')
     assert (led.coil, led.accessor.index, led.accessor.mask) == (3002, 3998, 0b100)
+
+
+BIT_IO_FEATURES = {
+    RO: {'type': 'RO', 'val_reg': 1, 'val_coil': 0},
+    LED: {'type': 'LED', 'val_reg': 1, 'val_coil': 0},
+    DO: {'type': 'DO', 'val_reg': 1, 'val_coil': 0, 'modes': ['Simple', 'PWM'],
+         'pwm_reg': 100, 'pwm_ps_reg': 140, 'pwm_c_reg': 141},
+}
+
+
+@pytest.mark.parametrize('devtype', BIT_IO_FEATURES)
+async def test_bit_ios_over_16_use_next_register(devtype):
+    hw = {'modbus_register_blocks': [{'start_reg': 0, 'count': 400, 'frequency': 1}],
+          'modbus_features': [dict(BIT_IO_FEATURES[devtype], count=32)]}
+    client = populate(hw)
+    ios = [Devices.by_name(devtype, f'1_{i:02d}') for i in range(1, 33)]
+    assert [(io.accessor.index, io.accessor.mask) for io in ios[14:18]] == \
+        [(1, 1 << 14), (1, 1 << 15), (2, 1), (2, 1 << 1)]
+    assert (ios[31].accessor.index, ios[31].accessor.mask) == (2, 1 << 15)
+    assert [io.coil for io in ios[14:18]] == [14, 15, 16, 17]
+    client.mb_client.holding.update({1: 0x0001, 2: 0x8002})
+    await scan(client, initial=True)
+    assert [i + 1 for i, io in enumerate(ios) if io.value] == [1, 18, 32]
 
 
 def test_unknown_feature_is_skipped(l0306):

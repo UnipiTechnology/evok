@@ -28,6 +28,11 @@ class IOParser:
         if hasattr(device, 'check_new_data'):
             self.client.eventable_devices.append(device)
 
+    @staticmethod
+    def bit_reg(reg, counter):
+        """ Register of the IO with bits for 16 IOs in one register, the IOs 17-32 are in the next register """
+        return reg + counter // 16
+
     def parse_feature_di(self, max_count, m_feature):
         counter = 0
         while counter < max_count:
@@ -57,7 +62,7 @@ class IOParser:
     def parse_feature_ro(self, max_count, m_feature):
         counter = 0
         while counter < max_count:
-            board_val_reg = m_feature['val_reg']
+            board_val_reg = self.bit_reg(m_feature['val_reg'], counter)
             _r = Relay("%s_%02d" % (self.circuit, counter + 1), self.client, m_feature['val_coil'] + counter,
                        board_val_reg, 0x1 << (counter % 16), major_group=self.circuit)
             self.__register_eventable_device(_r)
@@ -74,7 +79,8 @@ class IOParser:
         counter = 0
         while counter < max_count:
             _r = DigitalOutput("%s_%02d" % (self.circuit, counter + 1), self.client,
-                               m_feature['val_coil'] + counter, m_feature['val_reg'], 0x1 << (counter % 16),
+                               m_feature['val_coil'] + counter, self.bit_reg(m_feature['val_reg'], counter),
+                               0x1 << (counter % 16),
                                major_group=self.circuit, pwm=pwm,
                                pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'])
             self.__register_eventable_device(_r)
@@ -84,7 +90,7 @@ class IOParser:
     def parse_feature_led(self, max_count, m_feature):
         counter = 0
         while counter < max_count:
-            board_val_reg = m_feature['val_reg']
+            board_val_reg = self.bit_reg(m_feature['val_reg'], counter)
             _led = ULED("%s_%02d" % (self.circuit, counter + 1), self.client, m_feature['val_coil'] + counter,
                         board_val_reg, 0x1 << (counter % 16), major_group=self.circuit)
             self.__register_eventable_device(_led)
