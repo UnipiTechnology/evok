@@ -211,6 +211,8 @@ If no other type is viable, data point may be used.
 - `datatype` - value data type
     - null
     - float32
+- `writable` - the value can be written through the API, `false` (default) or `true`,
+  the register must be `holding`
 
 ```yaml title="Example"
 - type        : DATA_POINT

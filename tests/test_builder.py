@@ -82,6 +82,12 @@ def test_data_point_without_valid_mask_reg():
     populate(data_point_hw(datatype='signed16'))
     assert circuits(DATA_POINT) == ['1_1', '1_2', '1_3']
     assert all(type(d) is DataPoint for d in Devices[DATA_POINT].values())
+    assert not any(d.writable for d in Devices[DATA_POINT].values())
+
+
+def test_data_point_writable():
+    populate(data_point_hw(writable=True))
+    assert all(d.writable for d in Devices[DATA_POINT].values())
 
 
 def test_data_point_with_valid_mask_reg_is_ow_temperature():

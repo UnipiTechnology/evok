@@ -167,10 +167,11 @@ class DataPoint(IODevice):
     devtype = DATA_POINT
 
     def __init__(self, circuit, client: Client, reg, reg_type=None, major_group=0, datatype=None, unit=None,
-                 offset=0, factor=1, name=None):
+                 offset=0, factor=1, name=None, writable=False):
         super().__init__(circuit, client, major_group)
         self.unit = unit
         self.name = name
+        self.writable = writable
         self.value = None
         self.accessor = self._make_accessor(reg, reg_type == "input", datatype, factor, offset)
 
@@ -197,9 +198,13 @@ class DataPoint(IODevice):
         return value
 
     async def set(self, value=None, alias=None, **kwargs):
-        """ Data point is read-only, only the alias can be changed """
+        """ Write the value with the inverse transformation of the datatype,
+            only a writable data point in a holding register can be written
+        """
         if value is not None:
-            raise ValueError("Data point object is read-only")
+            if not self.writable:
+                raise ValueError(f"Data point {self.circuit} is read-only")
+            await self.accessor.write(self.client, float(value))
         self.set_alias(alias)
         return self.full()
 
@@ -226,7 +231,8 @@ class Register(DataPoint):
     devtype = REGISTER
 
     def __init__(self, circuit, client: Client, reg, reg_type="holding", major_group=0):
-        super().__init__(circuit, client, reg, reg_type=reg_type, major_group=major_group, datatype='uint16')
+        super().__init__(circuit, client, reg, reg_type=reg_type, major_group=major_group, datatype='uint16',
+                         writable=True)
 
     def full(self):
         ret = {'dev': 'register',
@@ -235,12 +241,6 @@ class Register(DataPoint):
                }
         self._with_alias(ret)
         return ret
-
-    async def set(self, value=None, alias=None, **kwargs):
-        self.set_alias(alias)
-        if value is not None:
-            await self.accessor.write(self.client, int(value))
-        return self.full()
 
 
 class OwTemperature(DataPoint):

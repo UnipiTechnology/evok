@@ -178,10 +178,11 @@ class IOParser:
             _valid_mask_reg = m_feature.get('valid_mask_reg')
             _datatype = m_feature.get('datatype')
             _reg_type = m_feature.get("reg_type", None)
+            _writable = m_feature.get("writable", False)
 
             _circuit = "{}_{}".format(self.circuit, board_val_reg + counter)
             _kwargs = dict(reg_type=_reg_type, datatype=_datatype, major_group=self.circuit,
-                           offset=_offset, factor=_factor, unit=_unit, name=_name)
+                           offset=_offset, factor=_factor, unit=_unit, name=_name, writable=_writable)
             if _valid_mask_reg is not None:
                 _xgt = OwTemperature(_circuit, self.client, board_val_reg + counter,
                                      _valid_mask_reg, 1 << counter, **_kwargs)

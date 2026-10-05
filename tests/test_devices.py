@@ -435,3 +435,29 @@ async def test_data_point_not_scanned_and_unknown_datatype(caplog):
     await client.cache.do_scan(initial=True)
     await dp.check_new_data()
     assert dp.value is None
+
+
+async def test_data_point_set_value():
+    client, dp = make_dp([0, 0], datatype='float32', factor=10, offset=1, writable=True)
+    await client.cache.do_scan(initial=True)
+    await dp.set(value='21')
+    assert client.mb_client.writes == [('regs', 0, to_registers(FLOAT32_BE, 2.0))]   # high word first
+    assert await dp.check_new_data()               # cache is updated without a scan
+    assert dp.value == 21.0
+
+
+async def test_data_point_set_signed16():
+    client, dp = make_dp([0], factor=0.1, writable=True)
+    await client.cache.do_scan(initial=True)
+    await dp.set(value=-12.3)
+    assert client.mb_client.holding[0] == 0x10000 - 123
+    with pytest.raises(ValueError, match='out of range'):
+        await dp.set(value=4000)
+
+
+async def test_data_point_input_is_read_only():
+    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1, 'type': 'input'}])
+    dp = DataPoint('x', client, 0, reg_type='input', writable=True)
+    with pytest.raises(ValueError, match='read-only'):
+        await dp.set(value=1)
+    assert client.mb_client.writes == []
