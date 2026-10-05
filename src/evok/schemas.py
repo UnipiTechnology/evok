@@ -135,6 +135,19 @@ register_post_inp_schema = {
 
 register_post_inp_example = {"value": '1'}
 
+data_point_post_inp_schema = {
+    "$schema": SCHEMA,
+    "title": "Data_point",
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "value": {"type": ["number", "string"]},  # the range depends on the datatype, checked by the accessor
+        "alias": {"type": "string"}
+    }
+}
+
+data_point_post_inp_example = {"value": 21.5}
+
 wd_post_inp_schema = {
     "$schema": SCHEMA,
     "title": "Master_Watchdog",
@@ -220,6 +233,7 @@ schemas: Dict[str, Tuple[dict, dict]] = {
     'input': (di_post_inp_schema, di_post_inp_example),
     'output': (relay_post_inp_schema, relay_post_inp_example),
     'register': (register_post_inp_schema, register_post_inp_example),
+    'data_point': (data_point_post_inp_schema, data_point_post_inp_example),
     'ai': (ai_post_inp_schema, ai_post_inp_example),
     'ao': (ao_post_inp_schema, ao_post_inp_example),
     'led': (led_post_inp_schema, led_post_inp_example),

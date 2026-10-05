@@ -1427,6 +1427,72 @@ paths:
             - rest
           default: json
         description: Content type - use "json" for application/json OR "rest" for text/html.
+    post:
+      summary: Write Data point
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    $ref: '#/components/schemas/Status'
+                  result:
+                    $ref: '#/components/schemas/Data_point'
+              examples:
+                setpoint:
+                  value:
+                    success: true
+                    result:
+                      dev: data_point
+                      circuit: '1_100'
+                      name: setpoint
+                      unit: "˚C"
+                      value: 21.5
+        '404':
+          description: Unknown circuit or the value cannot be written
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    examples: [false]
+                  errors:
+                    type: object
+                    additionalProperties:
+                      type: string
+              examples:
+                read-only:
+                  value:
+                    success: false
+                    errors:
+                      ValueError: Data point IAQ_0 is read-only
+                out-of-range:
+                  value:
+                    success: false
+                    errors:
+                      ValueError: Value 4000 out of range for int16 register 100
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Data_point_params'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Data_point_params'
+      description: |
+        Write the value of a data point. Only a data point with `writable: true` in the hardware definition
+        in a holding register can be written, other data points are read-only.
+        The value is converted to the register by the inverse of the transformation of the data point,
+        `(value - offset) / factor`, integer datatypes are rounded and checked against their range.
+      operationId: write-data_point-object
+      tags:
+        - Data point
+        - Setter
   '/{format}/wd/{circuit}':
     get:
       summary: Read watchdog
@@ -3695,6 +3761,19 @@ components:
         - dev: register
           circuit: 1_4
           value: 16256
+    Data_point_params:
+      title: Data point params
+      type: object
+      description: Writable params of a data point.
+      properties:
+        value:
+          type: number
+          examples: [21.5]
+          description: New value of the data point in its unit, only for a writable data point
+        alias:
+          type: string
+          examples: [setpoint_living_room]
+          description: Alias of the data point
     Data_point:
       title: Data point
       x-stoplight:
