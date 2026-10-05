@@ -114,7 +114,7 @@ di_post_inp_schema = {
     },
 }
 
-di_post_inp_example = {"value": 1}
+di_post_inp_example = {"debounce": 50}
 
 register_post_inp_schema = {
     "$schema": SCHEMA,
@@ -123,7 +123,7 @@ register_post_inp_schema = {
     "additionalProperties": False,
     "properties": {
         "value": {
-            "type": "number",
+            "type": ["number", "string"],  # the range applies to numbers, strings are checked by the accessor
             "minimum": 0,
             "maximum": 65535
         },
