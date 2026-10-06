@@ -63,8 +63,8 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
             if SCHEMA_VALIDATE and dev in schemas:
                 schema, example = schemas[dev]
                 jsonschema.validate(instance=kw, schema=schema)
-            result = await device.set(**kw)
-            self.write(json.dumps({'success': True, 'result': result}))
+            await device.set(**kw)
+            self.write(json.dumps({'success': True, 'result': device.full()}))
         except Exception as E:
             logger.error(f"Error while processing post: {str(type(E).__name__)}: {str(E)}")
             if logger.level == logging.DEBUG:

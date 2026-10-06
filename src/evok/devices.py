@@ -123,7 +123,6 @@ class Aliases:
     async def set(self, save: bool = False):
         if save is not None and bool(int(save)):
             self.set_force_save()
-        return self.full()
 
 
 class DeviceList(dict):

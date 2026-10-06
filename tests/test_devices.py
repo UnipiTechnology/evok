@@ -132,8 +132,8 @@ async def test_do_set_pwm_duty(unit):
 async def test_do_timeout_reverts_value(unit):
     client = await unit()
     do = dev(DO, '1_01')
-    res = await do.set(value=1, timeout=0.01)
-    assert res['pending'] is True
+    await do.set(value=1, timeout=0.01)
+    assert do.full()['pending'] is True
     await asyncio.sleep(0.05)
     assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0)]
     assert do.pending_task is None
@@ -142,8 +142,9 @@ async def test_do_timeout_reverts_value(unit):
 @pytest.mark.xfail(strict=True, reason="set() reports the cached state until the next scan")
 async def test_do_set_returns_new_value(unit):
     await unit()
-    res = await dev(DO, '1_01').set(value=1)
-    assert res['value'] == 1
+    do = dev(DO, '1_01')
+    await do.set(value=1)
+    assert do.full()['value'] == 1
 
 
 # --- AnalogInput ------------------------------------------------------------
@@ -234,9 +235,11 @@ def nv_save(monkeypatch):
 
 async def test_nv_save_holds_value_until_timeout(nv_save):
     client, nv = nv_save
-    assert (await nv.set(value=0))['value'] == 0
+    await nv.set(value=0)
+    assert nv.full()['value'] == 0
     assert client.mb_client.writes == []
-    assert (await nv.set(value='1'))['value'] == 1
+    await nv.set(value='1')
+    assert nv.full()['value'] == 1
     assert client.mb_client.writes == [('coil', 5, 1)]
     with pytest.raises(ValueError):
         await nv.set(value=1)
@@ -352,7 +355,8 @@ async def test_analog_output_brain_set_mode():
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
-    res = await ao.set(mode='Current')
+    await ao.set(mode='Current')
+    res = ao.full()
     # mode register is written, the value is reset to 0 in the new mode
     assert client.mb_client.writes == [('reg', 4, 1), ('regs', 0, to_registers(FLOAT32_LE, 0.0))]
     assert (res['mode'], res['unit']) == ('Current', 'mA')
@@ -414,7 +418,8 @@ async def test_data_point_read_only_without_valid():
     with pytest.raises(ValueError, match='read-only'):
         await dp.set(value=1)
     assert client.mb_client.writes == []
-    assert await dp.set() == {'dev': 'data_point', 'circuit': 'x', 'value': 7}
+    assert await dp.set() is None
+    assert dp.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 7}
 
 
 async def test_ow_temperature_valid_mask():

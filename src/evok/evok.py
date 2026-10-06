@@ -358,8 +358,8 @@ class JSONBulkHandler(tornado.web.RequestHandler):
                     kw = single_command['assigned_values']
                     if SCHEMA_VALIDATE:
                         jsonschema.validate(instance=kw, schema=schema)
-                    outp = await outp.set(**kw)
-                    result['individual_assignments'].append(outp)
+                    await outp.set(**kw)
+                    result['individual_assignments'].append(outp.full())
 
             self.write(json.dumps(result))
         except Exception as E:

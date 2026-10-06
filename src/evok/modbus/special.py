@@ -32,7 +32,6 @@ class OwPower(IODevice):
             value = bool(int(value))
             self.value = value
             await self.client.mb_client.write_single_coil(self.coil, value)
-        return self.full()
 
 
 class NvSave(IODevice):
@@ -84,7 +83,6 @@ class NvSave(IODevice):
                 self.hold_task = None
                 self.value = 0
                 raise
-        return self.full()
 
 
 class Watchdog(IODevice):
@@ -150,5 +148,3 @@ class Watchdog(IODevice):
                 self.nvsavvalue = 0
                 await self.client.mb_client.write_single_coil(self.reset_coil, 1)
                 logger.info("Performed reset of board %s" % self.circuit)
-
-        return self.full()

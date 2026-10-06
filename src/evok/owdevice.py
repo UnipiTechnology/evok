@@ -58,7 +58,6 @@ class MySensor(object):
             devents.config(self)
         if alias is not None:
             Devices.set_alias(alias, self)
-        return self.full()
 
     async def read_val_from_sens(self, sens):
         raise NotImplementedError("Please Implement this method")
@@ -275,7 +274,6 @@ class OwBusDriver:
 
         if was_changed:
             devents.config(self)
-        return self.full()
 
     def register_sensor(self, mysensor):
         self.mysensors.append(mysensor)

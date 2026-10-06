@@ -83,10 +83,6 @@ class Handler(UserBasicHelper):
         'output_set',
         'output_set_for_time',
         'ai_get',
-        'ai_set_bits',
-        'ai_set_interval',
-        'ai_set_gain',
-        'ai_set',
         'ao_set_value',
         'ao_set',
         'owbus_get',
@@ -114,9 +110,10 @@ class Handler(UserBasicHelper):
         inp = Devices.by_int(DI, str(circuit))
         return inp.get()['value']
 
-    def input_set(self, circuit, debounce):
+    async def input_set(self, circuit, debounce):
         inp = Devices.by_int(DI, str(circuit))
-        return inp.set(debounce=debounce)
+        await inp.set(debounce=debounce)
+        return inp.full()
 
     # ---- Relay ----
     def relay_get(self, circuit):
@@ -143,29 +140,14 @@ class Handler(UserBasicHelper):
     async def output_set_for_time(self, circuit, value, timeout):
         relay = Devices.by_int(DO, str(circuit))
         if timeout <= 0:
-            raise Exception('Invalid timeout %s' % str(timeout))
-        return await relay.set(value, timeout)
+            raise ValueError('Invalid timeout %s' % str(timeout))
+        await relay.set(value, timeout)
+        return relay.full()
 
     # ---- Analog Input ----
     def ai_get(self, circuit):
         ai = Devices.by_int(AI, str(circuit))
         return ai.get()
-
-    def ai_set_bits(self, circuit, bits):
-        ai = Devices.by_int(AI, str(circuit))
-        return ai.set(bits=bits)
-
-    def ai_set_interval(self, circuit, interval):
-        ai = Devices.by_int(AI, str(circuit))
-        return ai.set(interval=interval)
-
-    def ai_set_gain(self, circuit, gain):
-        ai = Devices.by_int(AI, str(circuit))
-        return ai.set(gain=gain)
-
-    def ai_set(self, circuit, bits, gain, interval):
-        ai = Devices.by_int(AI, str(circuit))
-        return ai.set(bits=bits, gain=gain, interval=interval)
 
     # def ai_measure(self, circuit):
 
@@ -174,31 +156,35 @@ class Handler(UserBasicHelper):
         ao = Devices.by_int(AO, str(circuit))
         return await ao.set_value(value)
 
-    async def ao_set(self, circuit, value, frequency):
+    async def ao_set(self, circuit, value, mode):
         ao = Devices.by_int(AO, str(circuit))
-        return await ao.set(value, frequency)
+        await ao.set(value, mode)
+        return ao.full()
 
     # ---- OwBus (1wire bus) ----
     def owbus_get(self, circuit):
         ow = Devices.by_int(OWBUS, str(circuit))
         return ow.bus_driver.scan_interval
 
-    def owbus_set(self, circuit, scan_interval):
+    async def owbus_set(self, circuit, scan_interval):
         ow = Devices.by_int(OWBUS, str(circuit))
-        return ow.bus_driver.set(scan_interval=scan_interval)
+        await ow.bus_driver.set(scan_interval=scan_interval)
+        return ow.bus_driver.full()
 
-    def owbus_scan(self, circuit):
+    async def owbus_scan(self, circuit):
         ow = Devices.by_int(OWBUS, str(circuit))
-        return ow.bus_driver.set(do_scan=True)
+        await ow.bus_driver.set(do_scan=True)
+        return ow.bus_driver.full()
 
     def owbus_list(self, circuit):
         ow = Devices.by_int(OWBUS, str(circuit))
         return ow.bus_driver.list()
 
     # ---- Sensors (1wire thermo,humidity) ----
-    def sensor_set(self, circuit, interval):
+    async def sensor_set(self, circuit, interval):
         sens = Devices.by_int(SENSOR, str(circuit))
-        return sens.set(interval=interval)
+        await sens.set(interval=interval)
+        return sens.full()
 
     def sensor_get(self, circuit):
         sens = Devices.by_int(SENSOR, str(circuit))

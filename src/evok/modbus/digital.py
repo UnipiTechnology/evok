@@ -123,7 +123,7 @@ class DigitalOutput(IODevice):
             self.set_alias(alias)
 
             if timeout is None:
-                return self.full()
+                return
 
             async def timercallback():
                 await asyncio.sleep(float(timeout))
@@ -131,8 +131,6 @@ class DigitalOutput(IODevice):
                 await self.client.mb_client.write_single_coil(self.coil, 0 if value else 1)
 
             self.pending_task = asyncio.create_task(timercallback())
-
-            return self.full()
 
         except Exception as E:
             logger.error(f"Error in set DO: {E}")
@@ -186,8 +184,6 @@ class Relay(IODevice):
             await self.client.mb_client.write_single_coil(self.coil, parsed_value)
 
         self.set_alias(alias)
-
-        return self.full()
 
 
 class ULED(Relay):
@@ -266,4 +262,3 @@ class DigitalInput(WithDIMode, IODevice):
         if counter is not None:
             if self.regcounter is not None:
                 await self.accessor_counter.write(self.client, int(float(counter)))
-        return self.full()

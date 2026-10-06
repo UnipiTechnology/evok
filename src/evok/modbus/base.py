@@ -25,8 +25,8 @@ class IODevice:
     def get(self):
         return self.full()
 
-    async def set(self, alias=None, **kwargs) -> dict:
-        """ Change the device settings, return the new full state """
+    async def set(self, alias=None, **kwargs) -> None:
+        """ Change the device settings, the caller reads the new state by full() """
         raise NotImplementedError
 
     def set_alias(self, alias):

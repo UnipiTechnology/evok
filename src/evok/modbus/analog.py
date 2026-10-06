@@ -58,7 +58,6 @@ class AnalogInput(WithIOMode, IODevice):
 
         if mode is not None:
             await self.iomode.set(mode)
-        return self.full()
 
     def full(self):
         ret = {'dev': self.devtype,
@@ -102,7 +101,6 @@ class AnalogOutput(AnalogInput):
 
         if value is not None:
             await self.set_value(value)
-        return self.full()
 
 
 class AnalogOutputBrain(AnalogInput):
@@ -159,8 +157,6 @@ class AnalogOutputBrain(AnalogInput):
                 raise ValueError(f'AO {self.circuit}: value cannot be set in mode "{self.iomode.mode}"')
             await self.set_value(float(value))
 
-        return self.full()
-
 
 class DataPoint(IODevice):
 
@@ -206,7 +202,6 @@ class DataPoint(IODevice):
                 raise ValueError(f"Data point {self.circuit} is read-only")
             await self.accessor.write(self.client, float(value))
         self.set_alias(alias)
-        return self.full()
 
     def full(self):
 
