@@ -11,7 +11,7 @@ from ..devices import AI, AO, REGISTER, DATA_POINT
 from ..log import logger
 from .cache import ENoCacheRegister
 from .base import IODevice
-from .client import Client, Accessor, Accessor32, AccessorFactory
+from .client import Client, Accessor, Accessor32, AccessorBit, AccessorFactory
 from .iomode import IOMode, WithIOMode
 
 
@@ -248,8 +248,7 @@ class OwTemperature(DataPoint):
 
     def __init__(self, circuit, client: Client, reg, valid_mask_reg, valid_mask, **kwargs):
         super().__init__(circuit, client, reg, **kwargs)
-        self.valid_mask_reg = valid_mask_reg
-        self.valid_mask = valid_mask
+        self.accessor_valid = AccessorBit(valid_mask_reg, valid_mask, is_input=self.accessor.is_input)
         self.is_valid = None
 
     async def check_new_data(self):
@@ -260,10 +259,9 @@ class OwTemperature(DataPoint):
 
     def read_is_valid(self):
         try:
-            val = self.client.read_u16(self.valid_mask_reg, is_input=self.accessor.is_input)
-            return bool(val & self.valid_mask)
+            return bool(self.accessor_valid.read(self.client))
         except ENoCacheRegister:
-            return 0
+            return False
 
     def full(self):
         ret = super().full()

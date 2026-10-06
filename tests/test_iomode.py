@@ -37,6 +37,13 @@ async def test_fixed_mode_without_register():
     assert client.mb_client.writes == []
 
 
+async def test_fixed_mode_without_value_and_register():
+    client, iomode = await make_iomode(0, regmode=None, modes={'Fixed': MODES['Fixed']})
+    assert iomode.mode == 'Fixed'
+    assert await iomode.set('Fixed') == MODES['Fixed']
+    assert client.mb_client.writes == []
+
+
 async def test_set_writes_register_and_waits_for_scan():
     client, iomode = await make_iomode(0)
     iomode.update()

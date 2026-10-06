@@ -383,8 +383,9 @@ async def test_data_point_read_only_without_valid():
 async def test_ow_temperature_valid_mask():
     client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}], {0: 2150, 2: 0b10})
     t = OwTemperature('x', client, 0, 2, 0b10, factor=0.01, unit='C')
-    assert await t.check_new_data()     # not scanned yet, is_valid None -> 0
-    assert (t.value, t.is_valid) == (None, 0)
+    assert await t.check_new_data()     # not scanned yet, is_valid None -> False
+    assert (t.value, t.is_valid) == (None, False)
+    assert t.is_valid is False
     await client.cache.do_scan(initial=True)
     assert await t.check_new_data()
     assert t.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 21.5, 'unit': 'C', 'valid': True}

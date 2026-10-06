@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from ..log import logger
-from .client import Client
+from .client import Client, AccessorU16, AccessorBit, Accessor
 
 
 class IOMode:
@@ -17,11 +17,11 @@ class IOMode:
 
     def __init__(self, client: Client, regmode=None, modes=None, name=''):
         self.client = client
-        self.regmode = regmode
+        self.accessor = AccessorU16(regmode) if regmode is not None else Accessor(regmode)
         self.modes = modes or {}
         self.name = name
         self.mode_value = None
-        if self.regmode is None and len(self.modes) == 1:
+        if regmode is None and len(self.modes) == 1:
             self.mode = next(iter(self.modes))
         else:
             self.mode = None
@@ -45,9 +45,7 @@ class IOMode:
 
     def update(self) -> bool:
         """ Read the mode register from the cache, return True if the mode has changed """
-        if self.regmode is None:
-            return False
-        mode_value = self.client.read_u16(self.regmode)
+        mode_value = self.accessor.read(self.client)
         if mode_value == self.mode_value:
             return False
         self.mode_value = mode_value
@@ -59,15 +57,17 @@ class IOMode:
     async def set(self, mode: str) -> dict:
         """ Write the mode to the mode register, return its definition
 
-            The current mode is changed by update() after the next scan.
+            The write updates the cache, the current mode is changed by the next update().
+            Without a mode register nothing is written and any defined mode is accepted.
         """
         if mode not in self.modes:
             raise ValueError(f'{self.name}: unknown mode "{mode}"!')
         data = self.modes[mode]
-        if 'value' not in data:
-            raise ValueError(f"{self.name}: this device cant switch mode!")
-        if self.regmode is not None:
-            await self.client.mb_client.write_single_register(self.regmode, int(data['value']))
+        mode_value = data.get('value')
+        if self.accessor.index is not None:
+            if mode_value is None:
+                raise ValueError(f"{self.name}: this device cant switch mode!")
+            await self.accessor.write(self.client, int(mode_value))
         return data
 
 
@@ -90,10 +90,6 @@ class WithIOMode:
     @property
     def mode_value(self):
         return self.iomode.mode_value
-
-    @property
-    def regmode(self):
-        return self.iomode.regmode
 
     @property
     def unit_name(self):
@@ -119,45 +115,39 @@ class DIMode:
     def __init__(self, client: Client, bitmask: int, regmode=None, regpolarity=None, regtoggle=None,
                  modes=None, ds_modes=None, name=''):
         self.client = client
-        self.bitmask = bitmask
-        self.regmode = regmode
-        self.regpolarity = regpolarity
-        self.regtoggle = regtoggle
+        self.accessor_mode = self._accessor(regmode, bitmask)
+        self.accessor_polarity = self._accessor(regpolarity, bitmask)
+        self.accessor_toggle = self._accessor(regtoggle, bitmask)
         self.modes = modes if modes is not None else ['Simple']
         self.ds_modes = ds_modes if ds_modes is not None else ['Simple']
         self.name = name
         self.mode = 'Simple'
         self.ds_mode = 'Simple'
 
+    @staticmethod
+    def _accessor(reg, bitmask) -> Accessor:
+        return AccessorBit(reg, bitmask) if reg is not None else Accessor(None)
+
     @property
     def has_direct_switch(self) -> bool:
-        return 'DirectSwitch' in self.modes and self.regmode is not None
-
-    def _bit(self, reg) -> bool:
-        return bool(self.client.read_u16(reg) & self.bitmask)
+        return 'DirectSwitch' in self.modes and self.accessor_mode.index is not None
 
     def update(self) -> bool:
         """ Read the mode registers from the cache, return True if the mode has changed """
         if not self.has_direct_switch:
             return False
         old = (self.mode, self.ds_mode)
-        if self._bit(self.regmode):
+        if self.accessor_mode.read(self.client):
             self.mode = 'DirectSwitch'
-            if self._bit(self.regpolarity):
+            if self.accessor_polarity.read(self.client):
                 self.ds_mode = 'Inverted'
-            elif self._bit(self.regtoggle):
+            elif self.accessor_toggle.read(self.client):
                 self.ds_mode = 'Toggle'
             else:
                 self.ds_mode = 'Simple'
         else:
             self.mode = 'Simple'
         return old != (self.mode, self.ds_mode)
-
-    async def _write_bit(self, reg, value: bool):
-        """ Read-modify-write the bit of this input in a shared register """
-        curr = (await self.client.cache.get_register_async(1, reg))[0]
-        curr = curr | self.bitmask if value else curr & ~self.bitmask
-        await self.client.write_u16(reg, curr)
 
     async def set(self, mode=None, ds_mode=None):
         """ Write the mode and the DirectSwitch mode, unknown values are ignored
@@ -168,15 +158,15 @@ class DIMode:
         """
         if mode in self.modes:
             self.mode = mode
-            if self.regmode is not None:
-                await self._write_bit(self.regmode, mode == 'DirectSwitch')
+            if self.accessor_mode.index is not None:
+                await self.accessor_mode.write(self.client, int(mode == 'DirectSwitch'))
         else:
             mode = self.mode
 
         if mode == 'DirectSwitch' and ds_mode in self.ds_modes:
             self.ds_mode = ds_mode
-            await self._write_bit(self.regpolarity, ds_mode == 'Inverted')
-            await self._write_bit(self.regtoggle, ds_mode == 'Toggle')
+            await self.accessor_polarity.write(self.client, int(ds_mode == 'Inverted'))
+            await self.accessor_toggle.write(self.client, int(ds_mode == 'Toggle'))
 
 
 class WithDIMode:
@@ -199,15 +189,3 @@ class WithDIMode:
     @property
     def ds_modes(self):
         return self.dimode.ds_modes
-
-    @property
-    def regmode(self):
-        return self.dimode.regmode
-
-    @property
-    def regpolarity(self):
-        return self.dimode.regpolarity
-
-    @property
-    def regtoggle(self):
-        return self.dimode.regtoggle
