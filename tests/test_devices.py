@@ -7,6 +7,7 @@ from evok.devices import Devices, DI, DO, AI, LED, WATCHDOG
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
 from evok.modbus.builder import IOParser
 from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
+from evok.modbus.special import NvSave
 
 from conftest import make_client, scan
 
@@ -220,6 +221,42 @@ async def test_ai_unknown_mode_reads_none():
     await client.cache.do_scan(initial=True)
     await ai.check_new_data()
     assert (ai.mode, ai.value) == (None, None)
+
+
+# --- NvSave -----------------------------------------------------------------
+
+@pytest.fixture
+def nv_save(monkeypatch):
+    monkeypatch.setattr(NvSave, 'HOLD_TIME', 0.01)
+    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1}])
+    return client, NvSave('x', client, 5)
+
+
+async def test_nv_save_holds_value_until_timeout(nv_save):
+    client, nv = nv_save
+    assert (await nv.set(value=0))['value'] == 0
+    assert client.mb_client.writes == []
+    assert (await nv.set(value='1'))['value'] == 1
+    assert client.mb_client.writes == [('coil', 5, 1)]
+    with pytest.raises(ValueError):
+        await nv.set(value=1)
+    assert client.mb_client.writes == [('coil', 5, 1)]
+    await asyncio.sleep(0.03)
+    assert nv.full()['value'] == 0
+    await nv.set(value=1)
+    assert client.mb_client.writes == [('coil', 5, 1), ('coil', 5, 1)]
+
+
+async def test_nv_save_failed_write_releases_timer(nv_save):
+    client, nv = nv_save
+
+    async def fail(address, value):
+        raise ConnectionError('no answer')
+    client.mb_client.write_single_coil = fail
+    with pytest.raises(ConnectionError):
+        await nv.set(value=1)
+    await asyncio.sleep(0)
+    assert (nv.value, nv.hold_task) == (0, None)
 
 
 # --- Watchdog, LED ----------------------------------------------------------

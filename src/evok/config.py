@@ -303,7 +303,7 @@ def create_devices(evok_config: EvokConfig, hw_dict):
                         raise EvokConfigError("")
                     hw_model_dict = hw_dict.definitions[device_model]
 
-                    slave = ModbusScanner(bus.bus_driver, circuit, evok_config, scanfreq, scan_enabled,
+                    slave = ModbusScanner(bus.bus_driver, circuit, scanfreq, scan_enabled,
                                           hw_model_dict, unit_id=slave_id)
                     Devices.register_device(MODBUS_SLAVE, slave)
 

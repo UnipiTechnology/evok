@@ -15,7 +15,7 @@ import tornado.web
 
 import logging
 import logging.handlers
-from .log import logger
+from .log import logger, read_log_tail
 
 from operator import methodcaller
 from tornado import websocket
@@ -286,6 +286,29 @@ class VersionHandler(UserCookieHelper, tornado.web.RequestHandler):
         self.finish()
 
 
+class LogHandler(UserCookieHelper, tornado.web.RequestHandler):
+    """ GET /log?lines=N returns the last N lines of the log file as plain text """
+
+    DEFAULT_LINES = 255
+    MAX_LINES = 1000
+
+    def initialize(self, log_file):
+        self.log_file = log_file
+
+    @tornado.web.authenticated
+    async def get(self):
+        if self.log_file is None:
+            raise tornado.web.HTTPError(404, 'Logging to a file is not configured')
+        try:
+            lines = int(self.get_argument('lines', str(self.DEFAULT_LINES)))
+        except ValueError:
+            raise tornado.web.HTTPError(400, 'Invalid number of lines')
+        lines = max(1, min(lines, self.MAX_LINES))
+        text = await asyncio.to_thread(read_log_tail, self.log_file, lines)
+        self.set_header('Content-Type', 'text/plain; charset=utf-8')
+        self.write(text)
+
+
 class JSONBulkHandler(tornado.web.RequestHandler):
     def initialize(self):
         self.set_header("Content-Type", "application/json")
@@ -472,6 +495,7 @@ async def main():
         (r"/json/all/?", LoadAllHandler),
         (r"/json/([^/]+)/([^/]+)/?([^/]+)?/?", LegacyJsonHandler),
         (r"/version/?", VersionHandler),
+        (r"/log/?", LogHandler, dict(log_file=log_file)),
     ]
 
     if evok_config.get_api('websocket').get('enabled', False):

@@ -36,28 +36,54 @@ class OwPower(IODevice):
 
 
 class NvSave(IODevice):
+    """ Writing value=1 schedules writing of startup data in firmware
+
+        The value is held at 1 for HOLD_TIME seconds after the write,
+        a new write is refused until then.
+    """
 
     devtype = NV_SAVE
+
+    HOLD_TIME = 0.5
 
     def __init__(self, circuit, client: Client, coil, major_group=0):
         super().__init__(circuit, client, major_group)
         self.coil = coil
         self.value = 0
+        self.hold_task: asyncio.Task | None = None
 
     def full(self):
         ret = {'dev': 'nv_save', 'circuit': self.circuit, 'value': self.value}
         self._with_alias(ret)
         return ret
 
+    async def _hold(self):
+        """ Keep the value at 1 for HOLD_TIME, then return it to 0 """
+        try:
+            await asyncio.sleep(self.HOLD_TIME)
+        finally:
+            # a cancelled timer must not reset a timer started after it
+            if self.hold_task is asyncio.current_task():
+                self.value = 0
+                self.hold_task = None
+
     async def set(self, value=None, alias=None):
-        """ Schedule writing of startup data in firmware if value=1,
-            the value is reported only in the response of this call
-        """
+        """ Schedule writing of startup data in firmware if value=1 """
         self.set_alias(alias)
         if value is not None and int(value):
-            await self.client.mb_client.write_single_coil(self.coil, 1)
-            await asyncio.sleep(0.2)
-            return {**self.full(), 'value': 1}
+            if self.hold_task is not None:
+                raise ValueError(f"NV save {self.circuit} is in progress, try it again later")
+            # start the timer before the write, so a concurrent call is refused
+            self.value = 1
+            self.hold_task = asyncio.create_task(self._hold())
+            try:
+                await self.client.mb_client.write_single_coil(self.coil, 1)
+            except Exception:
+                # a task cancelled before it starts does not run its finally block
+                self.hold_task.cancel()
+                self.hold_task = None
+                self.value = 0
+                raise
         return self.full()
 
 

@@ -377,6 +377,35 @@ paths:
       operationId: get-version
       x-stoplight:
         id: pnta60tkpt5qz
+  /log:
+    get:
+      summary: Get log
+      description: Read the last lines of the Evok log file. Available only when logging to a file is configured.
+      tags:
+        - General
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 255
+          name: lines
+          in: query
+          required: false
+          description: Number of lines from the end of the log, values out of range are clamped
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              examples:
+                log:
+                  value: "2026-10-06 12:00:00,000 - evok - INFO - Starting Evok\n"
+        '400':
+          description: Invalid number of lines
+        '404':
+          description: Logging to a file is not configured
+      operationId: get-log
   '/{format}/di/{circuit}':
     get:
       summary: Read digital input

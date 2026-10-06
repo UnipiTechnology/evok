@@ -23,15 +23,13 @@ from .builder import IOParser
 from .cache import ModbusCacheMap
 from .client import Client
 
-import subprocess
-
 
 class ModbusScanner:
 
     INITIAL_SCAN_INTERVAL = 2
 
     def __init__(self, transport: AsyncSmartTransport,
-                 circuit, evok_config, scan_freq, scan_enabled, hw_definition,
+                 circuit, scan_freq, scan_enabled, hw_definition,
                  unit_id: int):
         self.alias = ""
         self.devtype = MODBUS_SLAVE
@@ -48,7 +46,6 @@ class ModbusScanner:
         self.scan_task: Union[None, asyncio.Task] = None
         self.scan_enabled = scan_enabled
         self.versions = []
-        self.logfile = evok_config.logging.get("file", "./evok.log")
 
         mb_client = AsyncModbusClient(transport,
                                       unit_id=unit_id,
@@ -68,13 +65,6 @@ class ModbusScanner:
         if self.scan_task is not None:
             self.scan_task.cancel()
             self.scan_task = None
-
-    async def set(self, print_log=None):
-        if print_log is not None and print_log != 0:
-            log_tail = subprocess.check_output(["tail", "-n 255", self.logfile])
-            return log_tail
-        else:
-            return ""
 
     async def _scan_unit(self) -> bool:
         try:
