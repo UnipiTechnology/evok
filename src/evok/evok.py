@@ -8,7 +8,6 @@ import sys
 import traceback
 from importlib.metadata import version, PackageNotFoundError
 
-import jsonschema
 import tornado.httpserver
 import tornado.httpclient
 import tornado.web
@@ -17,22 +16,17 @@ import logging
 import logging.handlers
 from .log import logger, read_log_tail
 
-from operator import methodcaller
-from tornado import websocket
 from tornado import escape
-from .handlers_base import EvokWebHandlerBase, SCHEMA_VALIDATE
-from urllib.parse import urlparse
-from .schemas import schemas, bulk_post_inp_schema
-from .errors import DeviceNotFound
+from .handlers_base import EvokWebHandlerBase
+from .bulk_handler import JSONBulkHandler
+from .ws_handler import WsHandler, registered_ws
 
 import signal
 
 import json
 from . import config
-from .devices import DI, RO, AI, AO, SENSOR, MODBUS_SLAVE, \
-    RUN, OWBUS, TCPBUS, SERIALBUS
-from .devices import Devices, devtype_altnames, devents
-from .devices import num_to_devtype_name
+from .devices import MODBUS_SLAVE, RUN, OWBUS, TCPBUS, SERIALBUS
+from .devices import Devices, devents
 from . import rpc_handler
 
 logging.basicConfig(level=logging.WARNING)
@@ -66,9 +60,6 @@ class UserCookieHelper:
         return self.get_secure_cookie("user")
 
 
-registered_ws = {}
-
-
 class WhHandler:
     def __init__(self, url, allowed_types, complex_events):
         self.http_client = tornado.httpclient.AsyncHTTPClient()
@@ -99,131 +90,6 @@ class WhHandler:
             logger.error(f"WhHandler error in event: {E}")
             if logger.level == logging.DEBUG:
                 traceback.print_exc()
-
-
-class WsHandler(websocket.WebSocketHandler):
-
-    def check_origin(self, origin):
-        # fix issue when Node-RED removes the 'prefix://'
-        parsed_origin = urlparse(origin)
-        origin = parsed_origin.netloc
-        origin = origin.lower()
-        # return origin == host or origin_origin == host
-        return True
-
-    def open(self):
-        self.filter = ["default"]
-        logger.debug("New WebSocket client connected")
-        if not ("all" in registered_ws):
-            registered_ws["all"] = set()
-        registered_ws["all"].add(self)
-
-    def on_event(self, device):
-        outp = []
-        try:
-            if len(self.filter) == 1 and self.filter[0] == "default":
-                self.write_message(json.dumps(device.full()))
-            else:
-                dev_all = device.full()
-                if 'dev' in dev_all:
-                    dev_all = [dev_all]
-                for single_dev in dev_all:
-                    if single_dev['dev'] in self.filter:
-                        outp += [single_dev]
-                if len(outp) > 0:
-                    self.write_message(json.dumps(outp))
-        except Exception as E:
-            logger.error(f"WsHandler error in event: {E}")
-            if logger.level == logging.DEBUG:
-                traceback.print_exc()
-
-    async def on_message(self, message):
-        try:
-            message = json.loads(message)
-            try:
-                cmd = message["cmd"]
-            except Exception:
-                cmd = None
-            # get FULL state of each IO
-            if cmd == "all":
-                result = []
-                devices = [DI, RO, AI, AO, SENSOR]
-                if evok_config.get_api('websocket').get("all_filtered", False):
-                    if len(self.filter) == 1 and self.filter[0] == "default":
-                        for dev_name in devices:
-                            result += map(lambda dev: dev.full(), Devices.by_int(dev_name))
-                    else:
-                        for dev_name in num_to_devtype_name.values():
-                            added_results = map(lambda dev: dev.full() if hasattr(dev, "full") else None,
-                                                Devices.by_int(dev_name))
-                            for added_result in added_results:
-                                if added_result is not None and added_result in self.filter:
-                                    result.append(added_result)
-                else:
-                    for dev_name in num_to_devtype_name.values():
-                        added_results = map(lambda dev: dev.full() if hasattr(dev, "full") else None,
-                                            Devices.by_int(dev_name))
-                        for added_result in added_results:
-                            if added_result is not None:
-                                result.append(added_result)
-                await self.write_message(json.dumps(result))
-            # set device state
-            elif cmd == "filter":
-                devices = []
-                try:
-                    for single_dev in message["devices"]:
-                        if (str(single_dev) in num_to_devtype_name.values()) or (str(single_dev) in devtype_altnames):
-                            devices += [single_dev]
-                    if len(devices) > 0 or len(message["devices"]) == 0:
-                        self.filter = devices
-                        if len(message["devices"]) and message["devices"][0] == "default":
-                            self.filter = ["default"]
-                    else:
-                        raise Exception("Invalid 'devices' argument: %s" % str(message["devices"]))
-                except Exception as E:
-                    logger.exception("Exc: %s", str(E))
-            elif cmd is not None:
-                dev = message["dev"]
-                circuit = message["circuit"]
-                try:
-                    value = message["value"]
-                except Exception:
-                    value = None
-                try:
-                    device = Devices.by_name(dev, circuit)
-                    func = getattr(device, cmd)
-                    if value is not None:
-                        if type(value) == dict:
-                            result = await func(**value)
-                        else:
-                            result = await func(value)
-                    else:
-                        # Set other property than "value" (e.g. counter of an input)
-                        funcdata = {key: value for (key, value) in message.items() if
-                                    key not in ("circuit", "value", "cmd", "dev")}
-                        if len(funcdata) > 0:
-                            result = await func(**funcdata)
-                        else:
-                            result = await func()
-                    if cmd == "full":
-                        await self.write_message(json.dumps(result))
-                    # send response only to the modbusclient_rs485 requesting full info
-                # nebo except Exception as e:
-                except Exception as E:
-                    logger.error(f"EsHandler error in request: {E}")
-                    if logger.level == logging.DEBUG:
-                        traceback.print_exc()
-
-        except Exception as E:
-            logger.debug("Skipping WS message: %s (%s)", message, str(E))
-            if logger.level == logging.DEBUG:
-                traceback.print_exc()
-            # skip it since we do not understand this message....
-            pass
-
-    def on_close(self):
-        if ("all" in registered_ws) and (self in registered_ws["all"]):
-            registered_ws["all"].remove(self)
 
 
 class LogoutHandler(tornado.web.RequestHandler):
@@ -308,84 +174,6 @@ class LogHandler(UserCookieHelper, tornado.web.RequestHandler):
         text = await asyncio.to_thread(read_log_tail, self.log_file, lines)
         self.set_header('Content-Type', 'text/plain; charset=utf-8')
         self.write(text)
-
-
-class JSONBulkHandler(tornado.web.RequestHandler):
-    def initialize(self):
-        self.set_header("Content-Type", "application/json")
-        self.set_header("Access-Control-Allow-Origin", "*")
-        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
-        self.set_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
-
-    def options(self):
-        # no body
-        self.set_status(204)
-        self.finish()
-
-    async def post(self):
-        """This function returns a heterogeneous list of all devices exposed via the REST API"""
-        result = {}
-        try:
-            js_dict = json.loads(self.request.body)
-            # the structure of the request, the assigned values are checked by the device schemas
-            jsonschema.validate(instance=js_dict, schema=bulk_post_inp_schema)
-            if 'group_queries' in js_dict:
-                result['group_queries'] = []
-                for single_query in js_dict['group_queries']:
-                    all_devs = [dev for device_type in single_query['device_types']
-                                for dev in Devices.by_name(device_type)]
-                    if (grp := single_query.get('group', None)) is not None:
-                        all_devs = [dev for dev in all_devs if dev.major_group == str(grp)]
-                    if (circuits := single_query.get('device_circuits', None)) is not None:
-                        all_devs = [dev for dev in all_devs if dev.circuit in circuits]
-                    result['group_queries'].append(list(map(methodcaller('full'), all_devs)))
-
-            if 'group_assignments' in js_dict:
-                result['group_assignments'] = []
-                for single_command in js_dict['group_assignments']:
-                    dev_type = single_command['device_type']
-                    kw = single_command['assigned_values']
-                    all_devs = Devices.by_name(dev_type)
-                    if SCHEMA_VALIDATE:
-                        # validate before setting any device of the group
-                        if dev_type not in schemas:
-                            raise ValueError(f'Invalid device name {dev_type}')
-                        jsonschema.validate(instance=kw, schema=schemas[dev_type][0])
-                    if (grp := single_command.get('group', None)) is not None:
-                        all_devs = [dev for dev in all_devs if dev.major_group == str(grp)]
-                    if (circuits := single_command.get('device_circuits', None)) is not None:
-                        all_devs = [dev for dev in all_devs if dev.circuit in circuits]
-                    for dev in all_devs:
-                        await dev.set(**kw)
-                    result['group_assignments'].append(list(map(methodcaller('full'), all_devs)))
-
-            if 'individual_assignments' in js_dict:
-                result['individual_assignments'] = []
-                for single_command in js_dict['individual_assignments']:
-                    dev_type = single_command['device_type']
-                    kw = single_command['assigned_values']
-                    dev = Devices.by_name(dev_type, circuit=single_command['device_circuit'])
-                    if SCHEMA_VALIDATE:
-                        if dev_type not in schemas:
-                            raise ValueError(f'Invalid device name {dev_type}')
-                        jsonschema.validate(instance=kw, schema=schemas[dev_type][0])
-                    await dev.set(**kw)
-                    result['individual_assignments'].append(dev.full())
-
-            self.write(json.dumps(result))
-        except (ValueError, DeviceNotFound, jsonschema.ValidationError) as E:
-            # the string of a ValidationError contains the whole schema
-            message = E.message if isinstance(E, jsonschema.ValidationError) else str(E)
-            logger.error(f"BULK: {message}")
-            self.write(json.dumps({'success': False, 'errors': {str(type(E).__name__): message}}))
-            # a wrong device is not found, wrong data is a bad request
-            self.set_status(status_code=404 if isinstance(E, DeviceNotFound) else 400)
-        except Exception as E:
-            logger.exception(f"BULK: {str(E)}")
-            self.write(json.dumps({'success': False, 'errors': {'Server error': 'internal'}}))
-            self.set_status(status_code=500)
-        finally:
-            await self.finish()
 
 
 class AliasTask:
@@ -516,7 +304,8 @@ async def main():
     ]
 
     if evok_config.get_api('websocket').get('enabled', False):
-        api_routes.append((r"/ws/?", WsHandler))
+        all_filtered = evok_config.get_api('websocket').get("all_filtered", False)
+        api_routes.append((r"/ws/?", WsHandler, dict(all_filtered=all_filtered)))
 
     app = tornado.web.Application(
         handlers=api_routes
