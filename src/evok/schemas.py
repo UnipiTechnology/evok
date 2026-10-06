@@ -3,7 +3,7 @@ Created on 16 Oct 2017
 
 '''
 from typing import Dict, Tuple
-SCHEMA = "http://json-schema.org/draft/2020-12/schema"
+SCHEMA = "https://json-schema.org/draft/2020-12/schema"
 
 owire_post_inp_schema = {
     "$schema": SCHEMA,
@@ -38,15 +38,28 @@ relay_post_inp_schema = {
     "additionalProperties": False,
     "properties": {
         "value": {"type": ["boolean", "string", 'number']},
+        "alias": {"type": "string"}
+    },
+}
+
+relay_post_inp_example = {"value": "1"}
+
+do_post_inp_schema = {
+    "$schema": SCHEMA,
+    "title": "Digital_Output",
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "value": {"type": ["boolean", "string", 'number']},
         "mode": {"type": "string"},
-        "timeout": {"type": "string"},
+        "timeout": {"type": ["number", "string"]},
         "pwm_freq": {"type": ["number", "string"]},
         "pwm_duty": {"type": ["number", "string"]},
         "alias": {"type": "string"}
     },
 }
 
-relay_post_inp_example = {"value": "1"}
+do_post_inp_example = {"value": "1"}
 
 ao_post_inp_schema = {
     "$schema": SCHEMA,
@@ -68,9 +81,6 @@ ao_post_inp_schema = {
         },
         "alias": {
             "type": "string"
-        },
-        "frequency": {
-            "description": "Only for the UniPi 1.1"
         }
     }
 }
@@ -191,9 +201,6 @@ owbus_post_inp_schema = {
         },
         "scan_interval": {
             "type": ["number", "string"]
-        },
-        "circuit": {
-            "type": "string"
         }
     }
 }
@@ -209,6 +216,9 @@ owpower_post_inp_schema = {
         "value": {
             "type": ["number", "string", "boolean"]
         },
+        "alias": {
+            "type": "string"
+        }
     }
 }
 
@@ -228,10 +238,28 @@ run_post_inp_schema = {
 
 run_post_inp_example = {"save": True}
 
+nv_save_post_inp_schema = {
+    "$schema": SCHEMA,
+    "title": "NV_save",
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "value": {
+            "type": ["number", "string", "boolean"]
+        },
+        "alias": {
+            "type": "string"
+        }
+    }
+}
+
+nv_save_post_inp_example = {"value": 1}
+
 
 schemas: Dict[str, Tuple[dict, dict]] = {
     'input': (di_post_inp_schema, di_post_inp_example),
-    'output': (relay_post_inp_schema, relay_post_inp_example),
+    'output': (do_post_inp_schema, do_post_inp_example),
+    'ro': (relay_post_inp_schema, relay_post_inp_example),
     'register': (register_post_inp_schema, register_post_inp_example),
     'data_point': (data_point_post_inp_schema, data_point_post_inp_example),
     'ai': (ai_post_inp_schema, ai_post_inp_example),
@@ -242,10 +270,13 @@ schemas: Dict[str, Tuple[dict, dict]] = {
     'owbus': (owbus_post_inp_schema, owbus_post_inp_example),
     'owpower': (owpower_post_inp_schema, owpower_post_inp_example),
     'run': (run_post_inp_schema, run_post_inp_example),
+    'nv_save': (nv_save_post_inp_schema, nv_save_post_inp_example),
 }
 schemas['di'] = schemas['input']
+schemas['digitalinput'] = schemas['input']
 schemas['do'] = schemas['output']
-schemas['relay'] = schemas['output']
+schemas['digitaloutput'] = schemas['output']
+schemas['relay'] = schemas['ro']
 schemas['analoginput'] = schemas['ai']
 schemas['analogoutput'] = schemas['ao']
 schemas['wd'] = schemas['watchdog']

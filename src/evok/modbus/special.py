@@ -136,15 +136,15 @@ class Watchdog(IODevice):
             timeout = min(int(timeout), 65535)
             await self.accessor_timeout.write(self.client, timeout)
 
-        if self.nv_save_coil >= 0 and nv_save is not None and nv_save != self.nvsavvalue:
-            if nv_save != 0:
+        if self.nv_save_coil >= 0 and nv_save is not None and int(nv_save) != self.nvsavvalue:
+            if int(nv_save) != 0:
                 self.nvsavvalue = 1
             else:
                 self.nvsavvalue = 0
             await self.client.mb_client.write_single_coil(self.nv_save_coil, 1)
 
         if self.reset_coil >= 0 and reset is not None:
-            if reset != 0:
+            if int(reset) != 0:
                 self.nvsavvalue = 0
                 await self.client.mb_client.write_single_coil(self.reset_coil, 1)
                 logger.info("Performed reset of board %s" % self.circuit)

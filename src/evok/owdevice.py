@@ -257,7 +257,12 @@ class OwBusDriver:
     async def set(self, scan_interval=None, do_scan=False, interval=None, do_reset=None):
         was_changed = False
 
-        if do_reset is not None:
+        if scan_interval is not None:
+            scan_interval = int(float(scan_interval))
+        if interval is not None:
+            interval = int(float(interval))
+
+        if do_reset:
             await self.do_reset()
         if not (scan_interval is None) and (scan_interval != self.scan_interval):
             self.scan_interval = scan_interval

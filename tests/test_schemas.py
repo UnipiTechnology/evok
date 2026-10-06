@@ -1,7 +1,50 @@
+import inspect
+
 import jsonschema
 import pytest
 
+from evok.devices import Aliases
+from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, Register
+from evok.modbus.digital import DigitalInput, DigitalOutput, Relay, ULED
+from evok.modbus.special import NvSave, OwPower, Watchdog
+from evok.owdevice import MySensor, OwBusDriver
 from evok.schemas import schemas
+
+# the classes whose set() receives the validated request of each schema key
+SET_CLASSES = {
+    'input': [DigitalInput], 'di': [DigitalInput], 'digitalinput': [DigitalInput],
+    'output': [DigitalOutput], 'do': [DigitalOutput], 'digitaloutput': [DigitalOutput],
+    'ro': [Relay], 'relay': [Relay],
+    'led': [ULED],
+    'ai': [AnalogInput], 'analoginput': [AnalogInput],
+    'ao': [AnalogOutput, AnalogOutputBrain], 'analogoutput': [AnalogOutput, AnalogOutputBrain],
+    'register': [Register],
+    'data_point': [DataPoint],
+    'watchdog': [Watchdog], 'wd': [Watchdog],
+    'nv_save': [NvSave],
+    'owpower': [OwPower],
+    '1wdevice': [MySensor], 'sensor': [MySensor], 'temp': [MySensor],
+    'owbus': [OwBusDriver],
+    'run': [Aliases],
+}
+
+
+def set_params(cls):
+    """ Names of the keyword parameters of cls.set() without **kwargs """
+    params = inspect.signature(cls.set).parameters.values()
+    return {p.name for p in params
+            if p.name != 'self' and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)}
+
+
+def test_every_schema_has_set_classes():
+    assert set(schemas) == set(SET_CLASSES)
+
+
+@pytest.mark.parametrize('dev', schemas)
+def test_schema_matches_set_params(dev):
+    properties = set(schemas[dev][0]['properties'])
+    for cls in SET_CLASSES[dev]:
+        assert properties == set_params(cls), cls.__name__
 
 
 @pytest.mark.parametrize('kw', [
