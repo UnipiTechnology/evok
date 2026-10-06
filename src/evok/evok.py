@@ -22,7 +22,8 @@ from tornado import websocket
 from tornado import escape
 from .handlers_base import EvokWebHandlerBase, SCHEMA_VALIDATE
 from urllib.parse import urlparse
-from .schemas import schemas
+from .schemas import schemas, bulk_post_inp_schema
+from .errors import DeviceNotFound
 
 import signal
 
@@ -326,6 +327,8 @@ class JSONBulkHandler(tornado.web.RequestHandler):
         result = {}
         try:
             js_dict = json.loads(self.request.body)
+            # the structure of the request, the assigned values are checked by the device schemas
+            jsonschema.validate(instance=js_dict, schema=bulk_post_inp_schema)
             if 'group_queries' in js_dict:
                 result['group_queries'] = []
                 for single_query in js_dict['group_queries']:
@@ -340,33 +343,47 @@ class JSONBulkHandler(tornado.web.RequestHandler):
             if 'group_assignments' in js_dict:
                 result['group_assignments'] = []
                 for single_command in js_dict['group_assignments']:
-                    all_devs = Devices.by_name(single_command['device_type'])
+                    dev_type = single_command['device_type']
+                    kw = single_command['assigned_values']
+                    all_devs = Devices.by_name(dev_type)
+                    if SCHEMA_VALIDATE:
+                        # validate before setting any device of the group
+                        if dev_type not in schemas:
+                            raise ValueError(f'Invalid device name {dev_type}')
+                        jsonschema.validate(instance=kw, schema=schemas[dev_type][0])
                     if (grp := single_command.get('group', None)) is not None:
                         all_devs = [dev for dev in all_devs if dev.major_group == str(grp)]
                     if (circuits := single_command.get('device_circuits', None)) is not None:
                         all_devs = [dev for dev in all_devs if dev.circuit in circuits]
                     for dev in all_devs:
-                        await dev.set(**(single_command['assigned_values']))
+                        await dev.set(**kw)
                     result['group_assignments'].append(list(map(methodcaller('full'), all_devs)))
 
             if 'individual_assignments' in js_dict:
                 result['individual_assignments'] = []
                 for single_command in js_dict['individual_assignments']:
-                    dev = single_command['device_type']
-                    schema, example = schemas[dev]
-                    outp = Devices.by_name(dev, circuit=single_command['device_circuit'])
+                    dev_type = single_command['device_type']
                     kw = single_command['assigned_values']
+                    dev = Devices.by_name(dev_type, circuit=single_command['device_circuit'])
                     if SCHEMA_VALIDATE:
-                        jsonschema.validate(instance=kw, schema=schema)
-                    await outp.set(**kw)
-                    result['individual_assignments'].append(outp.full())
+                        if dev_type not in schemas:
+                            raise ValueError(f'Invalid device name {dev_type}')
+                        jsonschema.validate(instance=kw, schema=schemas[dev_type][0])
+                    await dev.set(**kw)
+                    result['individual_assignments'].append(dev.full())
 
             self.write(json.dumps(result))
+        except (ValueError, DeviceNotFound, jsonschema.ValidationError) as E:
+            # the string of a ValidationError contains the whole schema
+            message = E.message if isinstance(E, jsonschema.ValidationError) else str(E)
+            logger.error(f"BULK: {message}")
+            self.write(json.dumps({'success': False, 'errors': {str(type(E).__name__): message}}))
+            # a wrong device is not found, wrong data is a bad request
+            self.set_status(status_code=404 if isinstance(E, DeviceNotFound) else 400)
         except Exception as E:
-            logger.error(f"Error while processing get: {str(type(E).__name__)}: {str(E)}")
-            if logger.level == logging.DEBUG:
-                traceback.print_exc()
-            self.write(json.dumps({'success': False, 'errors': {str(type(E).__name__): str(E)}}))
+            logger.exception(f"BULK: {str(E)}")
+            self.write(json.dumps({'success': False, 'errors': {'Server error': 'internal'}}))
+            self.set_status(status_code=500)
         finally:
             await self.finish()
 

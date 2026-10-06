@@ -255,6 +255,62 @@ nv_save_post_inp_schema = {
 
 nv_save_post_inp_example = {"value": 1}
 
+_bulk_group = {"type": ["string", "number"]}
+_bulk_circuits = {"type": "array", "items": {"type": "string"}}
+
+bulk_post_inp_schema = {
+    "$schema": SCHEMA,
+    "title": "Bulk",
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "group_queries": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["device_types"],
+                "properties": {
+                    "device_types": {"type": "array", "items": {"type": "string"}},
+                    "group": _bulk_group,
+                    "device_circuits": _bulk_circuits
+                }
+            }
+        },
+        "group_assignments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["device_type", "assigned_values"],
+                "properties": {
+                    "device_type": {"type": "string"},
+                    "assigned_values": {"type": "object"},  # checked by the schema of the device_type
+                    "group": _bulk_group,
+                    "device_circuits": _bulk_circuits
+                }
+            }
+        },
+        "individual_assignments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["device_type", "device_circuit", "assigned_values"],
+                "properties": {
+                    "device_type": {"type": "string"},
+                    "device_circuit": {"type": ["string", "number"]},
+                    "assigned_values": {"type": "object"}  # checked by the schema of the device_type
+                }
+            }
+        }
+    }
+}
+
+bulk_post_inp_example = {
+    "individual_assignments": [{"device_type": "do", "device_circuit": "1_01", "assigned_values": {"value": 1}}]
+}
+
 
 schemas: Dict[str, Tuple[dict, dict]] = {
     'input': (di_post_inp_schema, di_post_inp_example),

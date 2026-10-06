@@ -8,7 +8,7 @@ from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, Dat
 from evok.modbus.digital import DigitalInput, DigitalOutput, Relay, ULED
 from evok.modbus.special import NvSave, OwPower, Watchdog
 from evok.owdevice import MySensor, OwBusDriver
-from evok.schemas import schemas
+from evok.schemas import schemas, bulk_post_inp_schema, bulk_post_inp_example
 
 # the classes whose set() receives the validated request of each schema key
 SET_CLASSES = {
@@ -77,3 +77,27 @@ def test_register_schema_accepts(kw):
 def test_register_schema_rejects(kw):
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(instance=kw, schema=schemas['register'][0])
+
+
+@pytest.mark.parametrize('request_body', [
+    bulk_post_inp_example,
+    {},
+    {'group_queries': [{'device_types': ['di', 'do'], 'group': 1, 'device_circuits': ['1_01']}]},
+    {'group_assignments': [{'device_type': 'do', 'assigned_values': {'value': 0}, 'group': '1'}]},
+    {'individual_assignments': [{'device_type': 'ro', 'device_circuit': 1, 'assigned_values': {}}]},
+])
+def test_bulk_schema_accepts(request_body):
+    jsonschema.validate(instance=request_body, schema=bulk_post_inp_schema)
+
+
+@pytest.mark.parametrize('request_body', [
+    [],
+    {'unknown': []},
+    {'group_queries': [{}]},
+    {'group_assignments': [{'device_type': 'do'}]},
+    {'individual_assignments': [{'device_type': 'do', 'assigned_values': {'value': 1}}]},
+    {'individual_assignments': [{'device_type': 'do', 'device_circuit': '1_01', 'assigned_values': 1}]},
+])
+def test_bulk_schema_rejects(request_body):
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(instance=request_body, schema=bulk_post_inp_schema)
