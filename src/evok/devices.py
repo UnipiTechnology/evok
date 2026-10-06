@@ -177,6 +177,8 @@ class DeviceList(dict):
         try:
             devdict = self[devtype]
         except KeyError:
+            if devtype not in self.altnames:
+                raise DeviceNotFound(f"Invalid device type '{devtype}'")
             devdict = self[self.altnames[devtype]]
         if circuit is None:
             return devdict.values()
@@ -185,13 +187,13 @@ class DeviceList(dict):
             return devdict[circuit]
         except KeyError:
             if circuit not in self.aliases:
-                raise Exception(f"Circuit or alias with name '{circuit}' not defined!")
+                raise DeviceNotFound(f"Circuit or alias with name '{circuit}' not defined!")
             ret = self.aliases[circuit]
             ret_name = ret.devtype
-            if ret_name == devtype or ret_name == devtype_altnames[devtype]:
+            if ret_name == devtype or ret_name == devtype_altnames.get(devtype):
                 return ret
             else:
-                raise Exception(f"Invalid device circuit '{str(circuit)}' with devtype '{devtype}'")
+                raise DeviceNotFound(f"Invalid device circuit '{str(circuit)}' with devtype '{devtype}'")
 
     def register_device(self, devtype_name, device):
         """ can be called with devtype = INTEGER or NAME

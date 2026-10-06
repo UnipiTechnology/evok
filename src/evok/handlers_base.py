@@ -1,6 +1,5 @@
 import json
-import logging
-import traceback
+from itertools import chain
 
 from .schemas import schemas
 
@@ -8,6 +7,7 @@ import jsonschema
 import tornado
 
 from .devices import Devices
+from .errors import DeviceNotFound
 from .devices import OWBUS, DEVICE_INFO, SENSOR, MODBUS_SLAVE, \
     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
     REGISTER, DATA_POINT
@@ -30,29 +30,32 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
     #        GET /rest/DEVICE/CIRCUIT/PROPERTY
     @tornado.web.authenticated
     def get(self, dev, circuit, prop):
+
+        def one_device(device, prop):
+            result = device.full()
+            if not prop:
+                return result
+            if prop not in result:
+                raise DeviceNotFound(f'Invalid property name {prop}')
+            return {prop: result[prop]}
+
         try:
-            if prop:
-                if prop[0] in ('_',):
-                    raise Exception('Invalid property name')
             if circuit == 'all':
-                if prop:
-                    result = list(map(lambda d: {'circuit': d.circuit, prop: getattr(d, prop)},
-                                      Devices.by_name(dev)))
-                else:
-                    result = list(map(lambda d: d.full(), Devices.by_name(dev)))
+                result = [{'circuit': d.circuit, **one_device(d, prop)} for d in Devices.by_name(dev)]
             else:
                 device = Devices.by_name(dev, circuit)
-                if prop:
-                    result = {prop: getattr(device, prop)}
-                else:
-                    result = device.full()
+                result = one_device(device, prop)
+
             self.write(json.dumps(result))
-        except Exception as E:
-            logger.error(f"Error while processing get: {str(type(E).__name__)}: {str(E)}")
-            if logger.level == logging.DEBUG:
-                traceback.print_exc()
+        except DeviceNotFound as E:
+            logger.error(f"GET: {str(E)}")
             self.write(json.dumps({'success': False, 'errors': {str(type(E).__name__): str(E)}}))
             self.set_status(status_code=404)
+
+        except Exception as E:
+            logger.exception(f"GET: {str(E)}")
+            self.write(json.dumps({'success': False, 'errors': {'Server error': 'internal'}}))
+            self.set_status(status_code=500)
         self.set_header('Content-Type', 'application/json')
         self.finish()
 
@@ -60,36 +63,33 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
         try:
             device = Devices.by_name(dev, circuit)
             kw = self._get_kw()
-            if SCHEMA_VALIDATE and dev in schemas:
+            if SCHEMA_VALIDATE:
+                if dev not in schemas:
+                    raise ValueError(f'Invalid device name {dev}')
                 schema, example = schemas[dev]
                 jsonschema.validate(instance=kw, schema=schema)
             await device.set(**kw)
             self.write(json.dumps({'success': True, 'result': device.full()}))
+        except (ValueError, DeviceNotFound, jsonschema.ValidationError) as E:
+            # the string of a ValidationError contains the whole schema
+            message = E.message if isinstance(E, jsonschema.ValidationError) else str(E)
+            logger.error(f"POST: {message}")
+            self.write(json.dumps({'success': False, 'errors': {str(type(E).__name__): message}}))
+            # a wrong URL is not found, wrong data is a bad request
+            self.set_status(status_code=404 if isinstance(E, DeviceNotFound) else 400)
+
         except Exception as E:
-            logger.error(f"Error while processing post: {str(type(E).__name__)}: {str(E)}")
-            if logger.level == logging.DEBUG:
-                traceback.print_exc()
-            self.write(json.dumps({'success': False, 'errors': {str(type(E).__name__): str(E)}}))
-            self.set_status(status_code=404)
+            logger.exception(f"POST: {str(E)}")
+            self.write(json.dumps({'success': False, 'errors': {'Server error': 'internal'}}))
+            self.set_status(status_code=500)
         self.set_header('Content-Type', 'application/json')
         await self.finish()
 
     def _get_all(self):
-        result = list(map(lambda dev: dev.full(), Devices.by_int(DI)))
-        result += map(lambda dev: dev.full(), Devices.by_int(RO))
-        result += map(lambda dev: dev.full(), Devices.by_int(DO))
-        result += map(lambda dev: dev.full(), Devices.by_int(AI))
-        result += map(lambda dev: dev.full(), Devices.by_int(AO))
-        result += map(lambda dev: dev.full(), Devices.by_int(SENSOR))
-        result += map(lambda dev: dev.full(), Devices.by_int(LED))
-        result += map(lambda dev: dev.full(), Devices.by_int(WATCHDOG))
-        result += map(lambda dev: dev.full(), Devices.by_int(MODBUS_SLAVE))
-        result += map(lambda dev: dev.full(), Devices.by_int(OWPOWER))
-        result += map(lambda dev: dev.full(), Devices.by_int(REGISTER))
-        result += map(lambda dev: dev.full(), Devices.by_int(DATA_POINT))
-        result += map(lambda dev: dev.full(), Devices.by_int(OWBUS))
-        result += map(lambda dev: dev.full(), Devices.by_int(DEVICE_INFO))
-        return result
+        devtypes = (DI, RO, DO, AI, AO, SENSOR, LED, WATCHDOG, MODBUS_SLAVE, OWPOWER,
+                    REGISTER, DATA_POINT, OWBUS, DEVICE_INFO)
+        devices = chain.from_iterable(Devices.by_int(devtype) for devtype in devtypes)
+        return [dev.full() for dev in devices]
 
     def options(self):
         self.set_status(204)
