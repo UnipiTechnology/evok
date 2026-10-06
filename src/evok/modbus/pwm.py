@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from math import sqrt
 
-from .client import Client
+from .client import Client, Accessor, AccessorU16
 
 
 class PwmFrequency:
@@ -38,14 +38,15 @@ class PwmFrequency:
         """ Return the register value of the duty cycle in percent """
         raise NotImplementedError
 
-    async def _write(self, values: dict):
-        """ Write the registers, update the cache after all writes,
-            so update() never sees a partial setting
+    async def _write(self, values: dict[Accessor, int]):
+        """ Write the raw register values, update the cache after all writes,
+            so update() never sees a partial setting (Accessor.write would
+            update the cache after each register)
         """
-        for reg, value in values.items():
-            await self.client.mb_client.write_single_register(reg, value)
-        for reg, value in values.items():
-            self.client.cache.set_register(reg, [value])
+        for accessor, value in values.items():
+            await self.client.mb_client.write_single_register(accessor.index, value)
+        for accessor, value in values.items():
+            self.client.cache.set_register(accessor.index, [value])
 
 
 class HardPwmFrequency(PwmFrequency):
@@ -59,14 +60,14 @@ class HardPwmFrequency(PwmFrequency):
 
     def __init__(self, client: Client, regcycle: int, regprescale: int):
         super().__init__(client)
-        self.regcycle = regcycle
-        self.regprescale = regprescale
+        self.accessor_cycle = AccessorU16(regcycle)
+        self.accessor_prescale = AccessorU16(regprescale)
         self.cycle = None
         self.prescale = None
 
     def _read(self) -> float:
-        self.cycle = self.client.read_u16(self.regcycle) + 1
-        self.prescale = self.client.read_u16(self.regprescale) + 1
+        self.cycle = self.accessor_cycle.read(self.client) + 1
+        self.prescale = self.accessor_prescale.read(self.client) + 1
         return self.BASE_FREQ / (self.cycle * self.prescale)
 
     @classmethod
@@ -85,7 +86,7 @@ class HardPwmFrequency(PwmFrequency):
 
     async def set(self, freq: float):
         cycle, prescale = self.divide(freq)
-        await self._write({self.regcycle: cycle - 1, self.regprescale: prescale - 1})
+        await self._write({self.accessor_cycle: cycle - 1, self.accessor_prescale: prescale - 1})
         self.cycle, self.prescale = cycle, prescale
         self.freq = self.BASE_FREQ / (cycle * prescale)
 
@@ -109,25 +110,25 @@ class SoftPwmFrequency(PwmFrequency):
 
     def __init__(self, client: Client, regpreset: int, regprescale: int):
         super().__init__(client)
-        self.regpreset = regpreset
-        self.regprescale = regprescale
+        self.accessor_preset = AccessorU16(regpreset)
+        self.accessor_prescale = AccessorU16(regprescale)
 
     def _read(self) -> float:
-        preset = self.client.read_u16(self.regpreset)
+        preset = self.accessor_preset.read(self.client)
         if preset in self.PRESETS:
             return self.PRESETS[preset]
-        return round(self.BASE_FREQ / (1 + self.client.read_u16(self.regprescale)), 1)
+        return round(self.BASE_FREQ / (1 + self.accessor_prescale.read(self.client)), 1)
 
     async def set(self, freq: float):
         preset = next((preset for preset, preset_freq in self.PRESETS.items() if preset_freq == freq), None)
         if preset is not None:
-            await self._write({self.regpreset: preset})
+            await self._write({self.accessor_preset: preset})
             self.freq = self.PRESETS[preset]
             return
         prescale = round(self.BASE_FREQ / freq - 1)
         if not 0 <= prescale <= 65535:
             raise ValueError("Frequency out of range!")
-        await self._write({self.regpreset: self.CUSTOM, self.regprescale: prescale})
+        await self._write({self.accessor_preset: self.CUSTOM, self.accessor_prescale: prescale})
         self.freq = round(self.BASE_FREQ / (1 + prescale), 1)
 
     def duty(self, raw: int) -> float:

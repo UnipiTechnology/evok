@@ -54,7 +54,7 @@ def test_l0306_register_layout(l0306):
             di.dimode.accessor_toggle.index) == (1014, 1015, 1016)
     do = Devices.by_name(DO, '1_02')
     assert (do.coil, do.accessor.index, do.accessor.mask, do.pwmdutyreg) == (1, 1, 0b10, 22)
-    assert (do.pwm.regcycle, do.pwm.regprescale) == (1018, 1017)
+    assert (do.pwm.accessor_cycle.index, do.pwm.accessor_prescale.index) == (1018, 1017)
     assert do.pwm is Devices.by_name(DO, '1_01').pwm
     ai = Devices.by_name(AI, '1_05')
     assert (ai.accessor.index, ai.iomode.accessor.index) == (10, 1023)
