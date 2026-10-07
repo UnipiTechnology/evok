@@ -88,7 +88,7 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
     def _get_all(self):
         devtypes = (DI, RO, DO, AI, AO, SENSOR, LED, WATCHDOG, MODBUS_SLAVE, OWPOWER,
                     REGISTER, DATA_POINT, OWBUS, DEVICE_INFO)
-        devices = chain.from_iterable(Devices.by_int(devtype) for devtype in devtypes)
+        devices = chain.from_iterable(Devices.by_name(devtype) for devtype in devtypes)
         return [dev.full() for dev in devices]
 
     def options(self):

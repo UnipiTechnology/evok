@@ -336,14 +336,14 @@ async def main():
     alias_task = AliasTask(Devices.aliases, alias_file)
 
     for bustype in [OWBUS]:
-        for device in Devices.by_int(bustype):
+        for device in Devices.by_name(bustype):
             device.bus_driver.switch_to_async()
 
     for bustype in [TCPBUS, SERIALBUS]:
-        for device in Devices.by_int(bustype):
+        for device in Devices.by_name(bustype):
             device.switch_to_async()
 
-    for modbus_slave in Devices.by_int(MODBUS_SLAVE):
+    for modbus_slave in Devices.by_name(MODBUS_SLAVE):
         if modbus_slave.scan_enabled:
             modbus_slave.start_scanning()
 

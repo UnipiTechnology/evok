@@ -291,7 +291,7 @@ class OwBusDriver:
     async def do_reset(self):
         if self.owpower_circuit is not None:
             logger.info("Invoked reset of 1W master")
-            owpower = Devices.by_int(OWPOWER, self.owpower_circuit)
+            owpower = Devices.by_name(OWPOWER, self.owpower_circuit)
             await owpower.set(value=True)
             await asyncio.sleep(0.2)
             await owpower.set(value=False)

@@ -66,18 +66,18 @@ class WsHandler(websocket.WebSocketHandler):
                 if self.all_filtered:
                     if len(self.filter) == 1 and self.filter[0] == "default":
                         for dev_name in devices:
-                            result += map(lambda dev: dev.full(), Devices.by_int(dev_name))
+                            result += map(lambda dev: dev.full(), Devices.by_name(dev_name))
                     else:
                         for dev_name in num_to_devtype_name.values():
                             added_results = map(lambda dev: dev.full() if hasattr(dev, "full") else None,
-                                                Devices.by_int(dev_name))
+                                                Devices.by_name(dev_name))
                             for added_result in added_results:
                                 if added_result is not None and added_result in self.filter:
                                     result.append(added_result)
                 else:
                     for dev_name in num_to_devtype_name.values():
                         added_results = map(lambda dev: dev.full() if hasattr(dev, "full") else None,
-                                            Devices.by_int(dev_name))
+                                            Devices.by_name(dev_name))
                         for added_result in added_results:
                             if added_result is not None:
                                 result.append(added_result)

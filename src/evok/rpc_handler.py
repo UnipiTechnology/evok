@@ -102,43 +102,43 @@ class Handler(UserBasicHelper):
 
     # ---- Input ----
     def input_get(self, circuit):
-        inp = Devices.by_int(DI, str(circuit))
+        inp = Devices.by_name(DI, str(circuit))
         state = inp.get()
         return state['value'], state['debounce']
 
     def input_get_value(self, circuit):
-        inp = Devices.by_int(DI, str(circuit))
+        inp = Devices.by_name(DI, str(circuit))
         return inp.get()['value']
 
     async def input_set(self, circuit, debounce):
-        inp = Devices.by_int(DI, str(circuit))
+        inp = Devices.by_name(DI, str(circuit))
         await inp.set(debounce=debounce)
         return inp.full()
 
     # ---- Relay ----
     def relay_get(self, circuit):
-        relay = Devices.by_int(RO, str(circuit))
+        relay = Devices.by_name(RO, str(circuit))
         return relay.get()['value']
 
     async def relay_set(self, circuit, value):
-        relay = Devices.by_int(RO, str(circuit))
+        relay = Devices.by_name(RO, str(circuit))
         value = 1 if value else 0
         await relay.set(value=value)
         return value
 
     def output_get(self, circuit):
-        relay = Devices.by_int(DO, str(circuit))
+        relay = Devices.by_name(DO, str(circuit))
         state = relay.get()
         return state['value'], state['pending']
 
     async def output_set(self, circuit, value):
-        relay = Devices.by_int(DO, str(circuit))
+        relay = Devices.by_name(DO, str(circuit))
         value = 1 if value else 0
         await relay.set(value=value)
         return value
 
     async def output_set_for_time(self, circuit, value, timeout):
-        relay = Devices.by_int(DO, str(circuit))
+        relay = Devices.by_name(DO, str(circuit))
         if timeout <= 0:
             raise ValueError('Invalid timeout %s' % str(timeout))
         await relay.set(value, timeout)
@@ -146,50 +146,50 @@ class Handler(UserBasicHelper):
 
     # ---- Analog Input ----
     def ai_get(self, circuit):
-        ai = Devices.by_int(AI, str(circuit))
+        ai = Devices.by_name(AI, str(circuit))
         return ai.get()
 
     # def ai_measure(self, circuit):
 
     # ---- Analog Output (0-10V) ----
     async def ao_set_value(self, circuit, value):
-        ao = Devices.by_int(AO, str(circuit))
+        ao = Devices.by_name(AO, str(circuit))
         return await ao.set_value(value)
 
     async def ao_set(self, circuit, value, mode):
-        ao = Devices.by_int(AO, str(circuit))
+        ao = Devices.by_name(AO, str(circuit))
         await ao.set(value, mode)
         return ao.full()
 
     # ---- OwBus (1wire bus) ----
     def owbus_get(self, circuit):
-        ow = Devices.by_int(OWBUS, str(circuit))
+        ow = Devices.by_name(OWBUS, str(circuit))
         return ow.bus_driver.scan_interval
 
     async def owbus_set(self, circuit, scan_interval):
-        ow = Devices.by_int(OWBUS, str(circuit))
+        ow = Devices.by_name(OWBUS, str(circuit))
         await ow.bus_driver.set(scan_interval=scan_interval)
         return ow.bus_driver.full()
 
     async def owbus_scan(self, circuit):
-        ow = Devices.by_int(OWBUS, str(circuit))
+        ow = Devices.by_name(OWBUS, str(circuit))
         await ow.bus_driver.set(do_scan=True)
         return ow.bus_driver.full()
 
     def owbus_list(self, circuit):
-        ow = Devices.by_int(OWBUS, str(circuit))
+        ow = Devices.by_name(OWBUS, str(circuit))
         return ow.bus_driver.list()
 
     # ---- Sensors (1wire thermo,humidity) ----
     async def sensor_set(self, circuit, interval):
-        sens = Devices.by_int(SENSOR, str(circuit))
+        sens = Devices.by_name(SENSOR, str(circuit))
         await sens.set(interval=interval)
         return sens.full()
 
     def sensor_get(self, circuit):
-        sens = Devices.by_int(SENSOR, str(circuit))
+        sens = Devices.by_name(SENSOR, str(circuit))
         return sens.get()
 
     def sensor_get_value(self, circuit):
-        sens = Devices.by_int(SENSOR, str(circuit))
+        sens = Devices.by_name(SENSOR, str(circuit))
         return sens.get_value()

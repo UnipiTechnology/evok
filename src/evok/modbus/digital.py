@@ -139,7 +139,7 @@ class DigitalOutput(IODevice):
     async def set_pwm_freq(self, freq: float):
         """ Set the frequency shared by the group, keep the duty cycle of all its outputs """
         await self.pwm.set(freq)
-        for dev in Devices.by_int(DO, major_group=self.major_group):
+        for dev in Devices.by_name(DO, major_group=self.major_group):
             if dev.pwm is not self.pwm:
                 continue
             dev.pwm_freq = self.pwm.freq

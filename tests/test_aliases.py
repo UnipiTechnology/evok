@@ -55,16 +55,15 @@ def test_empty_alias_resets(devices):
     assert 'kitchen' not in devices.aliases
 
 
-def test_by_int_finds_alias_of_same_devtype(devices):
+def test_alias_is_found_by_altname(devices):
     devices.set_alias('kitchen', devices[DI]['1_01'])
-    assert devices.by_int(DI, 'kitchen') is devices[DI]['1_01']
-    assert devices.by_int('input', 'kitchen') is devices[DI]['1_01']
+    assert devices.by_name('input', 'kitchen') is devices[DI]['1_01']
 
 
-def test_by_int_does_not_find_alias_of_other_devtype(devices):
+def test_alias_of_other_devtype_is_not_found(devices):
     devices.set_alias('pump', devices[RO]['1_01'])
     with pytest.raises(DeviceNotFound):
-        devices.by_int(DI, 'pump')
+        devices.by_name(DI, 'pump')
 
 
 def test_aliases_instances_do_not_share_dicts():
@@ -140,17 +139,15 @@ def test_none_alias_resets_to_empty_string(devices):
 @pytest.mark.parametrize('find', [
     lambda: Devices.by_name('foo'),
     lambda: Devices.by_name('foo', '1_01'),
-    lambda: Devices.by_int('foo'),
-    lambda: Devices.by_int('foo', '1_01'),
 ])
 def test_unknown_devtype(find):
     with pytest.raises(DeviceNotFound, match="Invalid device type 'foo'"):
         find()
 
 
-def test_by_int_major_group(devices):
+def test_by_name_major_group(devices):
     devices[DI]['1_01'].major_group = '1'
     devices[DI]['1_02'].major_group = '2'
-    assert devices.by_int(DI, major_group='2') == [devices[DI]['1_02']]
-    assert devices.by_int('input', major_group='3') == []
-    assert list(devices.by_int(DI)) == [devices[DI]['1_01'], devices[DI]['1_02']]
+    assert devices.by_name(DI, major_group='2') == [devices[DI]['1_02']]
+    assert devices.by_name('input', major_group='3') == []
+    assert list(devices.by_name(DI)) == [devices[DI]['1_01'], devices[DI]['1_02']]

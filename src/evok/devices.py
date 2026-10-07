@@ -169,26 +169,14 @@ class DeviceList(dict):
         except KeyError:
             raise DeviceNotFound(f"Invalid device type '{devtype}'")
 
-    def by_int(self, devtype_name, circuit=None, major_group=None):
-        circuit = str(circuit) if circuit is not None else None
-        devdict = self._devdict(devtype_name)
+    def by_name(self, devtype, circuit=None, major_group=None):
+        """ The device of a type (or its altname) with a circuit or an alias,
+            without a circuit all devices of the type, optionally of a major_group
+        """
+        devdict = self._devdict(devtype)
         if circuit is None:
             if major_group is not None:
                 return [dev for dev in devdict.values() if dev.major_group == major_group]
-            return devdict.values()
-        try:
-            return devdict[circuit]
-        except KeyError:
-            if circuit in self.aliases:
-                ret = self.aliases[circuit]
-                # the alias of a device of another type is not found, as in by_name()
-                if ret.devtype == devtype_name or ret.devtype == devtype_altnames.get(devtype_name):
-                    return ret
-            raise DeviceNotFound(f"Invalid device circuit '{str(circuit)}' with devtypeid '{devtype_name}'")
-
-    def by_name(self, devtype, circuit=None):
-        devdict = self._devdict(devtype)
-        if circuit is None:
             return devdict.values()
         circuit = str(circuit)
         try:
