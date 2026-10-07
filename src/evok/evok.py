@@ -26,7 +26,7 @@ import signal
 import json
 from . import config
 from .devices import MODBUS_SLAVE, RUN, OWBUS, TCPBUS, SERIALBUS
-from .devices import Devices, devents
+from .devices import Devices, devents, devtype_of
 from . import rpc_handler
 
 logging.basicConfig(level=logging.WARNING)
@@ -64,7 +64,8 @@ class WhHandler:
     def __init__(self, url, allowed_types, complex_events):
         self.http_client = tornado.httpclient.AsyncHTTPClient()
         self.url = url
-        self.allowed_types = allowed_types
+        # altnames as 'wd' are converted to the device types
+        self.allowed_types = [devtype_of(str(name)) for name in allowed_types]
         self.complex_events = complex_events
 
     def open(self):
@@ -74,22 +75,33 @@ class WhHandler:
         registered_ws["all"].add(self)
 
     def on_event(self, device):
-        dev_all = device.full()
-        outp = []
-        for single_dev in dev_all:
-            if single_dev['dev'] in self.allowed_types:
-                outp += [single_dev]
+        """ Notify the webhook about the changed devices of the allowed types
+
+            A change of Modbus devices comes as a Proxy with a list of states,
+            a change of a 1-Wire sensor as the sensor with its state.
+        """
         try:
-            if len(outp) > 0:
-                if not self.complex_events:
-                    self.http_client.fetch(self.url, method="GET", headers={"Content-Type": "application/json"})
-                else:
-                    self.http_client.fetch(self.url, method="POST", headers={"Content-Type": "application/json"},
-                                           body=json.dumps(outp))
+            states = device.full()
+            if isinstance(states, dict):
+                states = [states]
+            states = [state for state in states if devtype_of(state['dev']) in self.allowed_types]
+            if not states:
+                return
+            if not self.complex_events:
+                future = self.http_client.fetch(self.url, method="GET", headers={"Content-Type": "application/json"})
+            else:
+                future = self.http_client.fetch(self.url, method="POST", headers={"Content-Type": "application/json"},
+                                                body=json.dumps(states))
+            future.add_done_callback(self._fetch_done)
         except Exception as E:
             logger.error(f"WhHandler error in event: {E}")
             if logger.level == logging.DEBUG:
                 traceback.print_exc()
+
+    def _fetch_done(self, future):
+        """ The request is not awaited, an error of the webhook server is only logged """
+        if not future.cancelled() and future.exception() is not None:
+            logger.error(f"WhHandler error in request to {self.url}: {future.exception()}")
 
 
 class LogoutHandler(tornado.web.RequestHandler):

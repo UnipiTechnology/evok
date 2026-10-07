@@ -7,7 +7,7 @@ import tornado.testing
 import tornado.web
 import tornado.websocket
 
-from evok.devices import Devices, DI, DO
+from evok.devices import Devices, DI, DO, SENSOR, WATCHDOG
 from evok.ws_handler import WsHandler, registered_ws
 
 
@@ -149,3 +149,47 @@ async def test_all(handlers, all_filtered, devices, expected):
     handler.all_filtered = all_filtered
     await send(client, {'cmd': 'filter', 'devices': devices})
     assert await send(client, {'cmd': 'all'}) == [expected]
+
+
+class FakeProxy:
+    """ A change of Modbus devices, full() returns a list """
+    def __init__(self, *devices):
+        self.devices = devices
+
+    def full(self):
+        return [device.full() for device in self.devices]
+
+
+@pytest.mark.parametrize('devices, event, expected', [
+    (['default'], lambda: Devices[DI]['1_01'], [{'dev': 'di', 'circuit': '1_01'}]),
+    (['default'], lambda: FakeProxy(Devices[DI]['1_01'], Devices[DO]['1_01']),
+     [{'dev': 'di', 'circuit': '1_01'}, {'dev': 'do', 'circuit': '1_01'}]),
+    (['do'], lambda: Devices[DI]['1_01'], None),
+    (['do'], lambda: FakeProxy(Devices[DI]['1_01'], Devices[DO]['1_01']), [{'dev': 'do', 'circuit': '1_01'}]),
+])
+async def test_event_is_a_list(handlers, devices, event, expected):
+    client, handler = handlers
+    await send(client, {'cmd': 'filter', 'devices': devices})
+    handler.on_event(event())
+    replies = await send(client, {'cmd': 'filter', 'devices': devices})
+    assert replies == ([expected] if expected else [])
+
+
+class FakeState:
+    """ A device whose 'dev' in full() is not its device type """
+    def __init__(self, dev):
+        self.dev = dev
+
+    def full(self):
+        return {'dev': self.dev, 'circuit': '1'}
+
+
+@pytest.mark.parametrize('devices, dev', [
+    (['wd'], 'wd'), (['watchdog'], 'wd'),
+    (['temp'], 'temp'), (['sensor'], 'temp'), (['sensor'], '1wdevice'),
+])
+async def test_event_filter_by_device_type(handlers, devices, dev):
+    client, handler = handlers
+    await send(client, {'cmd': 'filter', 'devices': devices})
+    handler.on_event(FakeState(dev))
+    assert await send(client, {'cmd': 'filter', 'devices': devices}) == [[{'dev': dev, 'circuit': '1'}]]

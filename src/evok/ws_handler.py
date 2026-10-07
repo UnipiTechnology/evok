@@ -7,7 +7,7 @@ import jsonschema
 from tornado import websocket
 
 from .devices import DI, RO, AI, AO, SENSOR
-from .devices import Devices, devtype_altnames, num_to_devtype_name
+from .devices import Devices, devtype_of, num_to_devtype_name
 from .errors import DeviceNotFound
 from .handlers_base import SCHEMA_VALIDATE
 from .log import logger
@@ -38,19 +38,19 @@ class WsHandler(websocket.WebSocketHandler):
         registered_ws["all"].add(self)
 
     def on_event(self, device):
-        outp = []
+        """ Send the states of the changed devices, always as a list
+
+            A change of Modbus devices comes as a Proxy with a list of states,
+            a change of a 1-Wire sensor as the sensor with its state.
+        """
         try:
-            if self._is_default_filter():
-                self.write_message(json.dumps(device.full()))
-            else:
-                dev_all = device.full()
-                if 'dev' in dev_all:
-                    dev_all = [dev_all]
-                for single_dev in dev_all:
-                    if single_dev['dev'] in self.filter:
-                        outp += [single_dev]
-                if len(outp) > 0:
-                    self.write_message(json.dumps(outp))
+            states = device.full()
+            if isinstance(states, dict):
+                states = [states]
+            if not self._is_default_filter():
+                states = [state for state in states if devtype_of(state['dev']) in self.filter]
+            if states:
+                self.write_message(json.dumps(states))
         except Exception as E:
             logger.error(f"WsHandler error in event: {E}")
             if logger.level == logging.DEBUG:
@@ -117,7 +117,7 @@ class WsHandler(websocket.WebSocketHandler):
         if names[:1] == ["default"]:
             self.filter = ["default"]
             return
-        devtypes = [devtype_altnames.get(str(name), str(name)) for name in names]
+        devtypes = [devtype_of(str(name)) for name in names]
         devtypes = [devtype for devtype in devtypes if devtype in num_to_devtype_name.values()]
         if names and not devtypes:
             raise ValueError(f"Invalid 'devices' argument: {names}")

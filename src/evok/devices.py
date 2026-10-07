@@ -284,8 +284,14 @@ devtype_altnames = {
     'analoginput': 'ai',
     'analogoutput': 'ao',
     'wd': 'watchdog',
-    'temp': 'sensor'
+    'temp': 'sensor',
+    '1wdevice': 'sensor',
 }
+
+
+def devtype_of(name: str) -> str:
+    """ Device type of a name, also of 'dev' in full() which is not always the device type (e.g. 'wd') """
+    return devtype_altnames.get(name, name)
 
 Devices = DeviceList(devtype_altnames)
 for _key in num_to_devtype_name.values():
