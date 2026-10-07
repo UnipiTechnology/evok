@@ -24,33 +24,40 @@ class EvokConfigError(Exception):
 class HWDict:
     def __init__(self, dir_paths: List[str] = None, paths: List[str] = None):
         """
-        :param dir_paths: path to dir for load
-        :param paths: paths to config files
+        :param dir_paths: paths to directories with definitions, all '.yaml' files are loaded
+        :param paths: paths to definition files
         """
-        self.definitions: Dict[str, List] = {}
+        self.definitions: Dict[str, dict] = {}
         scope = list()
         if dir_paths is not None:
             for dp in dir_paths:
-                if not os.path.exists(dp) or not os.path.isdir(dp):
+                if not os.path.isdir(dp):
                     logger.error(f"HWDict: Entered path is not directory: '{dp}'!")
                     continue
-                scope.extend([dp + f for f in os.listdir(dp)])
+                scope.extend(os.path.join(dp, f) for f in sorted(os.listdir(dp)))
         if paths is not None:
             scope.extend(paths)
-        if scope is None or len(scope) == 0:
+        if not scope:
             logger.warning("HWDict: no scope!")
-        else:
-            for file_path in scope:
-                if file_path.endswith(".yaml") and os.path.isfile(file_path):
-                    file_name = file_path.split("/")[-1].replace(".yaml", "")
-                    with open(file_path, 'r') as yfile:
-                        ydata = yaml.load(yfile, Loader=yaml.SafeLoader)
-                        if ydata is None:
-                            logger.warning(f"Empty Definition file '{file_path}'! skipping...")
-                            continue
-                        self.definitions[file_name] = ydata
-                        logger.debug(f"YAML Definition loaded: {file_path}, "
-                                     f"definition count {len(self.definitions) - 1}")
+        for file_path in scope:
+            if not file_path.endswith(".yaml") or not os.path.isfile(file_path):
+                continue
+            file_name = os.path.basename(file_path)[:-len(".yaml")]
+            # an invalid file is skipped, the other definitions are loaded
+            try:
+                with open(file_path, 'r') as yfile:
+                    ydata = yaml.safe_load(yfile)
+            except (OSError, yaml.YAMLError) as E:
+                logger.error(f"HWDict: Cannot load definition file '{file_path}': {E}")
+                continue
+            if ydata is None:
+                logger.warning(f"Empty Definition file '{file_path}'! skipping...")
+                continue
+            if not isinstance(ydata, dict):
+                logger.error(f"HWDict: Definition file '{file_path}' does not contain a mapping! skipping...")
+                continue
+            self.definitions[file_name] = ydata
+            logger.debug(f"YAML Definition loaded: {file_path}, definition count {len(self.definitions)}")
 
 
 class TcpBusDevice:
@@ -315,9 +322,18 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
 
 
 def load_aliases(path):
-    alias_dicts = list(HWDict(paths=[path]).definitions.values())
-    # HWDict returns List(), take only first item
-    alias_conf = alias_dicts[0] if len(alias_dicts) > 0 else dict()
+    # the file is read whatever its extension is, it is overwritten by save_aliases()
+    alias_conf = {}
+    try:
+        with open(path, 'r') as f:
+            alias_conf = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        logger.info(f"Alias file {path} not found, no aliases are loaded")
+    except (OSError, yaml.YAMLError) as E:
+        logger.error(f"Cannot load alias file {path}: {E}")
+    if not isinstance(alias_conf, dict):
+        logger.error(f"Alias file {path} does not contain a mapping, aliases are not loaded")
+        alias_conf = {}
     # 'version: 2.0' without quotes is a number, without a version it is given by the format of the aliases
     version = alias_conf.get("version")
     if version is None:

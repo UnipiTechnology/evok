@@ -118,3 +118,33 @@ def test_modbus_timeouts(bus, expected):
     devtype = TCPBUS if bus['type'] == 'MODBUSTCP' else SERIALBUS
     transport = Devices[devtype]['BUS'].bus_driver.base_transport
     assert {key: getattr(transport, key) for key in expected} == expected
+
+
+def test_hw_dict(tmp_path, caplog):
+    (tmp_path / 'xS51.yaml').write_text('type: xS51\n')
+    (tmp_path / 'my.yaml.yaml').write_text('type: my\n')
+    (tmp_path / 'broken.yaml').write_text('type: [\n')
+    (tmp_path / 'list.yaml').write_text('- a\n')
+    (tmp_path / 'empty.yaml').write_text('')
+    (tmp_path / 'notes.txt').write_text('type: notes\n')
+    hw = config.HWDict(dir_paths=[str(tmp_path)])                 # no trailing slash
+    assert hw.definitions == {'xS51': {'type': 'xS51'}, 'my.yaml': {'type': 'my'}}
+    assert "Cannot load definition file" in caplog.text
+    assert "does not contain a mapping" in caplog.text
+
+
+@pytest.mark.parametrize('name', ['alias.yaml', 'alias.yml', 'aliases'])
+def test_load_aliases_any_extension(tmp_path, name):
+    path = tmp_path / name
+    path.write_text('version: "2.0"\naliases:\n  kitchen: {devtype: di, circuit: "1_01"}\n')
+    config.load_aliases(str(path))
+    assert list(Devices.aliases.initial_dict) == ['kitchen']
+
+
+@pytest.mark.parametrize('text', [None, '', 'aliases: [\n', '- a\n'])
+def test_load_aliases_invalid_file(tmp_path, text):
+    path = tmp_path / 'alias.yaml'
+    if text is not None:
+        path.write_text(text)
+    config.load_aliases(str(path))
+    assert Devices.aliases.initial_dict == {}
