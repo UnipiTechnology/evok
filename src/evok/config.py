@@ -351,10 +351,19 @@ def load_aliases(path):
 
 # don't call it directly in asyn loop -- block
 def save_aliases(alias_dict, path):
+    """ Write the aliases to a temporary file and replace the file by it, so a failed write
+        keeps the previous file. An error is raised to the caller, which tries it again later.
+    """
+    logger.info(f"Saving alias file {path}")
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, 'w') as yfile:
+        yfile.write(yaml.dump({"version": "2.0", "aliases": alias_dict}))
+        yfile.flush()
+        os.fsync(yfile.fileno())
+    os.replace(tmp_path, path)
+    # the rename is durable after the directory is synced
+    dir_fd = os.open(os.path.dirname(os.path.abspath(path)), os.O_RDONLY)
     try:
-        logger.info(f"Saving alias file {path}")
-        with open(path, 'w+') as yfile:
-            yfile.write(yaml.dump({"version": "2.0", "aliases": alias_dict}))
-        os.system('sync')
-    except Exception as E:
-        logger.exception(str(E))
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)

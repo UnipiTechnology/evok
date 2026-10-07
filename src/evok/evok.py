@@ -142,15 +142,15 @@ class LegacyJsonHandler(UserCookieHelper, EvokWebHandlerBase):
 
 
 class LoadAllHandler(UserCookieHelper, EvokWebHandlerBase):
+    # tornado returns 405 Method Not Allowed for POST
+    SUPPORTED_METHODS = ("GET", "OPTIONS")
+
     async def get(self):  # noqa
         """This function returns a heterogeneous list of all devices exposed via the REST API"""
         result = self._get_all()
         self.write(json.dumps(result))
         self.set_header('Content-Type', 'application/json')
         await self.finish()
-
-    async def post(self):  # noqa
-        pass
 
 
 class VersionHandler(UserCookieHelper, tornado.web.RequestHandler):
@@ -227,6 +227,8 @@ class AliasTask:
                     await asyncio.to_thread(config.save_aliases, alias_dict, self.alias_file)
                 except Exception as E:
                     logger.exception(E)
+                    # try it again after SAVE_TIME
+                    self.dirty_trigger.set()
         except asyncio.CancelledError:
             # save pending changes on shutdown (synchronously, the task is being cancelled)
             if self.dirty_trigger.is_set():
@@ -287,7 +289,11 @@ async def main():
     logger.info(f"Setting logging level to '{log_level}'.")
 
     logger.setLevel(log_level)
-    logging.basicConfig(level=log_level)
+    # the root logger is already configured on import, force applies the level to the other libraries too
+    logging.basicConfig(level=log_level, force=True)
+    if log_level != 'DEBUG':
+        # a line for every request only in the debug level
+        logging.getLogger('tornado.access').setLevel(logging.WARNING)
     log_file = evok_config.logging.get("file", None)
     if log_file is not None:
         # rotating file handler
