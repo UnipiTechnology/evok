@@ -135,8 +135,10 @@ class AnalogOutputBrain(AnalogInput):
         return self.res_accessor if self.mode == "Resistance" else self.ao_accessor
 
     async def set_value(self, value: float):
-        if self.range is None:
-            raise ValueError(f'AO {self.circuit}: unknown mode, cannot set the value')
+        """ The value can be set only in the Voltage and Current modes, it is used also by RPC """
+        if self.iomode.mode not in ("Voltage", "Current"):
+            raise ValueError(f'AO {self.circuit}: value cannot be set in mode "{self.iomode.mode}"')
+        value = float(value)
         low, high = self.range
         if low > value or value > high:
             raise ValueError(f'AO {self.circuit}: value "{value}" is out of limit <{low}..{high}>')
@@ -153,9 +155,7 @@ class AnalogOutputBrain(AnalogInput):
             if mode in ("Voltage", "Current") and value is None:
                 value = 0  # Set 0 after mode change
         if value is not None:
-            if self.iomode.mode not in ("Voltage", "Current"):
-                raise ValueError(f'AO {self.circuit}: value cannot be set in mode "{self.iomode.mode}"')
-            await self.set_value(float(value))
+            await self.set_value(value)
 
 
 class DataPoint(IODevice):

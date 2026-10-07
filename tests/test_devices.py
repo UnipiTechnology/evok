@@ -335,6 +335,10 @@ async def test_analog_output_brain_float():
     assert client.mb_client.writes[-1] == ('regs', 0, to_registers(FLOAT32_LE, 1.25))
     with pytest.raises(ValueError):
         await ao.set(value=11)
+    # set_value() used by RPC checks the mode too
+    await ao.set(mode='Resistance')
+    with pytest.raises(ValueError, match='cannot be set in mode "Resistance"'):
+        await ao.set_value(1.0)
 
 
 async def test_analog_output_brain_set_value_unknown_mode():
