@@ -19,12 +19,12 @@ Device = Any
 
 
 class Aliases:
-    alias_dict: dict[str, Device] = {}
-    initial_dict: dict[str, dict[str, str]] = {}
 
     def __init__(self, initial_dict: dict[str, dict[str, str]]):
         self.devtype = 'run'
         self.circuit = 'alias'
+        self.alias_dict: dict[str, Device] = {}
+        self.initial_dict: dict[str, dict[str, str]] = {}
         for key, value in initial_dict.items():
             try:
                 value['devtype'] = num_to_devtype_name[int(value['devtype'])]
@@ -169,9 +169,11 @@ class DeviceList(dict):
             return devdict[circuit]
         except KeyError:
             if circuit in self.aliases:
-                return self.aliases[circuit]
-            else:
-                raise DeviceNotFound(f"Invalid device circuit '{str(circuit)}' with devtypeid '{devtype_name}'")
+                ret = self.aliases[circuit]
+                # the alias of a device of another type is not found, as in by_name()
+                if ret.devtype == devtype_name or ret.devtype == devtype_altnames.get(devtype_name):
+                    return ret
+            raise DeviceNotFound(f"Invalid device circuit '{str(circuit)}' with devtypeid '{devtype_name}'")
 
     def by_name(self, devtype, circuit=None):
         try:

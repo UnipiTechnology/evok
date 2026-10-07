@@ -1,6 +1,6 @@
 import pytest
 
-from evok.devices import Devices, DI, RO
+from evok.devices import Aliases, Devices, DeviceNotFound, DI, RO
 
 
 class FakeDevice:
@@ -53,3 +53,22 @@ def test_empty_alias_resets(devices):
     devices.set_alias('', devices[DI]['1_01'])
     assert devices[DI]['1_01'].alias == ''
     assert 'kitchen' not in devices.aliases
+
+
+def test_by_int_finds_alias_of_same_devtype(devices):
+    devices.set_alias('kitchen', devices[DI]['1_01'])
+    assert devices.by_int(DI, 'kitchen') is devices[DI]['1_01']
+    assert devices.by_int('input', 'kitchen') is devices[DI]['1_01']
+
+
+def test_by_int_does_not_find_alias_of_other_devtype(devices):
+    devices.set_alias('pump', devices[RO]['1_01'])
+    with pytest.raises(DeviceNotFound):
+        devices.by_int(DI, 'pump')
+
+
+def test_aliases_instances_do_not_share_dicts():
+    first = Aliases({'kitchen': {'devtype': 'di', 'circuit': '1_01'}})
+    second = Aliases({})
+    assert second.initial_dict == {}
+    assert second.alias_dict is not first.alias_dict
