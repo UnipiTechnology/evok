@@ -53,8 +53,8 @@ do_post_inp_schema = {
         "value": {"type": ["boolean", "string", 'number']},
         "mode": {"type": "string"},
         "timeout": {"type": ["number", "string"]},
-        "pwm_freq": {"type": ["number", "string"]},
-        "pwm_duty": {"type": ["number", "string"]},
+        "pwm_freq": {"type": ["number", "string"], "minimum": 0},     # 0 is rejected by the device
+        "pwm_duty": {"type": ["number", "string"], "minimum": 0, "maximum": 100},
         "alias": {"type": "string"}
     },
 }
@@ -73,11 +73,7 @@ ao_post_inp_schema = {
         },
         "mode": {
             "type": "string",
-            "enum": [
-                "Voltage",
-                "Current",
-                "Resistance"
-            ]
+            "description": "Must be in 'modes', they are given by the hardware definition"
         },
         "alias": {
             "type": "string"
@@ -133,7 +129,7 @@ register_post_inp_schema = {
     "additionalProperties": False,
     "properties": {
         "value": {
-            "type": ["number", "string"],  # the range applies to numbers, strings are checked by the accessor
+            "type": ["number", "string"],  # the range is checked also for strings by check_params()
             "minimum": 0,
             "maximum": 65535
         },
@@ -175,16 +171,17 @@ wd_post_inp_schema = {
     "additionalProperties": False,
     "properties": {
         "value": {
-            "type": ["string", "number"]
+            "type": ["boolean", "string", "number"]
         },
         "timeout": {
-            "type": ["string", "number"]
+            "type": ["string", "number"],
+            "minimum": 0
         },
         "reset": {
-            "type": ["string", "number"]
+            "type": ["boolean", "string", "number"]
         },
         "nv_save": {
-            "type": ["string", "number"]
+            "type": ["boolean", "string", "number"]
         },
         "alias": {
             "type": "string"

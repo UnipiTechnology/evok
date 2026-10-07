@@ -150,13 +150,18 @@ class DIMode:
         return old != (self.mode, self.ds_mode)
 
     async def set(self, mode=None, ds_mode=None):
-        """ Write the mode and the DirectSwitch mode, unknown values are ignored
+        """ Write the mode and the DirectSwitch mode, unknown values are rejected,
+            ds_mode is written only in the DirectSwitch mode
 
             Decide by the requested values and always read-modify-write the registers:
             self.mode and self.ds_mode can be stale or rewritten by update()
             in the scan task while this coroutine awaits.
         """
-        if mode in self.modes:
+        if mode is not None and mode not in self.modes:
+            raise ValueError(f'{self.name}: unknown mode "{mode}"')
+        if ds_mode is not None and ds_mode not in self.ds_modes:
+            raise ValueError(f'{self.name}: unknown ds_mode "{ds_mode}"')
+        if mode is not None:
             self.mode = mode
             if self.accessor_mode.index is not None:
                 await self.accessor_mode.write(self.client, int(mode == 'DirectSwitch'))

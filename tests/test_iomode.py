@@ -90,5 +90,10 @@ async def test_dimode_set_keeps_other_bits():
     assert [client.mb_client.holding[i] for i in range(3)] == [0b11, 0b11, 0b01]
     # cache is updated, so the next update does not flip the mode back
     assert not dimode.update()
-    await dimode.set('Unknown', 'Unknown')
+    # unknown modes are rejected before anything is written
+    writes = list(client.mb_client.writes)
+    for mode, ds_mode in (('Unknown', None), ('DirectSwitch', 'Unknown')):
+        with pytest.raises(ValueError, match='unknown'):
+            await dimode.set(mode, ds_mode)
     assert (dimode.mode, dimode.ds_mode) == ('DirectSwitch', 'Inverted')
+    assert client.mb_client.writes == writes

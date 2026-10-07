@@ -1,7 +1,7 @@
 import asyncio
 
 from .devices import SENSOR, OWBUS, OWPOWER
-from .devices import devents, Devices
+from .devices import devents, Devices, to_bool  # noqa: F401, to_bool is used also by tests
 from .log import logger
 
 import anyio
@@ -10,18 +10,6 @@ from asyncowfs import event
 
 MAX_LOSTINTERVAL = 300  # 5 minutes
 RECONNECT_DELAY = 10  # s, the next connection to owserver after a failure
-
-
-def to_bool(value) -> bool:
-    """ A flag from JSON (true, 1) or from a form of REST ('true', '1'), the string '0' is false """
-    if isinstance(value, str):
-        text = value.strip().lower()
-        if text in ('true', 'yes', 'on', '1'):
-            return True
-        if text in ('false', 'no', 'off', '0', ''):
-            return False
-        raise ValueError(f"Invalid boolean value '{value}'")
-    return bool(value)
 
 
 def check_interval(interval, name='interval', zero=False):

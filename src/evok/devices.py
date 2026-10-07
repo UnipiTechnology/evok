@@ -1,4 +1,5 @@
 from . import devents
+import math
 import re
 from copy import deepcopy
 from typing import Any, Callable, Union
@@ -13,6 +14,26 @@ from .log import logger
 
 # ToDo: ...
 Device = Any
+
+
+def to_bool(value) -> bool:
+    """ A flag from JSON (true, 1) or from a form of REST ('true', '1'), the string '0' is false """
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in ('true', 'yes', 'on', '1'):
+            return True
+        if text in ('false', 'no', 'off', '0', ''):
+            return False
+        raise ValueError(f"Invalid boolean value '{value}'")
+    return bool(value)
+
+
+def to_float(value) -> float:
+    """ A number from JSON or a form, NaN and infinity are rejected, they would pass any range check """
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError(f"Invalid number {value}")
+    return result
 
 
 class Aliases:
@@ -145,7 +166,7 @@ class Aliases:
     async def set(self, save: bool = False, delete: str = None):
         if delete is not None:
             self.remove(delete)
-        if save is not None and bool(int(save)):
+        if save is not None and to_bool(save):
             self.set_force_save()
 
 

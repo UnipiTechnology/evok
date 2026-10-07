@@ -101,3 +101,50 @@ def test_bulk_schema_accepts(request_body):
 def test_bulk_schema_rejects(request_body):
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(instance=request_body, schema=bulk_post_inp_schema)
+
+
+from evok.devices import to_bool, to_float
+from evok.handlers_base import check_params
+
+
+@pytest.mark.parametrize('dev, kw', [
+    ('ao', {'value': float('nan')}), ('ao', {'value': 'nan'}), ('ao', {'value': 'inf'}),
+    ('data_point', {'value': float('inf')}), ('data_point', {'value': '-Infinity'}),
+    ('register', {'value': '70000'}), ('register', {'value': '-1'}),          # the range of strings
+    ('do', {'pwm_duty': '150'}), ('do', {'pwm_freq': '-5'}),
+    ('di', {'counter': '4294967296'}), ('wd', {'timeout': '-1'}),
+])
+def test_check_params_rejects(dev, kw):
+    with pytest.raises(ValueError):
+        check_params(dev, kw)
+
+
+@pytest.mark.parametrize('dev, kw', [
+    ('ao', {'value': '5.5'}), ('ao', {'mode': 'Voltage2V5'}),                 # modes are checked by the device
+    ('register', {'value': '65535'}), ('do', {'pwm_duty': '50', 'alias': 'nan'}),
+    ('wd', {'value': True, 'reset': 'false', 'nv_save': 1}),
+    ('do', {'value': 'on'}),                                                   # not a number, checked by the device
+])
+def test_check_params_accepts(dev, kw):
+    check_params(dev, kw)
+
+
+@pytest.mark.parametrize('value', [float('nan'), 'nan', float('inf'), '-inf', 'x'])
+def test_to_float_rejects(value):
+    with pytest.raises(ValueError):
+        to_float(value)
+
+
+@pytest.mark.parametrize('value, expected', [('true', True), ('0', False), (1, True), (False, False)])
+def test_to_bool(value, expected):
+    assert to_bool(value) is expected
+
+
+async def test_run_save_from_form():
+    from evok.devices import Aliases
+    saved = []
+    aliases = Aliases({})
+    aliases.register_save_cb(lambda: saved.append(True))
+    await aliases.set(save='false')
+    await aliases.set(save='true')
+    assert saved == [True]

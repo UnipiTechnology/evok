@@ -4,7 +4,7 @@ from itertools import chain
 import jsonschema
 import tornado.web
 
-from .devices import Devices
+from .devices import Devices, to_float
 from .devices import OWBUS, DEVICE_INFO, SENSOR, MODBUS_SLAVE, \
     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
     REGISTER, DATA_POINT, NV_SAVE
@@ -23,7 +23,28 @@ def check_params(dev_type, kw):
     if SCHEMA_VALIDATE:
         if dev_type not in schemas:
             raise ValueError(f'Invalid device name {dev_type}')
-        jsonschema.validate(instance=kw, schema=schemas[dev_type][0])
+        schema = schemas[dev_type][0]
+        jsonschema.validate(instance=kw, schema=schema)
+        _check_numbers(schema, kw)
+
+
+def _check_numbers(schema, kw):
+    """ jsonschema checks the range of numbers only, a form sends strings; NaN and infinity pass any range """
+    for name, value in kw.items():
+        rules = schema['properties'].get(name, {})
+        types = rules.get('type', [])
+        if 'number' not in types or isinstance(value, bool):
+            continue
+        if isinstance(value, str):
+            try:
+                float(value)
+            except ValueError:
+                continue    # not a number, rejected by the device
+        number = to_float(value)
+        if 'minimum' in rules and number < rules['minimum']:
+            raise ValueError(f"{name} {value} is less than the minimum {rules['minimum']}")
+        if 'maximum' in rules and number > rules['maximum']:
+            raise ValueError(f"{name} {value} is greater than the maximum {rules['maximum']}")
 
 
 def client_error(error) -> tuple[dict, int]:

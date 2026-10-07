@@ -508,3 +508,32 @@ async def test_data_point_input_is_read_only():
     with pytest.raises(ValueError, match='read-only'):
         await dp.set(value=1)
     assert client.mb_client.writes == []
+
+
+@pytest.mark.parametrize('params', [{'pwm_duty': 150}, {'pwm_duty': '-1'}, {'pwm_freq': 0}, {'pwm_duty': 'nan'}])
+async def test_do_invalid_pwm(unit, params):
+    client = await unit()
+    writes = list(client.mb_client.writes)
+    with pytest.raises(ValueError):
+        await dev(DO, '1_01').set(**params)
+    assert client.mb_client.writes == writes
+
+
+@pytest.mark.parametrize('params', [{'mode': 'Unknown'}, {'counter_mode': 'Unknown'}, {'ds_mode': 'Unknown'}])
+async def test_di_unknown_mode(unit, params):
+    client = await unit()
+    with pytest.raises(ValueError, match='unknown'):
+        await dev(DI, '1_01').set(**params)
+
+
+@pytest.mark.parametrize('value', [float('nan'), 'nan', 'inf', float('-inf')])
+async def test_analog_output_rejects_nan(value):
+    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 0})
+    brain = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
+    await client.cache.do_scan(initial=True)
+    await brain.check_new_data()
+    with pytest.raises(ValueError, match='Invalid number'):
+        await brain.set(value=value)
+    with pytest.raises(ValueError, match='Invalid number'):
+        await AnalogOutput('y', client, 0).set_value(value)
+    assert client.mb_client.writes == []

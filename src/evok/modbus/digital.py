@@ -9,7 +9,7 @@ import asyncio
 
 from typing import Union
 
-from ..devices import DI, DO, RO, LED, Devices
+from ..devices import DI, DO, RO, LED, Devices, to_float
 from ..log import logger
 from .base import IODevice
 from .client import Client, Accessor, AccessorBit, AccessorU16, AccessorU32
@@ -79,10 +79,14 @@ class DigitalOutput(IODevice):
                 self.pending_task = None
 
             if pwm_duty is not None:
-                pwm_duty = float(pwm_duty)
+                pwm_duty = to_float(pwm_duty)
+                if not 0.0 <= pwm_duty <= 100.0:
+                    raise ValueError(f'DO {self.circuit}: pwm_duty {pwm_duty} is out of range <0..100>')
 
             if pwm_freq is not None:
-                pwm_freq = float(pwm_freq)
+                pwm_freq = to_float(pwm_freq)
+                if pwm_freq <= 0:
+                    raise ValueError(f'DO {self.circuit}: pwm_freq {pwm_freq} must be positive')
 
             # if pwm_duty is not None and self.mode == 'PWM' and float(pwm_duty) <= 0.01:
             #    mode = 'Simple'
@@ -252,7 +256,9 @@ class DigitalInput(WithDIMode, IODevice):
 
         await self.dimode.set(mode, ds_mode)
 
-        if counter_mode is not None and counter_mode in self.counter_modes and counter_mode != self.counter_mode:
+        if counter_mode is not None and counter_mode not in self.counter_modes:
+            raise ValueError(f'DI {self.circuit}: unknown counter_mode "{counter_mode}"')
+        if counter_mode is not None and counter_mode != self.counter_mode:
             self.counter_mode = counter_mode
             self.counter = self.read_counter()
 

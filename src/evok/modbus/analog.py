@@ -7,7 +7,7 @@ Created on Tue Sep 29 09:46:51 2026
 """
 from math import isnan
 
-from ..devices import AI, AO, REGISTER, DATA_POINT
+from ..devices import AI, AO, REGISTER, DATA_POINT, to_float
 from ..log import logger
 from .cache import ENoCacheRegister
 from .base import IODevice
@@ -89,7 +89,7 @@ class AnalogOutput(AnalogInput):
 
     async def set_value(self, value):
         """ The value is clamped to the 12-bit range of the output, return the value written """
-        value = min(max(float(value), 0.0), 4095 * self.accessor.ratio)
+        value = min(max(to_float(value), 0.0), 4095 * self.accessor.ratio)
         await self.accessor.write(self.client, value)
         return self.accessor.read(self.client)
 
@@ -138,7 +138,7 @@ class AnalogOutputBrain(AnalogInput):
         """ The value can be set only in the Voltage and Current modes, it is used also by RPC """
         if self.iomode.mode not in ("Voltage", "Current"):
             raise ValueError(f'AO {self.circuit}: value cannot be set in mode "{self.iomode.mode}"')
-        value = float(value)
+        value = to_float(value)
         low, high = self.range
         if low > value or value > high:
             raise ValueError(f'AO {self.circuit}: value "{value}" is out of limit <{low}..{high}>')
@@ -200,7 +200,7 @@ class DataPoint(IODevice):
         if value is not None:
             if not self.writable:
                 raise ValueError(f"Data point {self.circuit} is read-only")
-            await self.accessor.write(self.client, float(value))
+            await self.accessor.write(self.client, to_float(value))
         self.set_alias(alias)
 
     def full(self):
