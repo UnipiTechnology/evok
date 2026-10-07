@@ -2,6 +2,59 @@
 
 The Bulk API is designed to provide an efficient way for clients to update, create or delete large amounts of data. This protocol supports multiple writes in one request, but it is suitable for automated requests thanks JSON protocol, which is easily machine-processed.
 
+## Request
+
+The request is a JSON object sent by POST to `/bulk`, with any of these parts:
+
+```json
+{
+  "group_queries": [
+    {"device_types": ["di", "do"], "group": 1, "device_circuits": ["1_01", "my_alias"]}
+  ],
+  "group_assignments": [
+    {"device_type": "do", "group": 2, "device_circuits": ["2_01"], "assigned_values": {"value": 0}}
+  ],
+  "individual_assignments": [
+    {"device_type": "do", "device_circuit": "1_01", "assigned_values": {"value": 1}}
+  ]
+}
+```
+
+- `group_queries` - returns the states of all devices of the `device_types`
+- `group_assignments` - sets the `assigned_values` to all devices of the `device_type`
+- `individual_assignments` - sets the `assigned_values` to the device of the `device_type` and `device_circuit`
+  (a circuit or an alias)
+
+The devices of a group can be limited by optional parameters:
+
+- `group` - the major group of the devices, e.g. the section of a Modbus unit
+- `device_circuits` - a list of circuits or aliases
+
+The `assigned_values` are the same params as in [REST](rest.md) and they are validated in the same way.
+Altnames of the device types such as `input` or `relay` can be used.
+
+## Response
+
+The response contains a list of results for every part of the request, in the order of the commands:
+a list of states for every group query and group assignment and a state for every individual assignment.
+
+The parts are processed in this order: `group_queries`, `group_assignments`, `individual_assignments`,
+so the queries return the states before the assignments.
+
+## Errors
+
+All assignments are checked before any device is set. An unknown device type, circuit or alias is reported
+with the status 404, invalid params with the status 400, and no device is set.
+
+An error while setting a device is reported with the status 400 (e.g. a value out of range) or 500
+(e.g. an unavailable Modbus device). The response contains the results of the commands done before the error,
+the following commands are not done.
+
+```json
+{"success": false, "errors": {"ValueError": "Value out of range"},
+ "individual_assignments": [{"dev": "do", "circuit": "1_01", "value": 1}]}
+```
+
 ## Examples
 
 For python examples you need installed `requests` package. You can install it with this command: `pip3 install requests`.

@@ -14,7 +14,8 @@ class JSONBulkHandler(tornado.web.RequestHandler):
         self.set_header("Content-Type", "application/json")
         self.set_header("Access-Control-Allow-Origin", "*")
         self.set_header("Access-Control-Allow-Headers", "x-requested-with")
-        self.set_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+        # GET is not supported, the request is in the body of POST
+        self.set_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
 
     def options(self):
         # no body
