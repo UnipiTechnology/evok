@@ -96,20 +96,25 @@ class DS18B20(MySensor):  # thermometer
             ret['alias'] = self.alias
         return ret
 
+    por_skipped = False     # the last value was skipped as the power-on reset value
+
     async def read_val_from_sens(self, sens):
         new_val = float(await sens.get('temperature'))
-        if not (new_val == 85.0 and abs(new_val - self.value) > 2):
-            self.value = round(new_val * 2, 1) / 2  # 4 bits for frac part of number
-            devents.status(self)
-        else:
+        # 85 C is the value after power-on reset, it is skipped once if it is the first one or a jump
+        if new_val == 85.0 and not self.por_skipped and (self.value is None or abs(new_val - self.value) > 2):
+            self.por_skipped = True
             logger.debug("PoR detected! 85C")
+            return
+        self.por_skipped = False
+        self.value = round(new_val * 2, 1) / 2  # 4 bits for frac part of number
+        devents.status(self)
 
 
 class DS2438(MySensor):  # vdd + vad + thermometer
 
+    FIELDS = ('temperature', 'HIH4000.humidity', 'VDD', 'VAD', 'vis')
+
     def full(self):
-        self.value = (getattr(self, 'VDD', None), getattr(self, 'VAD', None), getattr(self, 'temperature', None),
-                      getattr(self, 'IAD', None))
         ret = {'dev': '1wdevice',
                'circuit': self.circuit,
                # 'humidity1':(((((float(self.value[1]) / float(self.value[0])) - 0.1515)) / 0.00636)
@@ -128,39 +133,36 @@ class DS2438(MySensor):  # vdd + vad + thermometer
             ret['alias'] = self.alias
         return ret
 
-    async def read_attribute(self, field):
+    async def read_attribute(self, sens, field):
         if type(field) is list:
             fname = '.'.join(field)
-            setattr(self, fname, await self.sens.get(*field))
+            setattr(self, fname, await sens.get(*field))
         else:
-            setattr(self, field, await self.sens.get(field))
+            setattr(self, field, await sens.get(field))
+
+    def _values(self):
+        return {name: getattr(self, name, None) for name in self.FIELDS}
 
     async def read_val_from_sens(self, sens):
+        old_values = self._values()
         async with anyio.create_task_group() as tg:
             for f in ('temperature', ['HIH4000', 'humidity'], 'VDD', 'VAD', 'vis'):
-                tg.start_soon(self.read_attribute, f)
-        # self.value = (sens.VDD, sens.VAD, sens.temperature, sens.vis)
+                tg.start_soon(self.read_attribute, sens, f)
+        # the value used by get() and get_value() in RPC
+        self.value = (getattr(self, 'VDD', None), getattr(self, 'VAD', None), getattr(self, 'temperature', None),
+                      getattr(self, 'IAD', None))
+        if self._values() != old_values:
+            devents.status(self)
 
 
 class DS2408(MySensor):
     def __init__(self, addr, sensor_type, bus, interval=None, is_dynamic_interval=True, circuit=None, major_group=1,
                  is_static=False):
-        self.type = sensor_type
-        self.circuit = circuit if circuit is not None else addr
-        self.address = addr
-        self.major_group = major_group
-        self.interval = bus.interval if interval is None else interval  # seconds
-        self.is_dynamic_interval = is_dynamic_interval  # dynamically change interval #TODO
-        self.last_value = None
-        self.value = None
-        self.lost = False
-        self.time = 0
-        self.readtime = 0
-        self.sens = None
-        if is_static:
-            self.__bus = bus  # can't pickle, must be reset/set  by pickeling/unpicklgin
-        bus.register_sensor(self)
         self.pios = []
+        # the circuit of a found DS2408 is its address with the dot, unlike the other sensors
+        super().__init__(addr, sensor_type, bus, interval=interval, dynamic=is_dynamic_interval,
+                         circuit=circuit if circuit is not None else addr, major_group=major_group,
+                         is_static=is_static)
 
     async def read_val_from_sens(self, sens):
         # latch.0 sensed.0 PIO.0
@@ -182,7 +184,10 @@ class DS2408(MySensor):
         ret = {'dev': '1wdevice',
                'circuit': self.circuit,
                'address': self.address,
-               'value': None,
+               'value': self.value,
+               'lost': self.lost,
+               'time': self.readtime,
+               'interval': self.interval,
                'type': self.type
                }
         if self.alias is not None and self.alias != '':
