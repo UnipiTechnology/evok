@@ -3,11 +3,15 @@ import logging
 import traceback
 from urllib.parse import urlparse
 
+import jsonschema
 from tornado import websocket
 
 from .devices import DI, RO, AI, AO, SENSOR
 from .devices import Devices, devtype_altnames, num_to_devtype_name
+from .errors import DeviceNotFound
+from .handlers_base import SCHEMA_VALIDATE
 from .log import logger
+from .schemas import schemas
 
 # clients notified by status_cb() in evok.py, websocket clients and the webhook
 registered_ws = {}
@@ -97,38 +101,23 @@ class WsHandler(websocket.WebSocketHandler):
                         raise Exception("Invalid 'devices' argument: %s" % str(message["devices"]))
                 except Exception as E:
                     logger.exception("Exc: %s", str(E))
-            elif cmd is not None:
+            elif cmd in ("full", "set"):
                 dev = message["dev"]
-                circuit = message["circuit"]
                 try:
-                    value = message["value"]
-                except Exception:
-                    value = None
-                try:
-                    device = Devices.by_name(dev, circuit)
+                    device = Devices.by_name(dev, message["circuit"])
                     if cmd == "full":
                         # full() is not a coroutine, send the state only to the requesting client
                         await self.write_message(json.dumps(device.full()))
                     else:
-                        func = getattr(device, cmd)
-                        if value is not None:
-                            if type(value) == dict:
-                                await func(**value)
-                            else:
-                                await func(value)
-                        else:
-                            # Set other property than "value" (e.g. counter of an input)
-                            funcdata = {key: value for (key, value) in message.items() if
-                                        key not in ("circuit", "value", "cmd", "dev")}
-                            if len(funcdata) > 0:
-                                await func(**funcdata)
-                            else:
-                                await func()
-                # nebo except Exception as e:
+                        await device.set(**self._set_params(dev, message))
+                except (ValueError, DeviceNotFound, jsonschema.ValidationError) as E:
+                    # the string of a ValidationError contains the whole schema
+                    error = E.message if isinstance(E, jsonschema.ValidationError) else str(E)
+                    logger.error(f"WS: {error}")
                 except Exception as E:
-                    logger.error(f"EsHandler error in request: {E}")
-                    if logger.level == logging.DEBUG:
-                        traceback.print_exc()
+                    logger.exception(f"WS: {str(E)}")
+            elif cmd is not None:
+                logger.error(f"WS: Unknown command '{cmd}'")
 
         except Exception as E:
             logger.debug("Skipping WS message: %s (%s)", message, str(E))
@@ -136,6 +125,23 @@ class WsHandler(websocket.WebSocketHandler):
                 traceback.print_exc()
             # skip it since we do not understand this message....
             pass
+
+    @staticmethod
+    def _set_params(dev, message) -> dict:
+        """ Params of set() as in REST: other keys of the message, a dict in 'value' or 'value' itself,
+            validated by the schema of the device type
+        """
+        kw = {key: val for (key, val) in message.items() if key not in ("circuit", "value", "cmd", "dev")}
+        value = message.get("value")
+        if isinstance(value, dict):
+            kw.update(value)
+        elif value is not None:
+            kw["value"] = value
+        if SCHEMA_VALIDATE:
+            if dev not in schemas:
+                raise ValueError(f'Invalid device name {dev}')
+            jsonschema.validate(instance=kw, schema=schemas[dev][0])
+        return kw
 
     def on_close(self):
         if ("all" in registered_ws) and (self in registered_ws["all"]):
