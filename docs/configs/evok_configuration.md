@@ -61,7 +61,7 @@ comm_channels:
         - `port` - path to the Modbus device
         - `boudrate` - baudrate of the Modbus device
         - `parity` - parity of the Modbus device (`N` / `E` / `O`)
-    - `OWBUS`
+    - `OWFS` (1-Wire bus, the former name `OWBUS` is not supported)
         - `interval` - interval of values updating
         - `scan_interval` - new devices will be automatically assigned
         - `owpower` - [Circuit](../circuit.md) of owpower device (for restarting bus; optional parameter)
@@ -76,10 +76,11 @@ comm_channels:
 - `slave_id` - slave address or unit-ID of the Modbus device.
 - `scan_frequency` - an optional parameter, determines how often values are read from the device (Default value is 50).
 
-#### OWBUS
+#### OWFS
 
 - `type` - 1-Wire sensor type, options: [`DS18B20`, `DS18S20`, `DS2438`, `DS2408`, `DS2406`, `DS2404`, `DS2413`]
 - `address` - 1-Wire device address
+- `interval` - an optional parameter, interval of values updating in seconds (Default value is 15).
 
 !!! Note
     It is better to use automatic device search, rather than defining devices manually.
@@ -119,7 +120,7 @@ TCP_EXT:
 
 ```yaml title="1-Wire thermometer"
 TEMPM:
-  type: OWBUS
+  type: OWFS
   interval: 10
   scan_interval: 60
   owpower: 1
@@ -169,7 +170,7 @@ comm_channels:
         slave-id: 3
         model: 13
   OWFS:
-    type: OWBUS
+    type: OWFS
     interval: 10
     scan_interval: 60
     owpower: 1

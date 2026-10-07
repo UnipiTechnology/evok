@@ -1,8 +1,6 @@
 import os
 from typing import List, Dict, Union
 import asyncio
-import logging
-import traceback
 
 from .modbus import ModbusScanner
 from tmodbus import (
@@ -15,7 +13,7 @@ from . import owdevice
 
 import yaml
 from .devices import Devices, Aliases
-from .devices import OWBUS, SERIALBUS, DEVICE_INFO, TCPBUS, SENSOR, MODBUS_SLAVE
+from .devices import OWBUS, SERIALBUS, DEVICE_INFO, TCPBUS, MODBUS_SLAVE
 from .log import logger
 
 
@@ -53,15 +51,6 @@ class HWDict:
                         self.definitions[file_name] = ydata
                         logger.debug(f"YAML Definition loaded: {file_path}, "
                                      f"definition count {len(self.definitions) - 1}")
-
-
-class OWSensorDevice:
-    def __init__(self, sensor_dev):
-        self.sensor_dev = sensor_dev
-        self.circuit = sensor_dev.circuit
-
-    def full(self):
-        return self.sensor_dev.full()
 
 
 class TcpBusDevice:
@@ -257,6 +246,11 @@ def create_devices(evok_config: EvokConfig, hw_dict):
             bus = SerialBusDevice(circuit=bus_name, bus_driver=bus_driver)
             Devices.register_device(SERIALBUS, bus)
 
+        else:
+            # e.g. 'OWBUS', the 1-Wire bus type before it was renamed to 'OWFS'
+            logger.error(f"Unknown type '{bus_type}' of bus '{bus_name}'! skipping...")
+            continue
+
         if bus is not None:
             bus_device_info_data = bus_data.get("device_info", None)  # noqa
             if bus_device_info_data is not None:
@@ -279,17 +273,18 @@ def create_devices(evok_config: EvokConfig, hw_dict):
                 continue
             logger.info(f"^ Creating device '{device_name}' with type '{bus_type}'")
             try:
-                if bus_type == 'OWBUS':
+                if bus_type == 'OWFS':
                     ow_type = device_data.get("type")
                     address = device_data.get("address")
-                    interval = device_data.getintdef("interval", 15)
+                    if address is None:
+                        raise EvokConfigError("Missing 'address' of the 1-Wire sensor")
+                    interval = int(device_data.get("interval", 15))
 
-                    circuit = device_name
-                    sensor = owdevice.MySensorFabric(address, ow_type, bus, interval=interval, circuit=circuit,
+                    # the sensor registers itself in the bus and in Devices
+                    sensor = owdevice.MySensorFabric(address, ow_type, bus, interval=interval, circuit=str(device_name),
                                                      is_static=True)
-                    if sensor is not None:
-                        sensor = OWSensorDevice(sensor)
-                    Devices.register_device(SENSOR, sensor)
+                    if sensor is None:
+                        raise EvokConfigError(f"Unsupported type '{ow_type}' of the 1-Wire sensor")
 
                 elif bus_type in ['MODBUSTCP', 'MODBUSRTU']:
                     slave_id = device_data.get("slave-id", 1)
@@ -320,11 +315,6 @@ def create_devices(evok_config: EvokConfig, hw_dict):
                                                 DeviceInfo(name=device_name, family=family, model=model, sn=sn,
                                                            board_count=board_count))
 
-                else:
-                    logger.error(f"Unknown bus type: '{bus_type}'! skipping...")
-                    if logger.level == logging.DEBUG:
-                        traceback.print_exc()
-
             except Exception as E:
                 logger.exception(f"Error in config section '{bus_type}:{device_name}' - {str(E)}")
 
@@ -333,17 +323,20 @@ def load_aliases(path):
     alias_dicts = list(HWDict(paths=[path]).definitions.values())
     # HWDict returns List(), take only first item
     alias_conf = alias_dicts[0] if len(alias_dicts) > 0 else dict()
-    version = str(alias_conf.get("version", "1.0"))
-
-    version = alias_conf.get("version", None)
-    if version == "1.0":
+    # 'version: 2.0' without quotes is a number, without a version it is given by the format of the aliases
+    version = alias_conf.get("version")
+    if version is None:
+        version = "1.0" if isinstance(alias_conf.get("aliases"), list) else "2.0"
+    version = str(version)
+    if version in ("1", "1.0"):
         # transform array to dict and rename dev_type -> devtype if version 1.0
         result = dict(((rec["name"], {"circuit": rec.get("circuit", None), "devtype": rec.get("dev_type", None)})
                        for rec in alias_conf.get("aliases", {})
                        if rec.get("name", None) is not None))
-    elif version == "2.0":
-        result = alias_conf.get("aliases", {})
+    elif version in ("2", "2.0"):
+        result = alias_conf.get("aliases") or {}
     else:
+        logger.error(f"Unknown version '{version}' of the alias file {path}, aliases are not loaded")
         result = {}
     Devices.aliases = Aliases(result)
     logger.debug(f"Load aliases with {result}")
