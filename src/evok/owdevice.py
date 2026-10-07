@@ -10,6 +10,15 @@ from asyncowfs import OWFS
 from asyncowfs import event
 
 MAX_LOSTINTERVAL = 300  # 5 minutes
+RECONNECT_DELAY = 10  # s, the next connection to owserver after a failure
+
+
+def check_interval(interval, name='interval', zero=False):
+    """ An interval in seconds, 0 or negative interval would poll the bus continuously """
+    interval = int(float(interval))
+    if interval < 0 or (interval == 0 and not zero):
+        raise ValueError(f"Invalid {name} {interval}, it must be {'0 or ' if zero else ''}a positive number")
+    return interval
 
 SUPPORTED_DEVICES = ["DS18S20", "DS18B20", "DS2438", "DS2408", "DS2413"]
 
@@ -27,7 +36,7 @@ class MySensor(object):
         self.circuit = circuit if circuit is not None else addr.replace('.', '')
         self.major_group = major_group
         self.address = addr
-        self.interval = bus.interval if interval is None else interval  # seconds
+        self.interval = bus.interval if interval is None else check_interval(interval)  # seconds
         self.is_dynamic_interval = dynamic  # dynamically change interval #TODO
         self.last_value = None
         self.value = None
@@ -53,7 +62,7 @@ class MySensor(object):
 
     async def set(self, interval=None, alias=None):
         if interval is not None:
-            self.interval = int(interval)
+            self.interval = check_interval(interval)
             self.time = anyio.current_time() + self.calc_interval()
             devents.config(self)
         if alias is not None:
@@ -233,8 +242,9 @@ class OwBusDriver:
         self.devtype = OWBUS
         self.circuit = circuit
         self.major_group = major_group
-        self.scan_interval = scan_interval
-        self.interval = interval
+        # scan_interval 0 scans only on request (do_scan), in fact once per hour
+        self.scan_interval = check_interval(scan_interval, 'scan_interval', zero=True)
+        self.interval = check_interval(interval)
         self.scanned = set()
         self.mysensors = list()
         self.ow = None
@@ -257,15 +267,31 @@ class OwBusDriver:
         return list
 
     def switch_to_async(self):
-        self._run_task = asyncio.create_task(self.run())
+        self._run_task = asyncio.create_task(self.run_forever())
+
+    async def run_forever(self):
+        """ Run the bus, connect to owserver again after a failure """
+        while True:
+            try:
+                await self.run()
+            except asyncio.CancelledError:
+                raise
+            except Exception as E:
+                logger.error(f"1-Wire bus {self.circuit} failed, connecting again in {RECONNECT_DELAY} s: "
+                             f"{type(E).__name__}: {E}")
+            # the devices are located again after the connection
+            for mysensor in self.mysensors:
+                mysensor.sens = None
+                mysensor.set_lost()
+            await asyncio.sleep(RECONNECT_DELAY)
 
     async def set(self, scan_interval=None, do_scan=False, interval=None, do_reset=None):
         was_changed = False
 
         if scan_interval is not None:
-            scan_interval = int(float(scan_interval))
+            scan_interval = check_interval(scan_interval, 'scan_interval', zero=True)
         if interval is not None:
-            interval = int(float(interval))
+            interval = check_interval(interval)
 
         if do_reset:
             await self.do_reset()

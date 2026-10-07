@@ -68,8 +68,9 @@ comm_channels:
         - `stopbits` - stop bits of the Modbus device (Default value is `1`)
         - `timeout` - timeout of a response in seconds (Default value is `0.5`)
     - `OWFS` (1-Wire bus, the former name `OWBUS` is not supported)
-        - `interval` - interval of values updating in seconds (Default value is `60`)
-        - `scan_interval` - interval of the search for new devices in seconds (Default value is `300`)
+        - `interval` - interval of values updating in seconds, a positive number (Default value is `60`)
+        - `scan_interval` - interval of the search for new devices in seconds, `0` searches only on request
+          (Default value is `300`)
         - `owpower` - [Circuit](../circuit.md) of owpower device (for restarting bus; optional parameter)
 
 ### Device configuration
