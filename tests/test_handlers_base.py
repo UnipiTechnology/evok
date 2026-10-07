@@ -104,3 +104,51 @@ async def test_get_all(fetch, analogs):
     code, reply = await fetch('/rest/ai/all')
     assert code == 200
     assert [state['circuit'] for state in reply] == ['1_01', '1_02']
+
+
+def test_get_all_includes_nv_save():
+    from evok.devices import NV_SAVE
+    from evok.handlers_base import EvokWebHandlerBase
+
+    class NvSave:
+        circuit = '1'
+
+        def full(self):
+            return {'dev': 'nv_save', 'circuit': '1', 'value': 0}
+    Devices[NV_SAVE]['1'] = NvSave()
+    assert EvokWebHandlerBase._get_all(None) == [{'dev': 'nv_save', 'circuit': '1', 'value': 0}]
+
+
+class FakeOutput:
+    devtype = 'do'
+
+    def __init__(self, circuit):
+        self.circuit = circuit
+        self.alias = ''
+        self.calls = []
+
+    def full(self):
+        return {'dev': 'do', 'circuit': self.circuit}
+
+    async def set(self, **kw):
+        self.calls.append(kw)
+
+
+@pytest.mark.parametrize('path, code', [
+    ('/rest/do/1_01', 200),
+    ('/rest/do/1_01/', 200),
+    ('/rest/do/1_01/alias', 200),
+    ('/rest/do/1_01/value', 404),
+    ('/rest/do/all', 404),
+])
+async def test_post_url(fetch, path, code):
+    Devices['do']['1_01'] = FakeOutput('1_01')
+    status, reply = await fetch(path, 'POST', urlencode({'value': '1'}))
+    assert status == code
+    assert Devices['do']['1_01'].calls == ([{'value': '1'}] if code == 200 else [])
+
+
+def test_alias_all_is_reserved():
+    Devices['do']['1_01'] = FakeOutput('1_01')
+    with pytest.raises(ValueError, match='reserved'):
+        Devices.set_alias('all', Devices['do']['1_01'])

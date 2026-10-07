@@ -10,7 +10,7 @@ from .devices import Devices
 from .errors import DeviceNotFound
 from .devices import OWBUS, DEVICE_INFO, SENSOR, MODBUS_SLAVE, \
     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
-    REGISTER, DATA_POINT
+    REGISTER, DATA_POINT, NV_SAVE
 from .log import logger
 
 SCHEMA_VALIDATE = True
@@ -67,6 +67,11 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
 
     async def post(self, dev, circuit, prop):
         try:
+            # .../alias is the documented URL for setting the alias, the params are in the body
+            if prop not in (None, 'alias'):
+                raise DeviceNotFound(f"Invalid URL, POST sets the params of the device in the body, not '{prop}'")
+            if circuit == 'all':
+                raise DeviceNotFound("POST cannot set all devices, use the bulk API")
             device = Devices.by_name(dev, circuit)
             kw = self._get_kw()
             if SCHEMA_VALIDATE:
@@ -92,7 +97,7 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
         await self.finish()
 
     def _get_all(self):
-        devtypes = (DI, RO, DO, AI, AO, SENSOR, LED, WATCHDOG, MODBUS_SLAVE, OWPOWER,
+        devtypes = (DI, RO, DO, AI, AO, SENSOR, LED, WATCHDOG, MODBUS_SLAVE, OWPOWER, NV_SAVE,
                     REGISTER, DATA_POINT, OWBUS, DEVICE_INFO)
         devices = chain.from_iterable(Devices.by_name(devtype) for devtype in devtypes)
         return [dev.full() for dev in devices]

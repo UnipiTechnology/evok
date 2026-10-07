@@ -72,6 +72,9 @@ class Aliases:
         # check alias name
         if not re.fullmatch(r"[A-Za-z0-9._-]+", alias):
             raise ValueError(f"Invalid alias {alias}")
+        # GET /rest/<dev>/all returns all devices of the type, such alias would never be used
+        if alias == 'all':
+            raise ValueError("Alias all is reserved")
 
     def add(self, alias: str, device: Device, file_update: bool = False):
         if alias != device.alias:
