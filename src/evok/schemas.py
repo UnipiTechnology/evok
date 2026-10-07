@@ -1,22 +1,22 @@
-'''
-Created on 16 Oct 2017
-
-'''
-from typing import Dict, Tuple
+""" JSON schemas of the params of set() of the device types, used by REST, bulk and WebSocket """
 SCHEMA = "https://json-schema.org/draft/2020-12/schema"
+
+# 7: the name of the alias is checked by Aliases.validate(), the length here
+MAX_ALIAS_LENGTH = 64
+ALIAS = {"type": "string", "maxLength": MAX_ALIAS_LENGTH}
 
 owire_post_inp_schema = {
     "$schema": SCHEMA,
-    "title": "OW_sensor",
+    "title": "OneWire_sensor",
     "type": "object",
     "additionalProperties": False,
     "properties": {
         "interval": {"type": ["string", "number"]},
-        "alias": {"type": "string"}
+        "alias": ALIAS
     }
 }
 
-owire_post_inp_example = {}
+owire_post_inp_example = {"interval": 15}
 
 led_post_inp_schema = {
     "$schema": SCHEMA,
@@ -25,7 +25,7 @@ led_post_inp_schema = {
     "additionalProperties": False,
     "properties": {
         "value": {"type": ["boolean", "string", "number"]},
-        "alias": {"type": "string"}
+        "alias": ALIAS
     },
 }
 
@@ -38,7 +38,7 @@ relay_post_inp_schema = {
     "additionalProperties": False,
     "properties": {
         "value": {"type": ["boolean", "string", 'number']},
-        "alias": {"type": "string"}
+        "alias": ALIAS
     },
 }
 
@@ -46,7 +46,7 @@ relay_post_inp_example = {"value": "1"}
 
 do_post_inp_schema = {
     "$schema": SCHEMA,
-    "title": "Digital_Output",
+    "title": "Digital_output",
     "type": "object",
     "additionalProperties": False,
     "properties": {
@@ -55,7 +55,7 @@ do_post_inp_schema = {
         "timeout": {"type": ["number", "string"]},
         "pwm_freq": {"type": ["number", "string"], "minimum": 0},     # 0 is rejected by the device
         "pwm_duty": {"type": ["number", "string"], "minimum": 0, "maximum": 100},
-        "alias": {"type": "string"}
+        "alias": ALIAS
     },
 }
 
@@ -63,7 +63,7 @@ do_post_inp_example = {"value": "1"}
 
 ao_post_inp_schema = {
     "$schema": SCHEMA,
-    "title": "Analog_Output",
+    "title": "Analog_output",
     "type": "object",
     "additionalProperties": False,
     "properties": {
@@ -75,9 +75,7 @@ ao_post_inp_schema = {
             "type": "string",
             "description": "Must be in 'modes', they are given by the hardware definition"
         },
-        "alias": {
-            "type": "string"
-        }
+        "alias": ALIAS
     }
 }
 
@@ -85,7 +83,7 @@ ao_post_inp_example = {"value": 1}
 
 ai_post_inp_schema = {
     "$schema": SCHEMA,
-    "title": "Analog_Input",
+    "title": "Analog_input",
     "type": "object",
     "additionalProperties": False,
     "properties": {
@@ -93,9 +91,7 @@ ai_post_inp_schema = {
             "type": "string",
             "description": "Must be in 'modes'!"
         },
-        "alias": {
-            "type": "string"
-        }
+        "alias": ALIAS
     }
 }
 
@@ -103,7 +99,7 @@ ai_post_inp_example = {"mode": "Voltage"}
 
 di_post_inp_schema = {
     "$schema": SCHEMA,
-    "title": "Digital_Input",
+    "title": "Digital_input",
     "type": "object",
     "additionalProperties": False,
     "properties": {
@@ -112,11 +108,11 @@ di_post_inp_schema = {
             "minimum": 0,
             "maximum": 4294967295
         },
-        "counter_mode": {},
+        "counter_mode": {"type": "string"},
         "debounce": {"type": ["number", "string"]},
         "mode": {"type": "string"},
         "ds_mode": {"type": "string"},
-        "alias": {"type": "string"}
+        "alias": ALIAS
     },
 }
 
@@ -133,9 +129,7 @@ register_post_inp_schema = {
             "minimum": 0,
             "maximum": 65535
         },
-        "alias": {
-            "type": "string"
-        }
+        "alias": ALIAS
     }
 }
 
@@ -155,7 +149,7 @@ data_point_post_inp_schema = {
             "examples": [21.5, "21.5"]
         },
         "alias": {
-            "type": "string",
+            **ALIAS,
             "description": "Alias of the data point",
             "examples": ["setpoint_living_room"]
         }
@@ -166,7 +160,7 @@ data_point_post_inp_example = {"value": 21.5}
 
 wd_post_inp_schema = {
     "$schema": SCHEMA,
-    "title": "Master_Watchdog",
+    "title": "Watchdog",
     "type": "object",
     "additionalProperties": False,
     "properties": {
@@ -183,9 +177,7 @@ wd_post_inp_schema = {
         "nv_save": {
             "type": ["boolean", "string", "number"]
         },
-        "alias": {
-            "type": "string"
-        }
+        "alias": ALIAS
     }
 }
 
@@ -223,9 +215,7 @@ owpower_post_inp_schema = {
         "value": {
             "type": ["number", "string", "boolean"]
         },
-        "alias": {
-            "type": "string"
-        }
+        "alias": ALIAS
     }
 }
 
@@ -233,7 +223,7 @@ owpower_post_inp_example = {"value": True}
 
 run_post_inp_schema = {
     "$schema": SCHEMA,
-    "title": "running_evok_config",
+    "title": "Aliases",
     "type": "object",
     "additionalProperties": False,
     "properties": {
@@ -258,9 +248,7 @@ nv_save_post_inp_schema = {
         "value": {
             "type": ["number", "string", "boolean"]
         },
-        "alias": {
-            "type": "string"
-        }
+        "alias": ALIAS
     }
 }
 
@@ -323,7 +311,7 @@ bulk_post_inp_example = {
 }
 
 
-schemas: Dict[str, Tuple[dict, dict]] = {
+schemas: dict[str, tuple[dict, dict]] = {
     'input': (di_post_inp_schema, di_post_inp_example),
     'output': (do_post_inp_schema, do_post_inp_example),
     'ro': (relay_post_inp_schema, relay_post_inp_example),

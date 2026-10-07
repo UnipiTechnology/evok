@@ -6,6 +6,7 @@ There are several restrictions to aliases:
 
 - Every alias needs to be globally unique, not just within its own class.
 - Aliases can only contain alphanumeric characters, underscores and dashes. This is to allow devices to address via the alias using the APIs (i.e. setting an alias for a `relay 1_01` to `bedroom_light` will allow it to be addressed both as `/rest/relay/al_bedroom_light` as well as `/rest/relay/1_01`)
+- An alias can have at most 64 characters.
 - An alias cannot be `all`, which addresses all devices of the type, or a circuit of a device of the same type.
 - Invalid aliases will be rejected by the API, with the previous alias remaining.
 

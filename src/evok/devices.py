@@ -6,6 +6,7 @@ from typing import Any, Callable, Union
 
 from .errors import DeviceNotFound
 from .log import logger
+from .schemas import MAX_ALIAS_LENGTH
 
 """
    Structured dict/dict of all devices in the system
@@ -90,8 +91,8 @@ class Aliases:
         rec = self.initial_dict.get(alias)
         if rec is not None and (rec.get('devtype') != device.devtype or rec.get('circuit') != str(device.circuit)):
             raise ValueError(f"Alias {alias} belongs to {rec.get('devtype')} {rec.get('circuit')}")
-        # check alias name
-        if not re.fullmatch(r"[A-Za-z0-9._-]+", alias):
+        # check alias name, the length as in the schemas, which are not used by every API
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", alias) or len(alias) > MAX_ALIAS_LENGTH:
             raise ValueError(f"Invalid alias {alias}")
         # GET /rest/<dev>/all returns all devices of the type, such alias would never be used
         if alias == 'all':

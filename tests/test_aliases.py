@@ -151,3 +151,9 @@ def test_by_name_major_group(devices):
     assert devices.by_name(DI, major_group='2') == [devices[DI]['1_02']]
     assert devices.by_name('input', major_group='3') == []
     assert list(devices.by_name(DI)) == [devices[DI]['1_01'], devices[DI]['1_02']]
+
+
+def test_alias_length(devices):
+    devices.set_alias('a' * 64, devices[DI]['1_01'])
+    with pytest.raises(ValueError, match='Invalid alias'):
+        devices.set_alias('a' * 65, devices[DI]['1_02'])

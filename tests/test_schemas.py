@@ -148,3 +148,9 @@ async def test_run_save_from_form():
     await aliases.set(save='false')
     await aliases.set(save='true')
     assert saved == [True]
+
+
+@pytest.mark.parametrize('dev, kw', [('do', {'alias': 'a' * 65}), ('di', {'counter_mode': 1})])
+def test_schema_rejects_long_alias_and_counter_mode_type(dev, kw):
+    with pytest.raises(jsonschema.ValidationError):
+        check_params(dev, kw)
