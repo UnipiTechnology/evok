@@ -1,5 +1,4 @@
 import json
-from operator import methodcaller
 
 import jsonschema
 import tornado.web
@@ -23,53 +22,65 @@ class JSONBulkHandler(tornado.web.RequestHandler):
         self.set_status(204)
         self.finish()
 
+    @staticmethod
+    def _filter(devices, command) -> list:
+        """ The devices of the optional group and circuits of the command """
+        if (grp := command.get('group')) is not None:
+            # major_group is a string of Modbus devices and a number of 1-Wire ones, some devices have none
+            devices = [dev for dev in devices if str(getattr(dev, 'major_group', None)) == str(grp)]
+        if (circuits := command.get('device_circuits')) is not None:
+            devices = [dev for dev in devices if dev.circuit in circuits]
+        return list(devices)
+
+    @staticmethod
+    def _check_params(dev_type, kw):
+        if SCHEMA_VALIDATE:
+            if dev_type not in schemas:
+                raise ValueError(f'Invalid device name {dev_type}')
+            jsonschema.validate(instance=kw, schema=schemas[dev_type][0])
+
     async def post(self):
-        """This function returns a heterogeneous list of all devices exposed via the REST API"""
+        """ Query and set several devices in one request
+
+            All assignments are checked before any device is set. An error while setting a device
+            returns the results of the commands done so far together with the error.
+        """
         result = {}
         try:
             js_dict = json.loads(self.request.body)
             # the structure of the request, the assigned values are checked by the device schemas
             jsonschema.validate(instance=js_dict, schema=bulk_post_inp_schema)
+
+            # find the devices and check the values of all assignments before setting any device
+            group_assignments = []
+            for command in js_dict.get('group_assignments', []):
+                devices = self._filter(Devices.by_name(command['device_type']), command)
+                self._check_params(command['device_type'], command['assigned_values'])
+                group_assignments.append((devices, command['assigned_values']))
+            individual_assignments = []
+            for command in js_dict.get('individual_assignments', []):
+                dev = Devices.by_name(command['device_type'], circuit=command['device_circuit'])
+                self._check_params(command['device_type'], command['assigned_values'])
+                individual_assignments.append((dev, command['assigned_values']))
+
             if 'group_queries' in js_dict:
                 result['group_queries'] = []
-                for single_query in js_dict['group_queries']:
-                    all_devs = [dev for device_type in single_query['device_types']
-                                for dev in Devices.by_name(device_type)]
-                    if (grp := single_query.get('group', None)) is not None:
-                        all_devs = [dev for dev in all_devs if dev.major_group == str(grp)]
-                    if (circuits := single_query.get('device_circuits', None)) is not None:
-                        all_devs = [dev for dev in all_devs if dev.circuit in circuits]
-                    result['group_queries'].append(list(map(methodcaller('full'), all_devs)))
+                for query in js_dict['group_queries']:
+                    devices = [dev for device_type in query['device_types'] for dev in Devices.by_name(device_type)]
+                    result['group_queries'].append([dev.full() for dev in self._filter(devices, query)])
 
             if 'group_assignments' in js_dict:
                 result['group_assignments'] = []
-                for single_command in js_dict['group_assignments']:
-                    dev_type = single_command['device_type']
-                    kw = single_command['assigned_values']
-                    all_devs = Devices.by_name(dev_type)
-                    if SCHEMA_VALIDATE:
-                        # validate before setting any device of the group
-                        if dev_type not in schemas:
-                            raise ValueError(f'Invalid device name {dev_type}')
-                        jsonschema.validate(instance=kw, schema=schemas[dev_type][0])
-                    if (grp := single_command.get('group', None)) is not None:
-                        all_devs = [dev for dev in all_devs if dev.major_group == str(grp)]
-                    if (circuits := single_command.get('device_circuits', None)) is not None:
-                        all_devs = [dev for dev in all_devs if dev.circuit in circuits]
-                    for dev in all_devs:
+                for devices, kw in group_assignments:
+                    states = []
+                    result['group_assignments'].append(states)
+                    for dev in devices:
                         await dev.set(**kw)
-                    result['group_assignments'].append(list(map(methodcaller('full'), all_devs)))
+                        states.append(dev.full())
 
             if 'individual_assignments' in js_dict:
                 result['individual_assignments'] = []
-                for single_command in js_dict['individual_assignments']:
-                    dev_type = single_command['device_type']
-                    kw = single_command['assigned_values']
-                    dev = Devices.by_name(dev_type, circuit=single_command['device_circuit'])
-                    if SCHEMA_VALIDATE:
-                        if dev_type not in schemas:
-                            raise ValueError(f'Invalid device name {dev_type}')
-                        jsonschema.validate(instance=kw, schema=schemas[dev_type][0])
+                for dev, kw in individual_assignments:
                     await dev.set(**kw)
                     result['individual_assignments'].append(dev.full())
 
@@ -78,12 +89,13 @@ class JSONBulkHandler(tornado.web.RequestHandler):
             # the string of a ValidationError contains the whole schema
             message = E.message if isinstance(E, jsonschema.ValidationError) else str(E)
             logger.error(f"BULK: {message}")
-            self.write(json.dumps({'success': False, 'errors': {str(type(E).__name__): message}}))
+            # the results of the commands done before the error
+            self.write(json.dumps({'success': False, 'errors': {str(type(E).__name__): message}, **result}))
             # a wrong device is not found, wrong data is a bad request
             self.set_status(status_code=404 if isinstance(E, DeviceNotFound) else 400)
         except Exception as E:
             logger.exception(f"BULK: {str(E)}")
-            self.write(json.dumps({'success': False, 'errors': {'Server error': 'internal'}}))
+            self.write(json.dumps({'success': False, 'errors': {'Server error': 'internal'}, **result}))
             self.set_status(status_code=500)
         finally:
             await self.finish()
