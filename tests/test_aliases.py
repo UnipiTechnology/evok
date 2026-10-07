@@ -127,3 +127,10 @@ async def test_delete_alias_of_registered_device(devices):
 async def test_delete_unknown_alias(devices):
     with pytest.raises(ValueError, match='Unknown alias'):
         await devices.aliases.set(delete='kitchen')
+
+
+def test_none_alias_resets_to_empty_string(devices):
+    devices.set_alias('kitchen', devices[DI]['1_01'])
+    devices.set_alias(None, devices[DI]['1_01'])
+    assert devices[DI]['1_01'].alias == ''
+    assert 'kitchen' not in devices.aliases

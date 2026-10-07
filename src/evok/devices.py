@@ -247,7 +247,8 @@ class DeviceList(dict):
                 if alias == '' or alias is None:
                     if device.alias:
                         self.aliases.delete(device.alias, file_update)
-                    device.alias = alias
+                    # no alias is '', full() of the devices tests it
+                    device.alias = ''
                     logger.debug(f"Reset alias of {device.devtype}[{device.circuit}]")
                 elif alias != device.alias:
                     # by_name() finds the circuit first, such alias would never be used
