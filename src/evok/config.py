@@ -100,7 +100,7 @@ class EvokConfig:
 
     def __init__(self, conf_dir_path: str):
         self.conf_dir_path = conf_dir_path
-        data = self.__get_final_conf(scope=[conf_dir_path + '/config.yaml'])
+        data = self.__get_final_conf([conf_dir_path + '/config.yaml'])
         self.comm_channels: dict = self.__get_comm_channels(data)
         self.apis: dict = self.__get_apis_conf(data)
         self.logging: dict = self.__get_logging_conf(data)
@@ -113,14 +113,8 @@ class EvokConfig:
                 source[key] = append[key]
         return source
 
-    def __get_final_conf(self, conf_dir_path: Union[None, str] = None,
-                         scope: Union[None, List[str]] = None,
-                         check_autogen: bool = True) -> dict:
-        if scope is None:
-            files = os.listdir(conf_dir_path)
-            if 'config.yaml' not in files:
-                raise EvokConfigError(f"Missing 'config.yaml' in evok configuration directory ({conf_dir_path})")
-            scope = files
+    def __get_final_conf(self, scope: List[str], check_autogen: bool = True) -> dict:
+        """ Merge the config files in the scope, the later ones override the former ones """
         final_conf = {}
         for path in scope:
             try:
@@ -136,7 +130,7 @@ class EvokConfig:
                 raise EvokConfigError(f"Config file {path} does not contain a mapping")
             self.__merge_data(final_conf, ydata)
         if check_autogen and final_conf.get('autogen', False):
-            return self.__get_final_conf(scope=[self.conf_dir_path + '/autogen.yaml', *scope], check_autogen=False)
+            return self.__get_final_conf([self.conf_dir_path + '/autogen.yaml', *scope], check_autogen=False)
         return final_conf
 
     @staticmethod
@@ -169,9 +163,6 @@ class EvokConfig:
             ret[name] = value
         return ret
 
-    def configtojson(self):
-        return self.main  # TODO: zkontrolovat!!
-
     def get_comm_channels(self) -> dict:
         return self.comm_channels
 
@@ -180,12 +171,6 @@ class EvokConfig:
             logger.warning(f"Api '{name}' not found")
             return {}
         return self.apis[name]
-
-
-def hexint(value):
-    if value.startswith('0x'):
-        return int(value[2:], 16)
-    return int(value)
 
 
 def create_devices(evok_config: EvokConfig, hw_dict):
@@ -231,7 +216,6 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
             retry_on_device_busy=True,
             retry_on_device_failure=False,
         )
-        # bus_driver = create_async_tcp_client(host=modbus_server, port=modbus_port, unit_id=0)
         bus = TcpBusDevice(circuit=bus_name, bus_driver=bus_driver)
         Devices.register_device(TCPBUS, bus)
 
@@ -253,9 +237,6 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
             retry_on_device_busy=True,
             retry_on_device_failure=False
         )
-
-        # bus_driver = create_async_rtu_client(port=serial_port, unit_id=0, baudrate=serial_baud_rate,
-        #                                      parity=serial_parity, stopbits=serial_stopbits, timeout=0.5)
         bus = SerialBusDevice(circuit=bus_name, bus_driver=bus_driver)
         Devices.register_device(SERIALBUS, bus)
 
