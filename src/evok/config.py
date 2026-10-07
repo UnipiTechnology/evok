@@ -125,10 +125,16 @@ class EvokConfig:
         for path in scope:
             try:
                 with open(path, 'r') as f:
-                    ydata: dict = yaml.load(f, Loader=yaml.Loader)
-                self.__merge_data(final_conf, ydata)
+                    ydata = yaml.safe_load(f)
             except FileNotFoundError:
                 logger.warning(f"Config file {path} not found!")
+                continue
+            if ydata is None:
+                logger.warning(f"Config file {path} is empty!")
+                continue
+            if not isinstance(ydata, dict):
+                raise EvokConfigError(f"Config file {path} does not contain a mapping")
+            self.__merge_data(final_conf, ydata)
         if check_autogen and final_conf.get('autogen', False):
             return self.__get_final_conf(scope=[self.conf_dir_path + '/autogen.yaml', *scope], check_autogen=False)
         return final_conf
@@ -139,7 +145,7 @@ class EvokConfig:
         if 'comm_channels' not in data:
             logger.warning("Section 'comm_channels' not in configuration!")
             return ret
-        for name, value in data['comm_channels'].items():
+        for name, value in (data['comm_channels'] or {}).items():
             ret[name] = value
         return ret
 
@@ -149,7 +155,7 @@ class EvokConfig:
         if 'apis' not in data:
             logger.warning("Section 'apis' not in configuration!")
             return ret
-        for name, value in data['apis'].items():
+        for name, value in (data['apis'] or {}).items():
             ret[name] = value
         return ret
 
@@ -159,7 +165,7 @@ class EvokConfig:
         if 'logging' not in data:
             logger.warning("Section 'logging' not in configuration!")
             return ret
-        for name, value in data['logging'].items():
+        for name, value in (data['logging'] or {}).items():
             ret[name] = value
         return ret
 
@@ -184,139 +190,147 @@ def hexint(value):
 
 def create_devices(evok_config: EvokConfig, hw_dict):
     for bus_name, bus_data in evok_config.get_comm_channels().items():
-        bus_data: dict
-        if not bus_data.get("enabled", True):
-            logger.info(f"Skipping disabled bus '{bus_name}'")
+        # an error in the config of a bus does not stop creating the other buses
+        try:
+            _create_bus(bus_name, bus_data or {}, hw_dict)
+        except Exception as E:
+            logger.exception(f"Error in config of bus '{bus_name}' - {str(E)}")
+
+
+def _create_bus(bus_name, bus_data: dict, hw_dict):
+    if not bus_data.get("enabled", True):
+        logger.info(f"Skipping disabled bus '{bus_name}'")
+        return
+    bus_type = bus_data.get('type')
+
+    bus = None
+    bus_device_info: Union[None, DeviceInfo] = None
+    if bus_type == 'OWFS':
+        interval = bus_data.get("interval", 60)
+        scan_interval = bus_data.get("scan_interval", 300)
+        owpower = bus_data.get("owpower", None)
+
+        circuit = bus_name
+        bus = owdevice.OwBusDriver(circuit, interval=interval, scan_interval=scan_interval,
+                                   owpower_circuit=owpower)
+        Devices.register_device(OWBUS, bus)
+
+    elif bus_type == 'MODBUSTCP':
+        host = bus_data.get("hostname", "127.0.0.1")
+        port = bus_data.get("port", 502)
+        bus_driver = AsyncSmartTransport(
+            AsyncTcpTransport(
+                host,
+                port,
+                timeout=0.5,
+                connect_timeout=1.0
+            ),
+            wait_between_requests=0.0,
+            wait_after_connect=0.0,
+            auto_reconnect=True,
+            retry_on_device_busy=True,
+            retry_on_device_failure=False,
+        )
+        # bus_driver = create_async_tcp_client(host=modbus_server, port=modbus_port, unit_id=0)
+        bus = TcpBusDevice(circuit=bus_name, bus_driver=bus_driver)
+        Devices.register_device(TCPBUS, bus)
+
+    elif bus_type == "MODBUSRTU":
+        serial_port = bus_data["port"]
+        serial_baud_rate = bus_data.get("baudrate", 19200)
+        serial_parity = bus_data.get("parity", 'N')
+        serial_stopbits = bus_data.get("stopbits", 1)
+        bus_driver = AsyncSmartTransport(
+            AsyncRtuTransport(
+                serial_port,
+                timeout=0.5,
+                baudrate=serial_baud_rate,
+                parity=serial_parity,
+                stopbits=serial_stopbits),
+            auto_reconnect=True,
+            wait_between_requests=0.0,
+            wait_after_connect=0.0,
+            retry_on_device_busy=True,
+            retry_on_device_failure=False
+        )
+
+        # bus_driver = create_async_rtu_client(port=serial_port, unit_id=0, baudrate=serial_baud_rate,
+        #                                      parity=serial_parity, stopbits=serial_stopbits, timeout=0.5)
+        bus = SerialBusDevice(circuit=bus_name, bus_driver=bus_driver)
+        Devices.register_device(SERIALBUS, bus)
+
+    else:
+        # e.g. 'OWBUS', the 1-Wire bus type before it was renamed to 'OWFS'
+        logger.error(f"Unknown type '{bus_type}' of bus '{bus_name}'! skipping...")
+        return
+
+    if bus is not None:
+        bus_device_info_data = bus_data.get("device_info", None)  # noqa
+        if bus_device_info_data is not None:
+            bus_device_info_data: dict
+            family = bus_device_info_data.get("family", 'unknown')
+            model = bus_device_info_data.get("model", 'unknown')
+            sn = bus_device_info_data.get("sn", None)
+            board_count = bus_device_info_data.get("board_count", 1)
+            bus_device_info = DeviceInfo(name=model, family=family, model=model, sn=sn, board_count=board_count)
+            Devices.register_device(DEVICE_INFO, bus_device_info)
+
+    if 'devices' not in bus_data:
+        logger.info(f"Creating bus '{bus_name}' with type '{bus_type}'.")
+        return
+
+    logger.info(f"Creating bus '{bus_name}' with type '{bus_type}' with devices.")
+    for device_name, device_data in (bus_data['devices'] or {}).items():
+        device_data = device_data or {}
+        if not device_data.get("enabled", True):
+            logger.info(f"^ Skipping disabled device '{device_name}'")
             continue
-        bus_type = bus_data['type']
+        logger.info(f"^ Creating device '{device_name}' with type '{bus_type}'")
+        try:
+            if bus_type == 'OWFS':
+                ow_type = device_data.get("type")
+                address = device_data.get("address")
+                if address is None:
+                    raise EvokConfigError("Missing 'address' of the 1-Wire sensor")
+                interval = int(device_data.get("interval", 15))
 
-        bus = None
-        bus_device_info: Union[None, DeviceInfo] = None
-        if bus_type == 'OWFS':
-            interval = bus_data.get("interval", 60)
-            scan_interval = bus_data.get("scan_interval", 300)
-            owpower = bus_data.get("owpower", None)
+                # the sensor registers itself in the bus and in Devices
+                sensor = owdevice.MySensorFabric(address, ow_type, bus, interval=interval, circuit=str(device_name),
+                                                 is_static=True)
+                if sensor is None:
+                    raise EvokConfigError(f"Unsupported type '{ow_type}' of the 1-Wire sensor")
 
-            circuit = bus_name
-            bus = owdevice.OwBusDriver(circuit, interval=interval, scan_interval=scan_interval,
-                                       owpower_circuit=owpower)
-            Devices.register_device(OWBUS, bus)
+            elif bus_type in ['MODBUSTCP', 'MODBUSRTU']:
+                slave_id = device_data.get("slave-id", 1)
+                scanfreq = device_data.get("scan_frequency", 50)
+                scan_enabled = device_data.get("scan_enabled", True)
+                device_model = device_data["model"]
+                circuit = str(device_name)
+                if device_model not in hw_dict.definitions:
+                    logger.error("Unsupported device model %s. Check HW definitions",
+                                 device_model)
+                    raise EvokConfigError("")
+                hw_model_dict = hw_dict.definitions[device_model]
 
-        elif bus_type == 'MODBUSTCP':
-            host = bus_data.get("hostname", "127.0.0.1")
-            port = bus_data.get("port", 502)
-            bus_driver = AsyncSmartTransport(
-                AsyncTcpTransport(
-                    host,
-                    port,
-                    timeout=0.5,
-                    connect_timeout=1.0
-                ),
-                wait_between_requests=0.0,
-                wait_after_connect=0.0,
-                auto_reconnect=True,
-                retry_on_device_busy=True,
-                retry_on_device_failure=False,
-            )
-            # bus_driver = create_async_tcp_client(host=modbus_server, port=modbus_port, unit_id=0)
-            bus = TcpBusDevice(circuit=bus_name, bus_driver=bus_driver)
-            Devices.register_device(TCPBUS, bus)
+                slave = ModbusScanner(bus.bus_driver, circuit, scanfreq, scan_enabled,
+                                      hw_model_dict, unit_id=slave_id)
+                Devices.register_device(MODBUS_SLAVE, slave)
 
-        elif bus_type == "MODBUSRTU":
-            serial_port = bus_data["port"]
-            serial_baud_rate = bus_data.get("baudrate", 19200)
-            serial_parity = bus_data.get("parity", 'N')
-            serial_stopbits = bus_data.get("stopbits", 1)
-            bus_driver = AsyncSmartTransport(
-                AsyncRtuTransport(
-                    serial_port,
-                    timeout=0.5,
-                    baudrate=serial_baud_rate,
-                    parity=serial_parity,
-                    stopbits=serial_stopbits),
-                auto_reconnect=True,
-                wait_between_requests=0.0,
-                wait_after_connect=0.0,
-                retry_on_device_busy=True,
-                retry_on_device_failure=False
-            )
+                if bus_device_info is None or "device_info" in device_data:
+                    device_info = {'model': device_data.get("model", device_name)}
+                    device_info.update(device_data.get("device_info", {}))
+                    family = device_info.get("family", 'unknown')
+                    model = device_info.get("model", 'unknown')
+                    sn = device_info.get("sn", None)
+                    board_count = device_info.get("board_count", 1)
+                    if model[:2].lower() in ['xs', 'xm', 'xl', 'xg'] and family == 'unknown':
+                        family = 'Extension'
+                    Devices.register_device(DEVICE_INFO,
+                                            DeviceInfo(name=device_name, family=family, model=model, sn=sn,
+                                                       board_count=board_count))
 
-            # bus_driver = create_async_rtu_client(port=serial_port, unit_id=0, baudrate=serial_baud_rate,
-            #                                      parity=serial_parity, stopbits=serial_stopbits, timeout=0.5)
-            bus = SerialBusDevice(circuit=bus_name, bus_driver=bus_driver)
-            Devices.register_device(SERIALBUS, bus)
-
-        else:
-            # e.g. 'OWBUS', the 1-Wire bus type before it was renamed to 'OWFS'
-            logger.error(f"Unknown type '{bus_type}' of bus '{bus_name}'! skipping...")
-            continue
-
-        if bus is not None:
-            bus_device_info_data = bus_data.get("device_info", None)  # noqa
-            if bus_device_info_data is not None:
-                bus_device_info_data: dict
-                family = bus_device_info_data.get("family", 'unknown')
-                model = bus_device_info_data.get("model", 'unknown')
-                sn = bus_device_info_data.get("sn", None)
-                board_count = bus_device_info_data.get("board_count", 1)
-                bus_device_info = DeviceInfo(name=model, family=family, model=model, sn=sn, board_count=board_count)
-                Devices.register_device(DEVICE_INFO, bus_device_info)
-
-        if 'devices' not in bus_data:
-            logger.info(f"Creating bus '{bus_name}' with type '{bus_type}'.")
-            continue
-
-        logger.info(f"Creating bus '{bus_name}' with type '{bus_type}' with devices.")
-        for device_name, device_data in bus_data['devices'].items():
-            if not device_data.get("enabled", True):
-                logger.info(f"^ Skipping disabled device '{device_name}'")
-                continue
-            logger.info(f"^ Creating device '{device_name}' with type '{bus_type}'")
-            try:
-                if bus_type == 'OWFS':
-                    ow_type = device_data.get("type")
-                    address = device_data.get("address")
-                    if address is None:
-                        raise EvokConfigError("Missing 'address' of the 1-Wire sensor")
-                    interval = int(device_data.get("interval", 15))
-
-                    # the sensor registers itself in the bus and in Devices
-                    sensor = owdevice.MySensorFabric(address, ow_type, bus, interval=interval, circuit=str(device_name),
-                                                     is_static=True)
-                    if sensor is None:
-                        raise EvokConfigError(f"Unsupported type '{ow_type}' of the 1-Wire sensor")
-
-                elif bus_type in ['MODBUSTCP', 'MODBUSRTU']:
-                    slave_id = device_data.get("slave-id", 1)
-                    scanfreq = device_data.get("scan_frequency", 50)
-                    scan_enabled = device_data.get("scan_enabled", True)
-                    device_model = device_data["model"]
-                    circuit = str(device_name)
-                    if device_model not in hw_dict.definitions:
-                        logger.error("Unsupported device model %s. Check HW definitions",
-                                     device_model)
-                        raise EvokConfigError("")
-                    hw_model_dict = hw_dict.definitions[device_model]
-
-                    slave = ModbusScanner(bus.bus_driver, circuit, scanfreq, scan_enabled,
-                                          hw_model_dict, unit_id=slave_id)
-                    Devices.register_device(MODBUS_SLAVE, slave)
-
-                    if bus_device_info is None or "device_info" in device_data:
-                        device_info = {'model': device_data.get("model", device_name)}
-                        device_info.update(device_data.get("device_info", {}))
-                        family = device_info.get("family", 'unknown')
-                        model = device_info.get("model", 'unknown')
-                        sn = device_info.get("sn", None)
-                        board_count = device_info.get("board_count", 1)
-                        if model[:2].lower() in ['xs', 'xm', 'xl', 'xg'] and family == 'unknown':
-                            family = 'Extension'
-                        Devices.register_device(DEVICE_INFO,
-                                                DeviceInfo(name=device_name, family=family, model=model, sn=sn,
-                                                           board_count=board_count))
-
-            except Exception as E:
-                logger.exception(f"Error in config section '{bus_type}:{device_name}' - {str(E)}")
+        except Exception as E:
+            logger.exception(f"Error in config section '{bus_type}:{device_name}' - {str(E)}")
 
 
 def load_aliases(path):
