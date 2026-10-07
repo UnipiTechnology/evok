@@ -2,6 +2,10 @@
 
 The Webhook API provides a mechanism for pushing real-time updates to clients. Evok sends the changes to the specified hostname and port. A list of reflected devices can be defined. It is suitable for collecting information about the running application.
 
+Evok sends at most one request per `min_interval` seconds (1 s by default) and waits for the response before
+the next request. The changes in the meantime are merged into one request, which contains the last state
+of each changed device, always as a list.
+
 ## Examples
 
 For python examples you need installed `flask` package. You can install it with this command: `pip3 install flask`.

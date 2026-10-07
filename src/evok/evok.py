@@ -5,7 +5,6 @@ import contextlib
 
 import os
 import sys
-import traceback
 from importlib.metadata import version, PackageNotFoundError
 
 import tornado.httpserver
@@ -61,12 +60,22 @@ class UserCookieHelper:
 
 
 class WhHandler:
-    def __init__(self, url, allowed_types, complex_events):
+    """ Notifies the webhook about the changed devices
+
+        At most one request is sent per min_interval seconds and only one request at a time.
+        The changes in the meantime are merged, only the last state of each device is sent.
+    """
+
+    def __init__(self, url, allowed_types, complex_events, min_interval=1.0):
         self.http_client = tornado.httpclient.AsyncHTTPClient()
         self.url = url
         # altnames as 'wd' are converted to the device types
         self.allowed_types = [devtype_of(str(name)) for name in allowed_types]
         self.complex_events = complex_events
+        self.min_interval = float(min_interval)
+        self.pending: dict[tuple, dict] = {}    # the last state of each changed device
+        self.last_sent = None                   # loop time of the last request
+        self.send_task: asyncio.Task | None = None
 
     def open(self):
         logger.debug(f"New WebHook connected {self.url}")
@@ -75,7 +84,7 @@ class WhHandler:
         registered_ws["all"].add(self)
 
     def on_event(self, device):
-        """ Notify the webhook about the changed devices of the allowed types
+        """ Queue the changed devices of the allowed types for the next request
 
             A change of Modbus devices comes as a Proxy with a list of states,
             a change of a 1-Wire sensor as the sensor with its state.
@@ -84,24 +93,37 @@ class WhHandler:
             states = device.full()
             if isinstance(states, dict):
                 states = [states]
-            states = [state for state in states if devtype_of(state['dev']) in self.allowed_types]
-            if not states:
-                return
-            if not self.complex_events:
-                future = self.http_client.fetch(self.url, method="GET", headers={"Content-Type": "application/json"})
-            else:
-                future = self.http_client.fetch(self.url, method="POST", headers={"Content-Type": "application/json"},
-                                                body=json.dumps(states))
-            future.add_done_callback(self._fetch_done)
+            for state in states:
+                if devtype_of(state['dev']) in self.allowed_types:
+                    self.pending[(state['dev'], state.get('circuit'))] = state
+            if self.pending and self.send_task is None:
+                self.send_task = asyncio.create_task(self._send())
         except Exception as E:
-            logger.error(f"WhHandler error in event: {E}")
-            if logger.level == logging.DEBUG:
-                traceback.print_exc()
+            logger.exception(f"WhHandler error in event: {E}")
 
-    def _fetch_done(self, future):
-        """ The request is not awaited, an error of the webhook server is only logged """
-        if not future.cancelled() and future.exception() is not None:
-            logger.error(f"WhHandler error in request to {self.url}: {future.exception()}")
+    async def _send(self):
+        """ Send the pending states, wait min_interval since the last request """
+        loop = asyncio.get_running_loop()
+        try:
+            while self.pending:
+                if self.last_sent is not None:
+                    await asyncio.sleep(max(0.0, self.last_sent + self.min_interval - loop.time()))
+                states = list(self.pending.values())
+                self.pending.clear()
+                self.last_sent = loop.time()
+                try:
+                    if not self.complex_events:
+                        await self.http_client.fetch(self.url, method="GET",
+                                                     headers={"Content-Type": "application/json"})
+                    else:
+                        await self.http_client.fetch(self.url, method="POST",
+                                                     headers={"Content-Type": "application/json"},
+                                                     body=json.dumps(states))
+                except Exception as E:
+                    # the states are not sent again, the next change is sent
+                    logger.error(f"WhHandler error in request to {self.url}: {E}")
+        finally:
+            self.send_task = None
 
 
 class LogoutHandler(tornado.web.RequestHandler):
@@ -339,7 +361,8 @@ async def main():
         wh_address = webhook_config.get("address", "http://127.0.0.1:80/index.html")
         wh_types = webhook_config.get("device_mask", ["di", "sensor", "watchdog"])
         wh_complex = webhook_config.get("complex_events", False)
-        wh = WhHandler(wh_address, wh_types, wh_complex)
+        wh_interval = webhook_config.get("min_interval", 1.0)
+        wh = WhHandler(wh_address, wh_types, wh_complex, wh_interval)
         wh.open()
 
     # ---- prepare hardware according to config ----

@@ -42,6 +42,8 @@ apis:
     # ^ List of device types to notify on (written as a JSON list) - adding AI will generate a large amount of messages!
     complex_events: false
     # ^ EVOK will send POST requests with the same data as WebSocket, rather than an empty GET request
+    min_interval: 1.0
+    # ^ Minimum time between two requests in seconds, the changes in the meantime are merged into one request
 
 #   +------------------------+
 #   | Hardware Configuration |

@@ -26,6 +26,8 @@ In this section you can configure address and port for API listening. These sett
 - `address` - address (with port) to which notifications should be sent
 - `device_mask` - list of devices to notify on (written as a JSON list, same format as `address`)
 - `complex_events` - Evok will send POST requests with the same data as WebSocket, rather than an empty GET request
+- `min_interval` - minimum time between two requests in seconds (default `1.0`). The changes in the meantime are merged
+  into one request with the last state of each device, only one request is sent at a time
 
 ## Hardware configuration
 
