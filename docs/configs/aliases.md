@@ -80,6 +80,33 @@ Alias of DO 1_01 will be removed.
 {'success': True, 'result': {'dev': 'relay', 'relay_type': 'digital', 'circuit': '1_01', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}}
 ```
 
+### Deleting an alias
+
+An alias loaded from the configuration file belongs to its device even when the device is not available
+(e.g. an offline Modbus device), so it cannot be assigned to another device. Such alias can be deleted by its name.
+Any other alias can be deleted this way too.
+
+=== "Python"
+
+    ```python
+    import requests
+
+    def delete_alias(host: str, port: str, alias: str):
+        url = f"http://{host}:{port}/rest/run/alias"
+        data = {'delete': alias}
+        return requests.post(url=url, data=data)
+
+    if __name__ == '__main__':
+        ret = delete_alias(host='127.0.0.1', port='8080', alias='my_relay')
+        print(ret.json())
+    ```
+
+=== "curl"
+
+    ```bash
+    curl --request POST --url 'http://127.0.0.1:8080/rest/run/alias/' --data 'delete=my_relay'
+    ```
+
 ### Force saving alias to flash
 
 === "Python"

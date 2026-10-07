@@ -243,6 +243,10 @@ run_post_inp_schema = {
         "save": {
             "type": ["string", "number", "boolean"]
         },
+        "delete": {
+            "type": "string",
+            "description": "Alias to delete, also an alias of a device which is not registered (e.g. offline)"
+        },
     }
 }
 

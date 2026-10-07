@@ -26,11 +26,20 @@ class Aliases:
         self.alias_dict: dict[str, Device] = {}
         self.initial_dict: dict[str, dict[str, str]] = {}
         for key, value in initial_dict.items():
-            try:
-                value['devtype'] = num_to_devtype_name[int(value['devtype'])]
-                logger.warning(f"Aliases: Detected old devtype '{key}'! Upgrading...")
-            except ValueError:
-                pass
+            if not isinstance(value, dict):
+                logger.warning(f"Aliases: Invalid record of alias '{key}', skipped")
+                continue
+            devtype = value.get('devtype')
+            if devtype is None:
+                # kept in the file, but it is never assigned to a device
+                logger.warning(f"Aliases: Missing devtype of alias '{key}'")
+            elif isinstance(devtype, int) or (isinstance(devtype, str) and devtype.isdigit()):
+                name = num_to_devtype_name.get(int(devtype))
+                if name is None:
+                    logger.warning(f"Aliases: Unknown devtype {devtype} of alias '{key}'")
+                else:
+                    value['devtype'] = name
+                    logger.warning(f"Aliases: Detected old devtype '{key}'! Upgrading...")
             self.initial_dict[key] = value
         self.dirty_callback: Union[None, Callable] = None
         self.save_callback: Union[None, Callable] = None
@@ -55,17 +64,21 @@ class Aliases:
         if self.save_callback:
             self.save_callback()
 
-    def validate(self, alias: str) -> None:
+    def validate(self, alias: str, device: Device) -> None:
         # check duplicity
         if alias in self.alias_dict:
             raise ValueError(f"Duplicate alias {alias}")
+        # an alias loaded from the file belongs to its device, even when the device is not registered yet
+        rec = self.initial_dict.get(alias)
+        if rec is not None and (rec.get('devtype') != device.devtype or rec.get('circuit') != str(device.circuit)):
+            raise ValueError(f"Alias {alias} belongs to {rec.get('devtype')} {rec.get('circuit')}")
         # check alias name
         if not re.fullmatch(r"[A-Za-z0-9._-]+", alias):
             raise ValueError(f"Invalid alias {alias}")
 
     def add(self, alias: str, device: Device, file_update: bool = False):
         if alias != device.alias:
-            self.validate(alias)
+            self.validate(alias, device)
         # delete old alias
         if device.alias:
             self.delete(device.alias)
@@ -95,6 +108,15 @@ class Aliases:
             else:
                 self.set_dirty()
 
+    def remove(self, alias: str) -> None:
+        """ Delete an alias of a registered device or an alias loaded from the file """
+        if alias not in self.alias_dict and alias not in self.initial_dict:
+            raise ValueError(f"Unknown alias {alias}")
+        device = self.alias_dict.get(alias)
+        if device is not None:
+            device.alias = ''
+        self.delete(alias)
+
     def get_aliases_by_circuit(self, devtype: int, circuit: str):
         return list((alias for alias, rec in self.initial_dict.items()
                      if (rec.get("devtype", None) == devtype) and (rec.get("circuit", None) == circuit)))
@@ -120,7 +142,9 @@ class Aliases:
         }
         return ret
 
-    async def set(self, save: bool = False):
+    async def set(self, save: bool = False, delete: str = None):
+        if delete is not None:
+            self.remove(delete)
         if save is not None and bool(int(save)):
             self.set_force_save()
 

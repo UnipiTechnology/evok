@@ -72,3 +72,58 @@ def test_aliases_instances_do_not_share_dicts():
     second = Aliases({})
     assert second.initial_dict == {}
     assert second.alias_dict is not first.alias_dict
+
+
+def test_alias_of_unregistered_device_is_reserved(devices):
+    devices.aliases.initial_dict['kitchen'] = {'devtype': DI, 'circuit': '2_01'}
+    with pytest.raises(ValueError, match='belongs to di 2_01'):
+        devices.set_alias('kitchen', devices[DI]['1_01'])
+    assert devices.aliases.initial_dict['kitchen'] == {'devtype': DI, 'circuit': '2_01'}
+
+
+def test_saved_alias_is_assigned_on_registration(devices):
+    devices.aliases.initial_dict['kitchen'] = {'devtype': DI, 'circuit': '2_01'}
+    device = FakeDevice(DI, '2_01')
+    devices.register_device(DI, device)
+    assert device.alias == 'kitchen'
+    assert devices.by_name(DI, 'kitchen') is device
+    assert 'kitchen' not in devices.aliases.initial_dict
+
+
+@pytest.mark.parametrize('record, devtype', [
+    ({'devtype': 1, 'circuit': '1_01'}, 'di'),            # old numeric devtype
+    ({'devtype': '0', 'circuit': '1_01'}, 'ro'),
+    ({'devtype': 'di', 'circuit': '1_01'}, 'di'),
+    ({'devtype': 99, 'circuit': '1_01'}, 99),             # unknown number is kept
+    ({'devtype': None, 'circuit': '1_01'}, None),         # version 1.0 without dev_type
+    ({'circuit': '1_01'}, None),
+])
+def test_load_aliases(record, devtype):
+    aliases = Aliases({'a': record})
+    assert aliases.initial_dict['a'].get('devtype') == devtype
+
+
+def test_load_aliases_skips_invalid_record():
+    aliases = Aliases({'a': 'di_1_01', 'b': {'devtype': 'di', 'circuit': '1_01'}})
+    assert list(aliases.initial_dict) == ['b']
+
+
+async def test_delete_alias_of_unregistered_device(devices):
+    devices.aliases.initial_dict['kitchen'] = {'devtype': DI, 'circuit': '2_01'}
+    await devices.aliases.set(delete='kitchen')
+    assert 'kitchen' not in devices.aliases.get_dict_to_save()
+    devices.set_alias('kitchen', devices[DI]['1_01'])
+    assert devices.by_name(DI, 'kitchen') is devices[DI]['1_01']
+
+
+async def test_delete_alias_of_registered_device(devices):
+    devices.set_alias('kitchen', devices[DI]['1_01'])
+    await devices.aliases.set(delete='kitchen')
+    assert devices[DI]['1_01'].alias == ''
+    with pytest.raises(DeviceNotFound):
+        devices.by_name(DI, 'kitchen')
+
+
+async def test_delete_unknown_alias(devices):
+    with pytest.raises(ValueError, match='Unknown alias'):
+        await devices.aliases.set(delete='kitchen')

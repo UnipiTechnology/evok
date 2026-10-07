@@ -2847,7 +2847,7 @@ paths:
           default: json
         description: Content type - use "json" for application/json OR "rest" for text/html.
     post:
-      summary: Force save aliases
+      summary: Force save or delete aliases
       description: Read more [here](https://evok.readthedocs.io/en/stable/configs/aliases/).
       tags:
         - Aliases
@@ -4025,6 +4025,12 @@ components:
             id: p20kj1i60jljw
           description: Force saves actual aliases list to non-volatile memory
           default: true  # It is true for force save example.
+        delete:
+          type: string
+          examples: [my_relay]
+          description: |
+            Alias to delete. It can be also an alias of a device which is not registered (e.g. a Modbus device
+            which is offline), such alias cannot be assigned to another device.
     Error:
       title: Error
       type: object
