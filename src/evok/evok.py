@@ -304,7 +304,8 @@ async def main():
 
     hw_dict = config.HWDict(dir_paths=[f'{config_path}/hw_definitions/'])
     config.load_aliases(alias_file)
-    address_api = evok_config.apis.get("address", None)
+    # only the local interface by default, an empty address listens on all interfaces
+    address_api = evok_config.apis.get("address", "127.0.0.1") or None
 
     port_api = evok_config.apis.get("port", 8080)
 
@@ -330,7 +331,7 @@ async def main():
     # ---- prepare http server ----
     httpServerApi = tornado.httpserver.HTTPServer(app)
     httpServerApi.listen(port_api, address=address_api)
-    logger.info(f"HTTP server API listening on {address_api}:{port_api}")
+    logger.info(f"HTTP server API listening on {address_api or 'all interfaces'}:{port_api}")
 
     webhook_config = evok_config.get_api('webhook')
     if webhook_config.get("enabled", False):

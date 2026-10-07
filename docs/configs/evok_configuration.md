@@ -13,7 +13,8 @@ evok --config-dir ./my-config --alias-file ./alias.yaml
 In this section you can configure address and port for API listening. These settings will be applied to protocols [REST](../apis/rest.md), [JSON](../apis/json.md), [BULK](../apis/bulk.md), [RPC](../apis/rpc.md), [Webhook](../apis/webhook.md), [WebSocket](../apis/websocket.md).
 
 - `port` - port for API listening, needs to be changed in `etc/nginx/sites-available/evok` too
-- `address` - adress of the interface for API listening, clear or remove the parameter to listen on all interfaces
+- `address` - address of the interface for API listening, `127.0.0.1` if the parameter is missing,
+  set it to an empty value to listen on all interfaces
 
 ### Websocket
 

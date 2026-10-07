@@ -27,7 +27,7 @@ apis:
 
   address: 127.0.0.1
   # ^ API listen address
-  # ^ to listen on all interfaces set this paramater to empty or remove it
+  # ^ to listen on all interfaces set this parameter to empty, 127.0.0.1 is used if it is missing
   # ^ FOR OUR WEB INTERFACE THE PORT SHOULD BE CHANGED IN "etc/nginx/sites-available/evok" TOO !!!
 
   websocket:
