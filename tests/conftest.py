@@ -73,8 +73,11 @@ def l0306():
 @pytest.fixture(autouse=True)
 def clean_devices():
     """ Devices is a global registry, keep tests independent """
-    for devdict in Devices.values():
-        devdict.clear()
+    def clear():
+        for devdict in Devices.values():
+            devdict.clear()
+        Devices.aliases.alias_dict.clear()
+        Devices.aliases.initial_dict.clear()
+    clear()
     yield
-    for devdict in Devices.values():
-        devdict.clear()
+    clear()

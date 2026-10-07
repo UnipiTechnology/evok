@@ -58,10 +58,10 @@ class Aliases:
     def validate(self, alias: str) -> None:
         # check duplicity
         if alias in self.alias_dict:
-            raise Exception(f"Duplicate alias {alias}")
+            raise ValueError(f"Duplicate alias {alias}")
         # check alias name
-        if len(re.findall(r"[A-Za-z0-9\-\._]*", alias)) > 2:
-            raise Exception(f"Invalid alias {alias}")
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", alias):
+            raise ValueError(f"Invalid alias {alias}")
 
     def add(self, alias: str, device: Device, file_update: bool = False):
         if alias != device.alias:
@@ -224,6 +224,9 @@ class DeviceList(dict):
                     device.alias = alias
                     logger.debug(f"Reset alias of {device.devtype}[{device.circuit}]")
                 elif alias != device.alias:
+                    # by_name() finds the circuit first, such alias would never be used
+                    if alias in self[device.devtype]:
+                        raise ValueError(f"Alias {alias} is a circuit of {device.devtype}")
                     self.aliases.add(alias, device, file_update)
                     device.alias = alias
                     logger.debug(f"Set alias {alias} of {device.devtype}[{device.circuit}]")
