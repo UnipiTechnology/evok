@@ -64,16 +64,17 @@ apis:
 #     devices:
 #       <device_name>:
 #         slave-id: <slave_id>
-#         model: <model_id>
+#         model: <model>
 
 # notes:
 #   <bus_name>: Your choice, but cannot be duplicates!
 #   <bus_type>:
 #       - MODBUSTCP (specific settings: [hostname, port, timeout, connect_timeout])
-#       - MODBUSRTU (specific settings: [port, boudrate, parity, timeout])
+#       - MODBUSRTU (specific settings: [port, baudrate, parity, stopbits, timeout])
+#       - OWFS (specific settings: [interval, scan_interval, owpower])
 #       ^ timeout of a response is 0.5 s and connect_timeout 1.0 s by default
 #   <device_name>: Under this name, the device will be available in the API. Cannot be duplicates!
-#   <model_id>: Defines a modbus register map. Source is in '.yaml' files in '/etc/evok/hw_definitions'.
+#   <model>: Defines a modbus register map. Source is in '.yaml' files in '/etc/evok/hw_definitions'.
 #               ^ examples [xS51, xS11, ]
 
 

@@ -46,38 +46,44 @@ comm_channels:
         devices:
             <device_name>:
                 slave-id: <slave_id>
-                model: <model_id>
+                model: <model>
                 scan_frequency: <scan_frequency>
 ```
 
 ### Bus configuration
 
 - *<bus_name\>* - Your choice, but has to be unique
+- `enabled` - an optional parameter, the bus is skipped if it is `false` (Default value is `true`)
+- `device_info` - an optional parameter, describes the controller: `family`, `model`, `sn`, `board_count`
 - `type` options:
     - `MODBUSTCP`
-        - `hostname` - hostname of the Modbus server
-        - `port` - port of the Modbus server
+        - `hostname` - hostname of the Modbus server (Default value is `127.0.0.1`)
+        - `port` - port of the Modbus server (Default value is `502`)
         - `timeout` - timeout of a response in seconds (Default value is `0.5`)
         - `connect_timeout` - timeout of connecting to the Modbus server in seconds (Default value is `1.0`)
     - `MODBUSRTU`
-        - `port` - path to the Modbus device
-        - `boudrate` - baudrate of the Modbus device
-        - `parity` - parity of the Modbus device (`N` / `E` / `O`)
+        - `port` - path to the Modbus device, required
+        - `baudrate` - baudrate of the Modbus device (Default value is `19200`)
+        - `parity` - parity of the Modbus device (`N` / `E` / `O`, Default value is `N`)
+        - `stopbits` - stop bits of the Modbus device (Default value is `1`)
         - `timeout` - timeout of a response in seconds (Default value is `0.5`)
     - `OWFS` (1-Wire bus, the former name `OWBUS` is not supported)
-        - `interval` - interval of values updating
-        - `scan_interval` - new devices will be automatically assigned
+        - `interval` - interval of values updating in seconds (Default value is `60`)
+        - `scan_interval` - interval of the search for new devices in seconds (Default value is `300`)
         - `owpower` - [Circuit](../circuit.md) of owpower device (for restarting bus; optional parameter)
 
 ### Device configuration
 
 - *<device_name\>*: the device will be available in the API under this name. Has to be unique.
+- `enabled` - an optional parameter, the device is skipped if it is `false` (Default value is `true`)
 
 #### MODBUSTCP & MODBUSRTU
 
-- `model_id` - assigns a Modbus register map (examples: `xS51`, `xS11`), see [hw_definitions](./hw_definitions.md).
-- `slave_id` - slave address or unit-ID of the Modbus device.
+- `model` - assigns a Modbus register map (examples: `xS51`, `xS11`), see [hw_definitions](./hw_definitions.md), required.
+- `slave-id` - slave address or unit-ID of the Modbus device (Default value is `1`).
 - `scan_frequency` - an optional parameter, determines how often values are read from the device (Default value is 50).
+- `scan_enabled` - an optional parameter, the device is not read periodically if it is `false` (Default value is `true`).
+- `device_info` - an optional parameter, describes the device: `family`, `model`, `sn`, `board_count`.
 
 #### OWFS
 
