@@ -201,10 +201,10 @@ owbus_post_inp_schema = {
     "additionalProperties": False,
     "properties": {
         "do_scan": {
-            "type": "boolean"
+            "type": ["boolean", "number", "string"]   # a form of REST sends strings, converted by to_bool()
         },
         "do_reset": {
-            "type": "boolean"
+            "type": ["boolean", "number", "string"]
         },
         "interval": {
             "type": ["number", "string"]

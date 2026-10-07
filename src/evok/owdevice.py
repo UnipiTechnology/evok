@@ -12,6 +12,18 @@ MAX_LOSTINTERVAL = 300  # 5 minutes
 RECONNECT_DELAY = 10  # s, the next connection to owserver after a failure
 
 
+def to_bool(value) -> bool:
+    """ A flag from JSON (true, 1) or from a form of REST ('true', '1'), the string '0' is false """
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in ('true', 'yes', 'on', '1'):
+            return True
+        if text in ('false', 'no', 'off', '0', ''):
+            return False
+        raise ValueError(f"Invalid boolean value '{value}'")
+    return bool(value)
+
+
 def check_interval(interval, name='interval', zero=False):
     """ An interval in seconds, 0 or negative interval would poll the bus continuously """
     interval = int(float(interval))
@@ -256,6 +268,8 @@ class OwBusDriver:
             scan_interval = check_interval(scan_interval, 'scan_interval', zero=True)
         if interval is not None:
             interval = check_interval(interval)
+        do_scan = do_scan is not None and to_bool(do_scan)
+        do_reset = do_reset is not None and to_bool(do_reset)
 
         if do_reset:
             await self.do_reset()

@@ -3712,15 +3712,17 @@ components:
           examples: [10, 20, 30]
           default: 10
         do_scan:
-          type: boolean
+          type: [boolean, integer, string]
           x-stoplight:
             id: nd3g09hlebgtw
           default: false
+          description: Start the search for new devices, also `1` or `'true'` in a form
         do_reset:
-          type: boolean
+          type: [boolean, integer, string]
           x-stoplight:
             id: t2hfgb2ga6hca
           default: false
+          description: Reset the 1-Wire master by owpower, also `1` or `'true'` in a form
         scan_interval:
           type: number
           x-stoplight:

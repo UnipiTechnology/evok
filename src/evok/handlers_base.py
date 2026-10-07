@@ -40,8 +40,14 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
             return {prop: result[prop]}
 
         try:
-            if circuit == 'all':
-                result = [{'circuit': d.circuit, **one_device(d, prop)} for d in Devices.by_name(dev)]
+            if circuit == 'all' and prop:
+                # the devices without the property are skipped, e.g. 'range' of AI in some modes
+                states = [d.full() for d in Devices.by_name(dev)]
+                result = [{'circuit': state['circuit'], prop: state[prop]} for state in states if prop in state]
+                if states and not result:
+                    raise DeviceNotFound(f'Invalid property name {prop}')
+            elif circuit == 'all':
+                result = [d.full() for d in Devices.by_name(dev)]
             else:
                 device = Devices.by_name(dev, circuit)
                 result = one_device(device, prop)
