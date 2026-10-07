@@ -30,6 +30,10 @@ apis:
   # ^ to listen on all interfaces set this parameter to empty, 127.0.0.1 is used if it is missing
   # ^ FOR OUR WEB INTERFACE THE PORT SHOULD BE CHANGED IN "etc/nginx/sites-available/evok" TOO !!!
 
+  rpc:
+    enabled: true
+    # ^ JSON-RPC API at /rpc, enabled if this section is missing
+
   websocket:
     enabled: true
     all_filtered: false

@@ -310,7 +310,6 @@ async def main():
     port_api = evok_config.apis.get("port", 8080)
 
     api_routes = [
-        (r"/rpc/?", rpc_handler.Handler),
         (r"/rest/all/?", LoadAllHandler),
         (r"/rest/([^/]+)/([^/]+)/?([^/]+)?/?", LegacyRestHandler),
         (r"/bulk/?", JSONBulkHandler),
@@ -319,6 +318,12 @@ async def main():
         (r"/version/?", VersionHandler),
         (r"/log/?", LogHandler, dict(log_file=log_file)),
     ]
+
+    # enabled if the section is missing, it was always enabled before the option was added
+    if (evok_config.apis.get('rpc') or {}).get('enabled', True):
+        api_routes.append((r"/rpc/?", rpc_handler.Handler))
+    else:
+        logger.info("RPC API is disabled")
 
     if evok_config.get_api('websocket').get('enabled', False):
         all_filtered = evok_config.get_api('websocket').get("all_filtered", False)

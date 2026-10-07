@@ -16,6 +16,10 @@ In this section you can configure address and port for API listening. These sett
 - `address` - address of the interface for API listening, `127.0.0.1` if the parameter is missing,
   set it to an empty value to listen on all interfaces
 
+### RPC
+
+- `enabled` - enables [RPC](../apis/rpc.md) API (`true` / `false`), enabled if the section is missing
+
 ### Websocket
 
 - `enabled` - enables websocket API (`true` / `false`)
