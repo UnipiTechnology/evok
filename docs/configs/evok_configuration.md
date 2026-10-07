@@ -57,10 +57,13 @@ comm_channels:
     - `MODBUSTCP`
         - `hostname` - hostname of the Modbus server
         - `port` - port of the Modbus server
+        - `timeout` - timeout of a response in seconds (Default value is `0.5`)
+        - `connect_timeout` - timeout of connecting to the Modbus server in seconds (Default value is `1.0`)
     - `MODBUSRTU`
         - `port` - path to the Modbus device
         - `boudrate` - baudrate of the Modbus device
         - `parity` - parity of the Modbus device (`N` / `E` / `O`)
+        - `timeout` - timeout of a response in seconds (Default value is `0.5`)
     - `OWFS` (1-Wire bus, the former name `OWBUS` is not supported)
         - `interval` - interval of values updating
         - `scan_interval` - new devices will be automatically assigned

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from evok import config
-from evok.devices import Devices, OWBUS, SENSOR
+from evok.devices import Devices, OWBUS, SENSOR, SERIALBUS, TCPBUS
 from evok.owdevice import DS18B20, OwBusDriver
 
 
@@ -105,3 +105,16 @@ def test_error_in_bus_does_not_stop_other_buses(caplog):
     assert "Error in config of bus 'RTU'" in caplog.text
     assert "Unknown type 'None' of bus 'EMPTY'" in caplog.text
     assert "Unknown type 'None' of bus 'NOTYPE'" in caplog.text
+
+
+@pytest.mark.parametrize('bus, expected', [
+    ({'type': 'MODBUSTCP'}, {'timeout': 0.5, 'connect_timeout': 1.0}),
+    ({'type': 'MODBUSTCP', 'timeout': 2, 'connect_timeout': '3.5'}, {'timeout': 2.0, 'connect_timeout': 3.5}),
+    ({'type': 'MODBUSRTU', 'port': '/dev/null'}, {'timeout': 0.5}),
+    ({'type': 'MODBUSRTU', 'port': '/dev/null', 'timeout': 1.5}, {'timeout': 1.5}),
+])
+def test_modbus_timeouts(bus, expected):
+    create({'BUS': bus})
+    devtype = TCPBUS if bus['type'] == 'MODBUSTCP' else SERIALBUS
+    transport = Devices[devtype]['BUS'].bus_driver.base_transport
+    assert {key: getattr(transport, key) for key in expected} == expected

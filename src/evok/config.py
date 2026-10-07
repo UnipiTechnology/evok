@@ -207,8 +207,8 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
             AsyncTcpTransport(
                 host,
                 port,
-                timeout=0.5,
-                connect_timeout=1.0
+                timeout=float(bus_data.get("timeout", 0.5)),
+                connect_timeout=float(bus_data.get("connect_timeout", 1.0))
             ),
             wait_between_requests=0.0,
             wait_after_connect=0.0,
@@ -227,7 +227,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
         bus_driver = AsyncSmartTransport(
             AsyncRtuTransport(
                 serial_port,
-                timeout=0.5,
+                timeout=float(bus_data.get("timeout", 0.5)),
                 baudrate=serial_baud_rate,
                 parity=serial_parity,
                 stopbits=serial_stopbits),
