@@ -1,53 +1,39 @@
-#!/usr/bin/python
 import argparse
 import asyncio
 import contextlib
-
+import json
+import logging
+import logging.handlers
 import os
+import signal
 import sys
 from importlib.metadata import version, PackageNotFoundError
 
-import tornado.httpserver
 import tornado.httpclient
+import tornado.httpserver
 import tornado.web
-
-import logging
-import logging.handlers
-from .log import logger, read_log_tail
-
 from tornado import escape
-from .handlers_base import EvokWebHandlerBase
-from .bulk_handler import JSONBulkHandler
-from .ws_handler import WsHandler, registered_ws
 
-import signal
-
-import json
 from . import config
+from . import rpc_handler
+from .bulk_handler import JSONBulkHandler
 from .devices import MODBUS_SLAVE, RUN, OWBUS, TCPBUS, SERIALBUS
 from .devices import Devices, devents, devtype_of
-from . import rpc_handler
+from .handlers_base import EvokWebHandlerBase
+from .log import logger, read_log_tail
+from .ws_handler import WsHandler, registered_ws
 
 logging.basicConfig(level=logging.WARNING)
 logger.setLevel(logging.INFO)
 
-# from tornadows import complextypes
-
 DEFAULT_CONFIG_DIR = '/etc/evok'
 DEFAULT_ALIAS_FILE = '/var/lib/evok/alias.yaml'
-
-# Set in main() after parsing command line arguments
-config_path = None
-alias_file = None
-evok_config = None
 
 try:
     evok_version = 'v' + version("evok")
 except PackageNotFoundError:
     logger.error("Cannot detect evok version.")
     evok_version = 'unknown'
-
-wh = None
 
 
 class UserCookieHelper:
@@ -261,21 +247,15 @@ class AliasTask:
             raise
 
 
-def status_cb(device, *kwargs):
+def status_cb(device, *args):
     if "all" in registered_ws:
         for x in registered_ws['all']:
             x.on_event(device)
 
 
-def config_cb(device, *kwargs):
-    pass
-
-
 # ---- MAIN ----
 
 async def main():
-    global config_path, alias_file, evok_config
-
     arg_parser = argparse.ArgumentParser(prog='evok', description='')
     arg_parser.add_argument('-d', '--debug', action='store_true', default=False, help='Debug logging')
     arg_parser.add_argument('-v', '--version', action='store_true', default=False, help='Print evok version')
@@ -303,9 +283,6 @@ async def main():
     log_level = evok_config.logging.get("level", "INFO").upper()
     if args.debug:
         log_level = 'DEBUG'
-#    if log_level == 'DEBUG':
-        # Debug level for pymodbus is too much!
-#        logging.getLogger('pymodbus').setLevel(logging.INFO)
 
     logger.info(f"Starting Evok {evok_version} using config directory '{config_path}'.")
     logger.info(f"Setting logging level to '{log_level}'.")
@@ -324,7 +301,6 @@ async def main():
         filelog_handler.setFormatter(log_formatter)
         filelog_handler.setLevel(log_level)
         logger.addHandler(filelog_handler)
-        # logging.getLogger('pymodbus').setLevel(logging.DEBUG)
 
     hw_dict = config.HWDict(dir_paths=[f'{config_path}/hw_definitions/'])
     config.load_aliases(alias_file)
@@ -366,8 +342,7 @@ async def main():
         wh.open()
 
     # ---- prepare hardware according to config ----
-    # prepare callbacks for config events
-    devents.register_config_cb(config_cb)
+    # notify websocket clients and the webhook about changes of devices
     devents.register_status_cb(status_cb)
 
     # create hw devices
