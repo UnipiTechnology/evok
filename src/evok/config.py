@@ -283,8 +283,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
                 interval = int(device_data.get("interval", 15))
 
                 # the sensor registers itself in the bus and in Devices
-                sensor = owdevice.MySensorFabric(address, ow_type, bus, interval=interval, circuit=str(device_name),
-                                                 is_static=True)
+                sensor = owdevice.MySensorFabric(address, ow_type, bus, interval=interval, circuit=str(device_name))
                 if sensor is None:
                     raise EvokConfigError(f"Unsupported type '{ow_type}' of the 1-Wire sensor")
 

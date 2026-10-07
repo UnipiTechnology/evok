@@ -1,5 +1,4 @@
 import asyncio
-import string
 
 from .devices import SENSOR, OWBUS, OWPOWER
 from .devices import devents, Devices
@@ -20,7 +19,8 @@ def check_interval(interval, name='interval', zero=False):
         raise ValueError(f"Invalid {name} {interval}, it must be {'0 or ' if zero else ''}a positive number")
     return interval
 
-SUPPORTED_DEVICES = ["DS18S20", "DS18B20", "DS2438", "DS2408", "DS2413"]
+# the sensor types created by MySensorFabric
+SUPPORTED_DEVICES = ["DS18S20", "DS18B20", "DS2438", "DS2408", "DS2406", "DS2404", "DS2413"]
 
 
 class NotSupportedError(ValueError):
@@ -29,8 +29,7 @@ class NotSupportedError(ValueError):
 
 
 class MySensor(object):
-    def __init__(self, addr, sensor_type, bus, interval=None, dynamic=True, circuit=None, major_group=1,
-                 is_static=False):
+    def __init__(self, addr, sensor_type, bus, interval=None, circuit=None, major_group=1):
         self.alias = ""
         self.devtype = SENSOR
         self.type = sensor_type
@@ -38,8 +37,6 @@ class MySensor(object):
         self.major_group = major_group
         self.address = addr
         self.interval = bus.interval if interval is None else check_interval(interval)  # seconds
-        self.is_dynamic_interval = dynamic  # dynamically change interval #TODO
-        self.last_value = None
         self.value = None
         self.lost = False
         self.time = 0
@@ -79,9 +76,6 @@ class MySensor(object):
             if self.lostinterval > MAX_LOSTINTERVAL:
                 self.lostinterval = MAX_LOSTINTERVAL
             return self.lostinterval
-        if self.is_dynamic_interval:
-            # TODO
-            pass
         return self.interval
 
     def set_lost(self):
@@ -129,8 +123,6 @@ class DS2438(MySensor):  # vdd + vad + thermometer
     def full(self):
         ret = {'dev': '1wdevice',
                'circuit': self.circuit,
-               # 'humidity1':(((((float(self.value[1]) / float(self.value[0])) - 0.1515)) / 0.00636)
-               #              / (1.0546 - 0.00216 * float(self.value[2]))),
                'humidity': getattr(self, 'HIH4000.humidity', None),
                'vdd': getattr(self, 'VDD', None),
                'vad': getattr(self, 'VAD', None),
@@ -167,29 +159,17 @@ class DS2438(MySensor):  # vdd + vad + thermometer
 
 
 class DS2408(MySensor):
-    def __init__(self, addr, sensor_type, bus, interval=None, is_dynamic_interval=True, circuit=None, major_group=1,
-                 is_static=False):
-        self.pios = []
+    def __init__(self, addr, sensor_type, bus, interval=None, circuit=None, major_group=1):
         # the circuit of a found DS2408 is its address with the dot, unlike the other sensors
-        super().__init__(addr, sensor_type, bus, interval=interval, dynamic=is_dynamic_interval,
-                         circuit=circuit if circuit is not None else addr, major_group=major_group,
-                         is_static=is_static)
+        super().__init__(addr, sensor_type, bus, interval=interval,
+                         circuit=circuit if circuit is not None else addr, major_group=major_group)
 
     async def read_val_from_sens(self, sens) -> bool:
-        # latch.0 sensed.0 PIO.0
-        # actual values must be read from sensed_ALL, but writes to the GPIOs must be done in PIO_x(PIO_ALL)
-        # pios_values = map(int, self.sens.sensed_ALL.split(','))
+        # the actual values of the PIOs are in sensed_ALL
         value = await sens.get_sensed_all()
-        # pios_values = [int(not int(i)) for i in self.sens.sensed_ALL.split(',')]
         if self.value == value:
             return False
         self.value = value
-        # update DS_2408_pio object that are attached to this DS2408
-        if type(value) is list:
-            pios_cnt = len(value)
-            for pio in self.pios:
-                if pio.pin < pios_cnt:
-                    pio.set_value(value[pio.pin])
         return True
 
     def full(self):
@@ -206,34 +186,16 @@ class DS2408(MySensor):
             ret['alias'] = self.alias
         return ret
 
-    def set_pio(self, pio, value):
-        # elif command == OWCMD_SET_PIO:
-        #    mysensor = next(x for x in self.mysensors if x.circuit == circuit)
-        #    if mysensor:
-        #        pin, value = value
-        #        mysensor.set_pio(pin, int(value))
 
-        if self.type == 'DS2408':
-            setattr(self.sens, 'PIO_' + repr(pio), str(value))
-        elif self.type == 'DS2406' or self.type == 'DS2413':
-            pio_alpha = dict(zip(range(0, 26), string.ascii_uppercase))
-            setattr(self.sens, 'PIO_' + pio_alpha[pio], str(value))
-
-    def register_pio(self, pio):
-        if pio not in self.pios:
-            self.pios.append(pio)
-
-
-def MySensorFabric(address, sensor_type, bus, interval=None, dynamic=True, circuit=None, major_group=1,
-                   is_static=False):
+def MySensorFabric(address, sensor_type, bus, interval=None, circuit=None):
     if (sensor_type == 'DS18B20') or (sensor_type == 'DS18S20'):
         return DS18B20(address, sensor_type, bus, interval=interval, circuit=circuit)
     elif sensor_type == 'DS2438':
         return DS2438(address, sensor_type, bus, interval=interval, circuit=circuit)
     elif sensor_type in ('DS2408', 'DS2406', 'DS2404', 'DS2413'):
-        return DS2408(address, sensor_type, bus, interval=interval, circuit=circuit, is_static=is_static)
+        return DS2408(address, sensor_type, bus, interval=interval, circuit=circuit)
     else:
-        logger.debug("Unsupported 1wire device %s (%s) detected", sensor_type, address)
+        logger.info("Unsupported 1wire device %s (%s) detected", sensor_type, address)
         return None
 
 
@@ -264,11 +226,9 @@ class OwBusDriver:
                 'do_reset': False}
 
     def list(self):
-        list = dict()
-        for dev in SUPPORTED_DEVICES:
-            temp_list = [sens.address for sens in self.mysensors if sens.type == dev]
-            list[dev] = temp_list
-        return list
+        """ Addresses of the sensors on the bus by their type, used in RPC """
+        return {sensor_type: [sens.address for sens in self.mysensors if sens.type == sensor_type]
+                for sensor_type in SUPPORTED_DEVICES}
 
     def switch_to_async(self):
         self._run_task = asyncio.create_task(self.run_forever())
@@ -352,7 +312,6 @@ class OwBusDriver:
     # Running async tasks: scanning, poll, mon
     async def scanning(self, server):
         while True:
-            # if self.scan_interval > 0:
             async with self.bus_lock:
                 try:
                     await server.scan_now(polling=False)
@@ -400,16 +359,17 @@ class OwBusDriver:
     async def mon(self, ow):
         async with ow.events as events:
             async for msg in events:
-                logger.info("%s", msg)
+                logger.debug("%s", msg)
                 if isinstance(msg, event.DeviceLocated):
-                    # for f in msg.device.fields:print(f)
                     sensor_type = await msg.device.get_type()
                     address = msg.device.id
-                    try:
-                        mysensor = next(x for x in self.mysensors if x.address == address)
-                        logger.info("Sensor found " + str(mysensor.circuit))
-                    except Exception:
+                    mysensor = next((x for x in self.mysensors if x.address == address), None)
+                    if mysensor is not None:
+                        logger.info(f"Sensor {mysensor.circuit} found")
+                    else:
                         mysensor = MySensorFabric(address, sensor_type, self, self.interval)
+                        if mysensor is not None:
+                            logger.info(f"New sensor {sensor_type} {address} found")
                     if mysensor:
                         # read at once, poll() reports the recovery of a lost sensor
                         mysensor.sens = msg.device
@@ -418,13 +378,11 @@ class OwBusDriver:
 
                 elif isinstance(msg, event.DeviceNotFound):
                     address = msg.device.id
-                    try:
-                        mysensor = next(x for x in self.mysensors if x.address == address)
+                    mysensor = next((x for x in self.mysensors if x.address == address), None)
+                    if mysensor is not None:
                         logger.info(f"Sensor {address} disappeared")
                         mysensor.sens = None
                         mysensor.set_lost()
-                    except Exception:
-                        pass
 
     async def run(self):
         self.bus_lock = anyio.Lock()

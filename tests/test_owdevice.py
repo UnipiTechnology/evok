@@ -177,3 +177,12 @@ async def test_poll_wakes_up_for_a_new_sensor(bus, events):
 async def test_reset_without_owpower_is_a_bad_request(bus):
     with pytest.raises(ValueError, match='not supported'):
         await bus.set(do_reset=True)
+
+
+def test_list(bus):
+    DS18B20('28.000001', 'DS18B20', bus)
+    MySensorFabric('3A.000001', 'DS2413', bus)
+    MySensorFabric('12.000001', 'DS2406', bus)
+    listed = bus.list()
+    assert (listed['DS18B20'], listed['DS2413'], listed['DS2406'], listed['DS2438']) == \
+        (['28.000001'], ['3A.000001'], ['12.000001'], [])
