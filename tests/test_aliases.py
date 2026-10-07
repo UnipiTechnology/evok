@@ -134,3 +134,23 @@ def test_none_alias_resets_to_empty_string(devices):
     devices.set_alias(None, devices[DI]['1_01'])
     assert devices[DI]['1_01'].alias == ''
     assert 'kitchen' not in devices.aliases
+
+
+
+@pytest.mark.parametrize('find', [
+    lambda: Devices.by_name('foo'),
+    lambda: Devices.by_name('foo', '1_01'),
+    lambda: Devices.by_int('foo'),
+    lambda: Devices.by_int('foo', '1_01'),
+])
+def test_unknown_devtype(find):
+    with pytest.raises(DeviceNotFound, match="Invalid device type 'foo'"):
+        find()
+
+
+def test_by_int_major_group(devices):
+    devices[DI]['1_01'].major_group = '1'
+    devices[DI]['1_02'].major_group = '2'
+    assert devices.by_int(DI, major_group='2') == [devices[DI]['1_02']]
+    assert devices.by_int('input', major_group='3') == []
+    assert list(devices.by_int(DI)) == [devices[DI]['1_01'], devices[DI]['1_02']]

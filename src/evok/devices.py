@@ -1,6 +1,3 @@
-import logging
-import traceback
-
 from . import devents
 import re
 from copy import deepcopy
@@ -117,7 +114,7 @@ class Aliases:
             device.alias = ''
         self.delete(alias)
 
-    def get_aliases_by_circuit(self, devtype: int, circuit: str):
+    def get_aliases_by_circuit(self, devtype: str, circuit: str):
         return list((alias for alias, rec in self.initial_dict.items()
                      if (rec.get("devtype", None) == devtype) and (rec.get("circuit", None) == circuit)))
 
@@ -165,30 +162,20 @@ class DeviceList(dict):
         except KeyError:
             return super(DeviceList, self).__getitem__(self.altnames[key])
 
-    def remove_item(self, key, value):
-        del (self[key])[value.circuit]
+    def _devdict(self, devtype):
+        """ Devices of a type, the type can be an altname """
+        try:
+            return self[devtype]
+        except KeyError:
+            raise DeviceNotFound(f"Invalid device type '{devtype}'")
 
     def by_int(self, devtype_name, circuit=None, major_group=None):
         circuit = str(circuit) if circuit is not None else None
-        devdict = self[devtype_name]
+        devdict = self._devdict(devtype_name)
         if circuit is None:
             if major_group is not None:
-                outp = []
-                if len(devdict.values()) > 1:
-                    for single_dev in devdict.values():
-                        if single_dev.major_group == major_group:
-                            outp += [single_dev]
-                    return outp
-                elif len(devdict.values()) > 0:
-                    single_dev = list(devdict.values())[0]
-                    if single_dev.major_group == major_group:
-                        return devdict.values()
-                    else:
-                        return []
-                else:
-                    return []
-            else:
-                return devdict.values()
+                return [dev for dev in devdict.values() if dev.major_group == major_group]
+            return devdict.values()
         try:
             return devdict[circuit]
         except KeyError:
@@ -200,12 +187,7 @@ class DeviceList(dict):
             raise DeviceNotFound(f"Invalid device circuit '{str(circuit)}' with devtypeid '{devtype_name}'")
 
     def by_name(self, devtype, circuit=None):
-        try:
-            devdict = self[devtype]
-        except KeyError:
-            if devtype not in self.altnames:
-                raise DeviceNotFound(f"Invalid device type '{devtype}'")
-            devdict = self[self.altnames[devtype]]
+        devdict = self._devdict(devtype)
         if circuit is None:
             return devdict.values()
         circuit = str(circuit)
@@ -241,27 +223,23 @@ class DeviceList(dict):
         devents.config(device)
         logger.debug(f"Registered new device '{devtype_name}' with circuit {device.circuit} \t ({device})")
 
-    def set_alias(self, alias: str, device: Device, file_update: bool = False) -> None:
-        try:
-            if alias != device.alias:
-                if alias == '' or alias is None:
-                    if device.alias:
-                        self.aliases.delete(device.alias, file_update)
-                    # no alias is '', full() of the devices tests it
-                    device.alias = ''
-                    logger.debug(f"Reset alias of {device.devtype}[{device.circuit}]")
-                elif alias != device.alias:
-                    # by_name() finds the circuit first, such alias would never be used
-                    if alias in self[device.devtype]:
-                        raise ValueError(f"Alias {alias} is a circuit of {device.devtype}")
-                    self.aliases.add(alias, device, file_update)
-                    device.alias = alias
-                    logger.debug(f"Set alias {alias} of {device.devtype}[{device.circuit}]")
-        except Exception as E:
-            logger.error(f"Error on setting alias {alias}: {str(E)}")
-            if logger.level == logging.DEBUG:
-                traceback.print_exc()
-            raise E
+    def set_alias(self, alias: str | None, device: Device, file_update: bool = False) -> None:
+        """ Set or reset ('' or None) the alias, an invalid alias raises ValueError logged by the caller """
+        if alias == device.alias:
+            return
+        if alias == '' or alias is None:
+            if device.alias:
+                self.aliases.delete(device.alias, file_update)
+            # no alias is '', full() of the devices tests it
+            device.alias = ''
+            logger.debug(f"Reset alias of {device.devtype}[{device.circuit}]")
+        else:
+            # by_name() finds the circuit first, such alias would never be used
+            if alias in self[device.devtype]:
+                raise ValueError(f"Alias {alias} is a circuit of {device.devtype}")
+            self.aliases.add(alias, device, file_update)
+            device.alias = alias
+            logger.debug(f"Set alias {alias} of {device.devtype}[{device.circuit}]")
 
 
 # # define device types constants
@@ -274,7 +252,6 @@ SENSOR = "sensor"
 OWBUS = "owbus"
 DS2408 = "ds2408"
 MODBUS_SLAVE = "modbus_slave"
-BOARD = "board"
 LED = "led"
 WATCHDOG = "watchdog"
 REGISTER = "register"
@@ -325,26 +302,3 @@ devtype_altnames = {
 Devices = DeviceList(devtype_altnames)
 for _key in num_to_devtype_name.values():
     Devices[_key] = {}
-
-# define units
-NONE = 0
-CELSIUS = 1
-VOLT = 2
-AMPERE = 3
-OHM = 4
-
-unit_names = [
-    '',
-    'C',
-    'V',
-    'mA',
-    'Ohm',
-]
-
-unit_altnames = {
-    '': '',
-    'C': 'Celsius',
-    'V': 'Volt',
-    'mA': 'miliampere',
-    'Ohm': 'ohm'
-}
