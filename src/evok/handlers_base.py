@@ -14,6 +14,25 @@ from .schemas import schemas
 
 SCHEMA_VALIDATE = True
 
+# errors of a request, reported to the client, other errors are internal
+CLIENT_ERRORS = (ValueError, DeviceNotFound, jsonschema.ValidationError)
+
+
+def check_params(dev_type, kw):
+    """ Validate the params of set() by the schema of the device type, used by REST, bulk and WebSocket """
+    if SCHEMA_VALIDATE:
+        if dev_type not in schemas:
+            raise ValueError(f'Invalid device name {dev_type}')
+        jsonschema.validate(instance=kw, schema=schemas[dev_type][0])
+
+
+def client_error(error) -> tuple[dict, int]:
+    """ The errors reported to the client and the HTTP status of one of CLIENT_ERRORS """
+    # the string of a ValidationError contains the whole schema
+    message = error.message if isinstance(error, jsonschema.ValidationError) else str(error)
+    # a wrong device is not found, wrong data is a bad request
+    return {type(error).__name__: message}, 404 if isinstance(error, DeviceNotFound) else 400
+
 
 class EvokWebHandlerBase(tornado.web.RequestHandler):
     def initialize(self):
@@ -74,19 +93,14 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
                 raise DeviceNotFound("POST cannot set all devices, use the bulk API")
             device = Devices.by_name(dev, circuit)
             kw = self._get_kw()
-            if SCHEMA_VALIDATE:
-                if dev not in schemas:
-                    raise ValueError(f'Invalid device name {dev}')
-                jsonschema.validate(instance=kw, schema=schemas[dev][0])
+            check_params(dev, kw)
             await device.set(**kw)
             self.write(json.dumps({'success': True, 'result': device.full()}))
-        except (ValueError, DeviceNotFound, jsonschema.ValidationError) as E:
-            # the string of a ValidationError contains the whole schema
-            message = E.message if isinstance(E, jsonschema.ValidationError) else str(E)
-            logger.error(f"POST: {message}")
-            self.write(json.dumps({'success': False, 'errors': {str(type(E).__name__): message}}))
-            # a wrong URL is not found, wrong data is a bad request
-            self.set_status(status_code=404 if isinstance(E, DeviceNotFound) else 400)
+        except CLIENT_ERRORS as E:
+            errors, status = client_error(E)
+            logger.error(f"POST: {errors}")
+            self.write(json.dumps({'success': False, 'errors': errors}))
+            self.set_status(status_code=status)
 
         except Exception as E:
             logger.exception(f"POST: {str(E)}")

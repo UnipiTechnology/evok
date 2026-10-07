@@ -3,15 +3,12 @@ import logging
 import traceback
 from urllib.parse import urlparse
 
-import jsonschema
 from tornado import websocket
 
 from .devices import DI, RO, AI, AO, SENSOR
 from .devices import Devices, devtype_of, num_to_devtype_name
-from .errors import DeviceNotFound
-from .handlers_base import SCHEMA_VALIDATE
+from .handlers_base import CLIENT_ERRORS, check_params, client_error
 from .log import logger
-from .schemas import schemas
 
 # clients notified by status_cb() in evok.py, websocket clients and the webhook
 registered_ws = {}
@@ -79,11 +76,10 @@ class WsHandler(websocket.WebSocketHandler):
                     await device.set(**self._set_params(dev, message))
             else:
                 raise ValueError(f"Unknown command '{cmd}'")
-        except (ValueError, DeviceNotFound, jsonschema.ValidationError) as E:
-            # the string of a ValidationError contains the whole schema
-            error = E.message if isinstance(E, jsonschema.ValidationError) else str(E)
-            logger.error(f"WS: {error}")
-            await self._send_error({type(E).__name__: error})
+        except CLIENT_ERRORS as E:
+            errors, _ = client_error(E)
+            logger.error(f"WS: {errors}")
+            await self._send_error(errors)
         except Exception as E:
             logger.exception(f"WS: {str(E)}")
             await self._send_error({'Server error': 'internal'})
@@ -134,10 +130,7 @@ class WsHandler(websocket.WebSocketHandler):
             kw.update(value)
         elif value is not None:
             kw["value"] = value
-        if SCHEMA_VALIDATE:
-            if dev not in schemas:
-                raise ValueError(f'Invalid device name {dev}')
-            jsonschema.validate(instance=kw, schema=schemas[dev][0])
+        check_params(dev, kw)
         return kw
 
     def on_close(self):

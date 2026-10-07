@@ -4,10 +4,9 @@ import jsonschema
 import tornado.web
 
 from .devices import Devices, devtype_of
-from .errors import DeviceNotFound
-from .handlers_base import SCHEMA_VALIDATE
+from .handlers_base import CLIENT_ERRORS, check_params, client_error
 from .log import logger
-from .schemas import schemas, bulk_post_inp_schema
+from .schemas import bulk_post_inp_schema
 
 
 class JSONBulkHandler(tornado.web.RequestHandler):
@@ -34,13 +33,6 @@ class JSONBulkHandler(tornado.web.RequestHandler):
                        if dev.circuit in circuits or (getattr(dev, 'alias', '') and dev.alias in circuits)]
         return list(devices)
 
-    @staticmethod
-    def _check_params(dev_type, kw):
-        if SCHEMA_VALIDATE:
-            if dev_type not in schemas:
-                raise ValueError(f'Invalid device name {dev_type}')
-            jsonschema.validate(instance=kw, schema=schemas[dev_type][0])
-
     async def post(self):
         """ Query and set several devices in one request
 
@@ -57,12 +49,12 @@ class JSONBulkHandler(tornado.web.RequestHandler):
             group_assignments = []
             for command in js_dict.get('group_assignments', []):
                 devices = self._filter(Devices.by_name(command['device_type']), command)
-                self._check_params(command['device_type'], command['assigned_values'])
+                check_params(command['device_type'], command['assigned_values'])
                 group_assignments.append((devices, command['assigned_values']))
             individual_assignments = []
             for command in js_dict.get('individual_assignments', []):
                 dev = Devices.by_name(command['device_type'], circuit=command['device_circuit'])
-                self._check_params(command['device_type'], command['assigned_values'])
+                check_params(command['device_type'], command['assigned_values'])
                 individual_assignments.append((dev, command['assigned_values']))
 
             if 'group_queries' in js_dict:
@@ -89,14 +81,12 @@ class JSONBulkHandler(tornado.web.RequestHandler):
                     result['individual_assignments'].append(dev.full())
 
             self.write(json.dumps(result))
-        except (ValueError, DeviceNotFound, jsonschema.ValidationError) as E:
-            # the string of a ValidationError contains the whole schema
-            message = E.message if isinstance(E, jsonschema.ValidationError) else str(E)
-            logger.error(f"BULK: {message}")
+        except CLIENT_ERRORS as E:
+            errors, status = client_error(E)
+            logger.error(f"BULK: {errors}")
             # the results of the commands done before the error
-            self.write(json.dumps({'success': False, 'errors': {str(type(E).__name__): message}, **result}))
-            # a wrong device is not found, wrong data is a bad request
-            self.set_status(status_code=404 if isinstance(E, DeviceNotFound) else 400)
+            self.write(json.dumps({'success': False, 'errors': errors, **result}))
+            self.set_status(status_code=status)
         except Exception as E:
             logger.exception(f"BULK: {str(E)}")
             self.write(json.dumps({'success': False, 'errors': {'Server error': 'internal'}, **result}))
