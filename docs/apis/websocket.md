@@ -2,6 +2,52 @@
 
 The WebSocket API allows for two-way communication between the client and the server over an open connection. Evok sends changes to every connected client. A list of reflected devices can be defined. It is suitable for cases, where you need to immediately react to events in your application.
 
+## Commands
+
+The client sends a JSON object with the command in `cmd`.
+
+| Command  | Message                                                    | Reply                                     |
+|----------|------------------------------------------------------------|-------------------------------------------|
+| `filter` | `{"cmd": "filter", "devices": ["do", "ao"]}`               | none                                      |
+| `all`    | `{"cmd": "all"}`                                           | list of the states of all devices         |
+| `full`   | `{"cmd": "full", "dev": "do", "circuit": "1_01"}`          | state of the device                       |
+| `set`    | `{"cmd": "set", "dev": "do", "circuit": "1_01", "value": 1}` | none, the new state is sent as an event |
+
+### filter
+
+Sets the device types sent in events. Altnames such as `input` or `relay` can be used, unknown types are skipped.
+An empty list stops the events, `["default"]` restores the default filter, which sends the events of all devices.
+
+### all
+
+Returns the state of all devices. With `all_filtered` enabled in the [configuration](../configs/evok_configuration.md#websocket),
+only the devices passing the filter are returned, the default filter returns DI, RO, AI, AO and 1-Wire sensors.
+
+### set
+
+Sets the params of a device, the same params as in [REST](rest.md) are accepted and validated. The params can be passed
+
+- in `value` as the value of the device: `{"cmd": "set", "dev": "do", "circuit": "1_01", "value": 1}`
+- in `value` as an object: `{"cmd": "set", "dev": "do", "circuit": "1_01", "value": {"value": 1, "timeout": 5}}`
+- as other keys of the message: `{"cmd": "set", "dev": "di", "circuit": "1_01", "debounce": 50}`
+
+The `value` is always the param `value` of the device, e.g. the debounce of a DI must be set by `debounce`.
+The `circuit` can be also an alias.
+
+## Events
+
+Evok sends the states of the changed devices to every client, always as a list. With a filter set by `filter`,
+only the states of the device types in the filter are sent.
+
+## Errors
+
+An invalid request (invalid JSON, unknown command, missing `dev` or `circuit`, unknown device, invalid params)
+gets an error reply only to the requesting client, in the same format as REST:
+
+```json
+{"success": false, "errors": {"DeviceNotFound": "Circuit or alias with name '9_99' not defined!"}}
+```
+
 ## Examples
 
 For python examples you need installed `websocket-client` package. You can install it with this command: `pip3 install websocket-client`.
