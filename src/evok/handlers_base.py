@@ -1,17 +1,16 @@
 import json
 from itertools import chain
 
-from .schemas import schemas
-
 import jsonschema
-import tornado
+import tornado.web
 
 from .devices import Devices
-from .errors import DeviceNotFound
 from .devices import OWBUS, DEVICE_INFO, SENSOR, MODBUS_SLAVE, \
     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
     REGISTER, DATA_POINT, NV_SAVE
+from .errors import DeviceNotFound
 from .log import logger
+from .schemas import schemas
 
 SCHEMA_VALIDATE = True
 
@@ -25,20 +24,14 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
     def _get_kw(self) -> dict:
         raise NotImplementedError("'_get_kw' not implemented!")
 
-    # usage: GET /rest/DEVICE/CIRCUIT
-    #        or
-    #        GET /rest/DEVICE/CIRCUIT/PROPERTY
     @tornado.web.authenticated
     def get(self, dev, circuit, prop):
+        """ GET /rest/DEVICE/CIRCUIT             the state of the device
+            GET /rest/DEVICE/CIRCUIT/PROPERTY    a property of the state
+            GET /rest/DEVICE/all[/PROPERTY]      the states (properties) of all devices of the type
 
-        def one_device(device, prop):
-            result = device.full()
-            if not prop:
-                return result
-            if prop not in result:
-                raise DeviceNotFound(f'Invalid property name {prop}')
-            return {prop: result[prop]}
-
+            An unknown device, circuit or property is 404, other errors 500.
+        """
         try:
             if circuit == 'all' and prop:
                 # the devices without the property are skipped, e.g. 'range' of AI in some modes
@@ -49,8 +42,11 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
             elif circuit == 'all':
                 result = [d.full() for d in Devices.by_name(dev)]
             else:
-                device = Devices.by_name(dev, circuit)
-                result = one_device(device, prop)
+                result = Devices.by_name(dev, circuit).full()
+                if prop:
+                    if prop not in result:
+                        raise DeviceNotFound(f'Invalid property name {prop}')
+                    result = {prop: result[prop]}
 
             self.write(json.dumps(result))
         except DeviceNotFound as E:
@@ -66,6 +62,10 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
         self.finish()
 
     async def post(self, dev, circuit, prop):
+        """ POST /rest/DEVICE/CIRCUIT[/alias] sets the params of the device in the body, validated by its schema
+
+            An unknown device or circuit is 404, invalid params 400, other errors 500.
+        """
         try:
             # .../alias is the documented URL for setting the alias, the params are in the body
             if prop not in (None, 'alias'):
@@ -77,8 +77,7 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
             if SCHEMA_VALIDATE:
                 if dev not in schemas:
                     raise ValueError(f'Invalid device name {dev}')
-                schema, example = schemas[dev]
-                jsonschema.validate(instance=kw, schema=schema)
+                jsonschema.validate(instance=kw, schema=schemas[dev][0])
             await device.set(**kw)
             self.write(json.dumps({'success': True, 'result': device.full()}))
         except (ValueError, DeviceNotFound, jsonschema.ValidationError) as E:
