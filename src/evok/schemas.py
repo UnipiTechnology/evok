@@ -149,10 +149,20 @@ data_point_post_inp_schema = {
     "$schema": SCHEMA,
     "title": "Data_point",
     "type": "object",
+    "description": "Writable params of a data point",
     "additionalProperties": False,
     "properties": {
-        "value": {"type": ["number", "string"]},  # the range depends on the datatype, checked by the accessor
-        "alias": {"type": "string"}
+        "value": {
+            "type": ["number", "string"],  # the range depends on the datatype, checked by the accessor
+            "description": "New value of the data point in its unit, only for a writable data point. "
+                           "A string is converted to a number.",
+            "examples": [21.5, "21.5"]
+        },
+        "alias": {
+            "type": "string",
+            "description": "Alias of the data point",
+            "examples": ["setpoint_living_room"]
+        }
     }
 }
 
