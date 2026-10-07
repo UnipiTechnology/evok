@@ -3,7 +3,7 @@ import json
 import jsonschema
 import tornado.web
 
-from .devices import Devices
+from .devices import Devices, devtype_of
 from .errors import DeviceNotFound
 from .handlers_base import SCHEMA_VALIDATE
 from .log import logger
@@ -29,7 +29,9 @@ class JSONBulkHandler(tornado.web.RequestHandler):
             # major_group is a string of Modbus devices and a number of 1-Wire ones, some devices have none
             devices = [dev for dev in devices if str(getattr(dev, 'major_group', None)) == str(grp)]
         if (circuits := command.get('device_circuits')) is not None:
-            devices = [dev for dev in devices if dev.circuit in circuits]
+            # a circuit or an alias, as in individual_assignments
+            devices = [dev for dev in devices
+                       if dev.circuit in circuits or (getattr(dev, 'alias', '') and dev.alias in circuits)]
         return list(devices)
 
     @staticmethod
@@ -66,7 +68,9 @@ class JSONBulkHandler(tornado.web.RequestHandler):
             if 'group_queries' in js_dict:
                 result['group_queries'] = []
                 for query in js_dict['group_queries']:
-                    devices = [dev for device_type in query['device_types'] for dev in Devices.by_name(device_type)]
+                    # altnames of the same type, e.g. 'di' and 'input', return its devices once
+                    devtypes = dict.fromkeys(devtype_of(device_type) for device_type in query['device_types'])
+                    devices = [dev for devtype in devtypes for dev in Devices.by_name(devtype)]
                     result['group_queries'].append([dev.full() for dev in self._filter(devices, query)])
 
             if 'group_assignments' in js_dict:

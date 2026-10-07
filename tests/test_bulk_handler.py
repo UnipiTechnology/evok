@@ -98,3 +98,25 @@ async def test_results_before_an_error_are_returned(bulk, devices):
     assert reply['errors'] == {'ValueError': 'Value out of range'}
     assert reply['individual_assignments'] == [{'dev': 'do', 'circuit': '1_01'}]
     assert devices[DO]['1_01'].calls == [{'value': 1}]
+
+
+async def test_altnames_are_merged(bulk, devices):
+    code, reply = await bulk({'group_queries': [{'device_types': ['do', 'output', 'digitaloutput']}]})
+    assert code == 200
+    assert [state['circuit'] for state in reply['group_queries'][0]] == ['1_01', '2_01']
+
+
+async def test_unknown_type_in_query(bulk, devices):
+    code, reply = await bulk({'group_queries': [{'device_types': ['do', 'foo']}]})
+    assert code == 404
+
+
+async def test_device_circuits_with_alias(bulk, devices):
+    Devices.set_alias('pump', devices[DO]['2_01'])
+    code, reply = await bulk({
+        'group_queries': [{'device_types': ['do'], 'device_circuits': ['pump']}],
+        'group_assignments': [{'device_type': 'do', 'device_circuits': ['pump', '1_01'], 'assigned_values': {'value': 1}}],
+    })
+    assert code == 200
+    assert [state['circuit'] for state in reply['group_queries'][0]] == ['2_01']
+    assert (devices[DO]['1_01'].calls, devices[DO]['2_01'].calls) == ([{'value': 1}], [{'value': 1}])
