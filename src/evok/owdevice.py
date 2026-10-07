@@ -23,7 +23,8 @@ def check_interval(interval, name='interval', zero=False):
 SUPPORTED_DEVICES = ["DS18S20", "DS18B20", "DS2438", "DS2408", "DS2413"]
 
 
-class NotSupportedError(Exception):
+class NotSupportedError(ValueError):
+    """ The request is not supported by the device, a ValueError is reported as a bad request """
     pass
 
 
@@ -44,8 +45,7 @@ class MySensor(object):
         self.time = 0
         self.readtime = 0
         self.sens = None
-        if is_static:
-            self.__bus = bus  # can't pickle, must be reset/set by pickling/un-pickling
+        self.bus = bus
         bus.register_sensor(self)
 
     def get_value(self):
@@ -64,11 +64,13 @@ class MySensor(object):
         if interval is not None:
             self.interval = check_interval(interval)
             self.time = anyio.current_time() + self.calc_interval()
+            self.bus.wake()
             devents.config(self)
         if alias is not None:
             Devices.set_alias(alias, self)
 
-    async def read_val_from_sens(self, sens):
+    async def read_val_from_sens(self, sens) -> bool:
+        """ Read the values, return True if they have changed, the change is reported by poll() """
         raise NotImplementedError("Please Implement this method")
 
     def calc_interval(self):
@@ -107,16 +109,17 @@ class DS18B20(MySensor):  # thermometer
 
     por_skipped = False     # the last value was skipped as the power-on reset value
 
-    async def read_val_from_sens(self, sens):
+    async def read_val_from_sens(self, sens) -> bool:
         new_val = float(await sens.get('temperature'))
         # 85 C is the value after power-on reset, it is skipped once if it is the first one or a jump
         if new_val == 85.0 and not self.por_skipped and (self.value is None or abs(new_val - self.value) > 2):
             self.por_skipped = True
             logger.debug("PoR detected! 85C")
-            return
+            return False
         self.por_skipped = False
+        old_value = self.value
         self.value = round(new_val * 2, 1) / 2  # 4 bits for frac part of number
-        devents.status(self)
+        return self.value != old_value
 
 
 class DS2438(MySensor):  # vdd + vad + thermometer
@@ -152,7 +155,7 @@ class DS2438(MySensor):  # vdd + vad + thermometer
     def _values(self):
         return {name: getattr(self, name, None) for name in self.FIELDS}
 
-    async def read_val_from_sens(self, sens):
+    async def read_val_from_sens(self, sens) -> bool:
         old_values = self._values()
         async with anyio.create_task_group() as tg:
             for f in ('temperature', ['HIH4000', 'humidity'], 'VDD', 'VAD', 'vis'):
@@ -160,8 +163,7 @@ class DS2438(MySensor):  # vdd + vad + thermometer
         # the value used by get() and get_value() in RPC
         self.value = (getattr(self, 'VDD', None), getattr(self, 'VAD', None), getattr(self, 'temperature', None),
                       getattr(self, 'IAD', None))
-        if self._values() != old_values:
-            devents.status(self)
+        return self._values() != old_values
 
 
 class DS2408(MySensor):
@@ -173,21 +175,22 @@ class DS2408(MySensor):
                          circuit=circuit if circuit is not None else addr, major_group=major_group,
                          is_static=is_static)
 
-    async def read_val_from_sens(self, sens):
+    async def read_val_from_sens(self, sens) -> bool:
         # latch.0 sensed.0 PIO.0
         # actual values must be read from sensed_ALL, but writes to the GPIOs must be done in PIO_x(PIO_ALL)
         # pios_values = map(int, self.sens.sensed_ALL.split(','))
         value = await sens.get_sensed_all()
         # pios_values = [int(not int(i)) for i in self.sens.sensed_ALL.split(',')]
-        if self.value != value:
-            self.value = value
-            devents.status(self)
-            # update DS_2408_pio object that are attached to this DS2408
-            if type(value) is list:
-                pios_cnt = len(value)
-                for pio in self.pios:
-                    if pio.pin < pios_cnt:
-                        pio.set_value(value[pio.pin])
+        if self.value == value:
+            return False
+        self.value = value
+        # update DS_2408_pio object that are attached to this DS2408
+        if type(value) is list:
+            pios_cnt = len(value)
+            for pio in self.pios:
+                if pio.pin < pios_cnt:
+                    pio.set_value(value[pio.pin])
+        return True
 
     def full(self):
         ret = {'dev': '1wdevice',
@@ -249,6 +252,7 @@ class OwBusDriver:
         self.mysensors = list()
         self.ow = None
         self.owpower_circuit = owpower_circuit
+        self._wakeup = None     # the event waking up poll()
 
     def full(self):
         return {'dev': 'owbus',
@@ -306,6 +310,7 @@ class OwBusDriver:
             for mysensor in self.mysensors:  # Global change - for all sensors
                 mysensor.interval = interval
                 mysensor.time = 0
+            self.wake()
             was_changed = True
 
         if was_changed:
@@ -314,6 +319,19 @@ class OwBusDriver:
     def register_sensor(self, mysensor):
         self.mysensors.append(mysensor)
         Devices.register_device(SENSOR, mysensor)
+        self.wake()
+
+    def wake(self):
+        """ Wake up poll() sleeping until the next read, a sensor was added or its time was changed """
+        if self._wakeup is not None:
+            self._wakeup.set()
+
+    async def _sleep(self, delay):
+        """ Sleep until the delay passes or wake() is called """
+        self._wakeup = anyio.Event()
+        with anyio.move_on_after(delay):
+            await self._wakeup.wait()
+        self._wakeup = None
 
     def do_scan(self):
         if hasattr(self, 'scanning_scope'):
@@ -352,26 +370,32 @@ class OwBusDriver:
 
         while True:
             if not self.mysensors:
-                await anyio.sleep(self.interval if self.interval > 0 else 5)
+                await self._sleep(self.interval)
                 continue
             # Find sensor with min time (all se to 0 as default)
             mysensor = min(self.mysensors, key=lambda x: x.time)
             t1 = anyio.current_time()
             if t1 < mysensor.time:
-                await anyio.sleep(mysensor.time - t1)
+                await self._sleep(mysensor.time - t1)
                 continue
-
-            try:
-                # Read values from selected sensor
-                async with self.bus_lock:
-                    await mysensor.read_val_from_sens(mysensor.sens)
-                # Store last read time
-                mysensor.lost = False
-                mysensor.readtime = t1
-            except Exception:
-                if not mysensor.lost:  # Catch the edge
-                    mysensor.set_lost()
+            await self.read_sensor(mysensor, t1)
             mysensor.time = anyio.current_time() + mysensor.calc_interval()
+
+    async def read_sensor(self, mysensor, now):
+        """ Read the sensor, report a change of its values and its recovery or loss """
+        try:
+            async with self.bus_lock:
+                changed = await mysensor.read_val_from_sens(mysensor.sens)
+        except Exception as E:
+            if not mysensor.lost:  # Catch the edge
+                logger.debug(f"Sensor {mysensor.circuit} is lost: {type(E).__name__}: {E}")
+                mysensor.set_lost()
+            return
+        was_lost = mysensor.lost
+        mysensor.lost = False
+        mysensor.readtime = now
+        if changed or was_lost:
+            devents.status(mysensor)
 
     async def mon(self, ow):
         async with ow.events as events:
@@ -387,9 +411,10 @@ class OwBusDriver:
                     except Exception:
                         mysensor = MySensorFabric(address, sensor_type, self, self.interval)
                     if mysensor:
+                        # read at once, poll() reports the recovery of a lost sensor
                         mysensor.sens = msg.device
-                        mysensor.lost = False
                         mysensor.time = 0
+                        self.wake()
 
                 elif isinstance(msg, event.DeviceNotFound):
                     address = msg.device.id
