@@ -40,7 +40,7 @@ class WsHandler(websocket.WebSocketHandler):
     def on_event(self, device):
         outp = []
         try:
-            if len(self.filter) == 1 and self.filter[0] == "default":
+            if self._is_default_filter():
                 self.write_message(json.dumps(device.full()))
             else:
                 dev_all = device.full()
@@ -59,72 +59,69 @@ class WsHandler(websocket.WebSocketHandler):
     async def on_message(self, message):
         try:
             message = json.loads(message)
-            try:
-                cmd = message["cmd"]
-            except Exception:
-                cmd = None
+            if not isinstance(message, dict):
+                raise ValueError("The message must be an object")
+            cmd = message.get("cmd")
             # get FULL state of each IO
             if cmd == "all":
-                result = []
-                devices = [DI, RO, AI, AO, SENSOR]
-                if self.all_filtered:
-                    if len(self.filter) == 1 and self.filter[0] == "default":
-                        for dev_name in devices:
-                            result += map(lambda dev: dev.full(), Devices.by_name(dev_name))
-                    else:
-                        for dev_name in num_to_devtype_name.values():
-                            added_results = map(lambda dev: dev.full() if hasattr(dev, "full") else None,
-                                                Devices.by_name(dev_name))
-                            for added_result in added_results:
-                                if added_result is not None and added_result in self.filter:
-                                    result.append(added_result)
-                else:
-                    for dev_name in num_to_devtype_name.values():
-                        added_results = map(lambda dev: dev.full() if hasattr(dev, "full") else None,
-                                            Devices.by_name(dev_name))
-                        for added_result in added_results:
-                            if added_result is not None:
-                                result.append(added_result)
-                await self.write_message(json.dumps(result))
-            # set device state
+                await self.write_message(json.dumps(self._all()))
             elif cmd == "filter":
-                devices = []
-                try:
-                    for single_dev in message["devices"]:
-                        if (str(single_dev) in num_to_devtype_name.values()) or (str(single_dev) in devtype_altnames):
-                            devices += [single_dev]
-                    if len(devices) > 0 or len(message["devices"]) == 0:
-                        self.filter = devices
-                        if len(message["devices"]) and message["devices"][0] == "default":
-                            self.filter = ["default"]
-                    else:
-                        raise Exception("Invalid 'devices' argument: %s" % str(message["devices"]))
-                except Exception as E:
-                    logger.exception("Exc: %s", str(E))
+                self._set_filter(message.get("devices"))
             elif cmd in ("full", "set"):
+                if "dev" not in message or "circuit" not in message:
+                    raise ValueError(f"Command '{cmd}' requires 'dev' and 'circuit'")
                 dev = message["dev"]
-                try:
-                    device = Devices.by_name(dev, message["circuit"])
-                    if cmd == "full":
-                        # full() is not a coroutine, send the state only to the requesting client
-                        await self.write_message(json.dumps(device.full()))
-                    else:
-                        await device.set(**self._set_params(dev, message))
-                except (ValueError, DeviceNotFound, jsonschema.ValidationError) as E:
-                    # the string of a ValidationError contains the whole schema
-                    error = E.message if isinstance(E, jsonschema.ValidationError) else str(E)
-                    logger.error(f"WS: {error}")
-                except Exception as E:
-                    logger.exception(f"WS: {str(E)}")
-            elif cmd is not None:
-                logger.error(f"WS: Unknown command '{cmd}'")
-
+                device = Devices.by_name(dev, message["circuit"])
+                if cmd == "full":
+                    # full() is not a coroutine, send the state only to the requesting client
+                    await self.write_message(json.dumps(device.full()))
+                else:
+                    await device.set(**self._set_params(dev, message))
+            else:
+                raise ValueError(f"Unknown command '{cmd}'")
+        except (ValueError, DeviceNotFound, jsonschema.ValidationError) as E:
+            # the string of a ValidationError contains the whole schema
+            error = E.message if isinstance(E, jsonschema.ValidationError) else str(E)
+            logger.error(f"WS: {error}")
+            await self._send_error({type(E).__name__: error})
         except Exception as E:
-            logger.debug("Skipping WS message: %s (%s)", message, str(E))
-            if logger.level == logging.DEBUG:
-                traceback.print_exc()
-            # skip it since we do not understand this message....
+            logger.exception(f"WS: {str(E)}")
+            await self._send_error({'Server error': 'internal'})
+
+    async def _send_error(self, errors: dict):
+        """ Errors are sent only to the requesting client, in the format of REST """
+        try:
+            await self.write_message(json.dumps({'success': False, 'errors': errors}))
+        except websocket.WebSocketClosedError:
             pass
+
+    def _is_default_filter(self) -> bool:
+        return self.filter == ["default"]
+
+    def _all(self) -> list:
+        """ State of all devices, with all_filtered only of the devices passing the filter """
+        if self.all_filtered and self._is_default_filter():
+            devtypes = [DI, RO, AI, AO, SENSOR]
+        elif self.all_filtered:
+            devtypes = [devtype for devtype in num_to_devtype_name.values() if devtype in self.filter]
+        else:
+            devtypes = num_to_devtype_name.values()
+        return [dev.full() for devtype in devtypes for dev in Devices.by_name(devtype)]
+
+    def _set_filter(self, names):
+        """ Device types sent in events, altnames are converted to the device types,
+            unknown types are skipped, ["default"] restores the default filter
+        """
+        if not isinstance(names, list):
+            raise ValueError("Command 'filter' requires a list in 'devices'")
+        if names[:1] == ["default"]:
+            self.filter = ["default"]
+            return
+        devtypes = [devtype_altnames.get(str(name), str(name)) for name in names]
+        devtypes = [devtype for devtype in devtypes if devtype in num_to_devtype_name.values()]
+        if names and not devtypes:
+            raise ValueError(f"Invalid 'devices' argument: {names}")
+        self.filter = devtypes
 
     @staticmethod
     def _set_params(dev, message) -> dict:
