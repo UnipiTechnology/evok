@@ -14,25 +14,18 @@ from .cache import ModbusCacheMap
 from ..devices import devents
 from ..log import logger
 
+UINT16 = struct.Struct(">H")
+INT16 = struct.Struct(">h")
 FLOAT32_BE = OrderAwareStruct(">f")
 FLOAT32_LE = OrderAwareStruct(">f", word_order="little")
 INT32_BE = OrderAwareStruct(">i")
 INT32_LE = OrderAwareStruct(">i", word_order="little")
 UINT32_BE = OrderAwareStruct(">I")
 UINT32_LE = OrderAwareStruct(">I", word_order="little")
-INT16 = OrderAwareStruct(">h")
 
 FLOAT32_WORD_ORDER = {"big": FLOAT32_BE, "little": FLOAT32_LE}
 UINT32_WORD_ORDER = {"big": UINT32_BE, "little": UINT32_LE}
 INT32_WORD_ORDER = {"big": INT32_BE, "little": INT32_LE}
-
-
-def word_order_format(formats: dict, word_order: str):
-    """ Return the format of the word order, raise ValueError for an unknown one """
-    fmt = formats.get(word_order)
-    if fmt is None:
-        raise ValueError(f"Unknown word order '{word_order}'")
-    return fmt
 
 
 def from_registers(fmt: struct.Struct, registers):
@@ -57,38 +50,9 @@ class Client:
         self.eventable_devices = []
         self.failing_devices = set()    # logged once, until they check new data again
 
-    def read_u16(self, index: int, is_input: bool = False) -> int:
-        """ Return the cached value of a 16-bit register """
-        return self.cache.get_register(1, index, is_input=is_input)[0]
-
-    def read_i16(self, index: int, is_input: bool = False) -> int:
-        """ Return the cached value of a 16-bit register as signed int"""
-        return from_registers(INT16, self.cache.get_register(1, index, is_input=is_input))
-
-    def read_float32(self, index: int, is_input: bool = False,
-                     word_order: Literal["big", "little"] = "little") -> float:
-        """ Return the cached value of a 32-bit float in two registers,
-            word_order "little" = low word first, "big" = high word first
-        """
-        return self._read32(FLOAT32_WORD_ORDER, index, is_input, word_order)
-
-    def read_u32(self, index: int, is_input: bool = False,
-                 word_order: Literal["big", "little"] = "little") -> int:
-        """ Return the cached value of a 32-bit unsigned integer in two registers,
-            word_order "little" = low word first, "big" = high word first
-        """
-        return self._read32(UINT32_WORD_ORDER, index, is_input, word_order)
-
-    def read_i32(self, index: int, is_input: bool = False,
-                 word_order: Literal["big", "little"] = "little") -> int:
-        """ Return the cached value of a 32-bit signed integer in two registers,
-            word_order "little" = low word first, "big" = high word first
-        """
-        return self._read32(INT32_WORD_ORDER, index, is_input, word_order)
-
-    def _read32(self, formats: dict, index: int, is_input: bool, word_order: str):
-        return from_registers(word_order_format(formats, word_order),
-                              self.cache.get_register(2, index, is_input=is_input))
+    def read_registers(self, index: int, count: int = 1, is_input: bool = False) -> list[int]:
+        """ Return the cached values of count registers, the datatypes are decoded by the accessors """
+        return self.cache.get_register(count, index, is_input=is_input)
 
     async def write_registers(self, index: int, values: list[int]):
         """ Write holding registers and update the cache, so the next check does not see a stale value """
@@ -97,27 +61,6 @@ class Client:
         else:
             await self.mb_client.write_multiple_registers(index, values)
         self.cache.set_register(index, values)
-
-    async def write_u16(self, index: int, value: int):
-        await self.write_registers(index, [value])
-
-    async def write_i16(self, index: int, value: int):
-        await self.write_registers(index, to_registers(INT16, value))
-
-    async def write_float32(self, index: int, value: float,
-                            word_order: Literal["big", "little"] = "little"):
-        await self._write32(FLOAT32_WORD_ORDER, index, value, word_order)
-
-    async def write_u32(self, index: int, value: int,
-                        word_order: Literal["big", "little"] = "little"):
-        await self._write32(UINT32_WORD_ORDER, index, value, word_order)
-
-    async def write_i32(self, index: int, value: int,
-                        word_order: Literal["big", "little"] = "little"):
-        await self._write32(INT32_WORD_ORDER, index, value, word_order)
-
-    async def _write32(self, formats: dict, index: int, value, word_order: str):
-        await self.write_registers(index, to_registers(word_order_format(formats, word_order), value))
 
     async def do_scan(self):
 
@@ -163,10 +106,13 @@ class Accessor:
     """ Reads a value of a given datatype from the cache of a Client
         and applies the linear transformation val * ratio + offset
         and rounding to decimals. Writes apply the inverse transformation.
+        The datatype is decoded from count registers by the struct fmt.
         Base class reads nothing and cannot write (unknown datatype).
     """
     datatype = None
     raw_range = None  # (min, max) of integer datatypes, None for float
+    fmt: struct.Struct | None = None
+    count = 1
 
     def __init__(self, index: int, is_input: bool = False, *,
                  ratio=1, offset=0, decimals=None):
@@ -191,7 +137,9 @@ class Accessor:
                                    offset=offset, decimals=decimals, word_order=word_order)
 
     def read_raw(self, client: Client) -> int | float | None:
-        return None
+        if self.fmt is None:
+            return None
+        return from_registers(self.fmt, client.read_registers(self.index, self.count, is_input=self.is_input))
 
     def read(self, client: Client) -> int | float | None:
         val = self.read_raw(client)
@@ -204,7 +152,13 @@ class Accessor:
         return val
 
     async def write_raw(self, client: Client, raw):
-        raise ValueError(f'Cannot write unknown datatype to register {self.index}')
+        if self.fmt is None:
+            raise ValueError(f'Cannot write unknown datatype to register {self.index}')
+        try:
+            registers = to_registers(self.fmt, raw)
+        except OverflowError:   # float32, the integer datatypes are checked by raw_range
+            raise ValueError(f'Value {raw} out of range for {self.datatype} register {self.index}') from None
+        await client.write_registers(self.index, registers)
 
     async def write(self, client: Client, value):
         """ Write the value converted by the inverse transformation (val - offset) / ratio,
@@ -228,23 +182,13 @@ class Accessor:
 class AccessorU16(Accessor):
     datatype = 'uint16'
     raw_range = (0, 0xffff)
-
-    def read_raw(self, client: Client) -> int:
-        return client.read_u16(self.index, is_input=self.is_input)
-
-    async def write_raw(self, client: Client, raw: int):
-        await client.write_u16(self.index, raw)
+    fmt = UINT16
 
 
 class AccessorI16(Accessor):
     datatype = 'int16'
     raw_range = (-0x8000, 0x7fff)
-
-    def read_raw(self, client: Client) -> int:
-        return client.read_i16(self.index, is_input=self.is_input)
-
-    async def write_raw(self, client: Client, raw: int):
-        await client.write_i16(self.index, raw)
+    fmt = INT16
 
 
 class AccessorBit(Accessor):
@@ -262,22 +206,28 @@ class AccessorBit(Accessor):
         return dict(super().params(), mask=self.mask)
 
     def read_raw(self, client: Client) -> int:
-        return 1 if client.read_u16(self.index, is_input=self.is_input) & self.mask else 0
+        return 1 if client.read_registers(self.index, is_input=self.is_input)[0] & self.mask else 0
 
     async def write_raw(self, client: Client, raw: int):
         """ Read-modify-write, the register is read from the unit, not from the cache """
         curr = (await client.cache.get_register_async(1, self.index))[0]
-        await client.write_u16(self.index, curr | self.mask if raw else curr & ~self.mask)
+        await client.write_registers(self.index, [curr | self.mask if raw else curr & ~self.mask])
 
 
 class Accessor32(Accessor):
-    """ Base for values in two registers, see Client.read_u32 for word_order """
+    """ Base for values in two registers,
+        word_order "little" = low word first, "big" = high word first
+    """
+    count = 2
+    formats: dict[str, struct.Struct]   # the format of each word order
 
     def __init__(self, index: int, is_input: bool = False, *,
                  word_order: Literal["big", "little"] = "little", **kwargs):
-        word_order_format(FLOAT32_WORD_ORDER, word_order)     # the same word orders for all 32-bit types
+        if word_order not in self.formats:
+            raise ValueError(f"Unknown word order '{word_order}'")
         super().__init__(index, is_input, **kwargs)
         self.word_order = word_order
+        self.fmt = self.formats[word_order]
 
     def params(self) -> dict:
         return dict(super().params(), word_order=self.word_order)
@@ -286,37 +236,18 @@ class Accessor32(Accessor):
 class AccessorU32(Accessor32):
     datatype = 'uint32'
     raw_range = (0, 0xffffffff)
-
-    def read_raw(self, client: Client) -> int:
-        return client.read_u32(self.index, is_input=self.is_input, word_order=self.word_order)
-
-    async def write_raw(self, client: Client, raw: int):
-        await client.write_u32(self.index, raw, word_order=self.word_order)
+    formats = UINT32_WORD_ORDER
 
 
 class AccessorI32(Accessor32):
     datatype = 'int32'
     raw_range = (-0x80000000, 0x7fffffff)
-
-    def read_raw(self, client: Client) -> int:
-        return client.read_i32(self.index, is_input=self.is_input, word_order=self.word_order)
-
-    async def write_raw(self, client: Client, raw: int):
-        await client.write_i32(self.index, raw, word_order=self.word_order)
+    formats = INT32_WORD_ORDER
 
 
 class AccessorFloat32(Accessor32):
     datatype = 'float32'
-
-    def read_raw(self, client: Client) -> float:
-        return client.read_float32(self.index, is_input=self.is_input, word_order=self.word_order)
-
-    async def write_raw(self, client: Client, raw: float):
-        try:
-            struct.pack('>f', raw)
-        except OverflowError:
-            raise ValueError(f'Value {raw} out of range for float32 register {self.index}') from None
-        await client.write_float32(self.index, raw, word_order=self.word_order)
+    formats = FLOAT32_WORD_ORDER
 
 
 class AccessorFactory:
