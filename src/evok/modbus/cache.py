@@ -86,6 +86,10 @@ class ModbusCacheMap:
             if count is None:
                 return False
             read += count
+        # the counters are ticked after the whole scan, a failed scan is repeated with the same groups,
+        # the slow groups keep their phase
+        for group in self.groups + self.igroups:
+            group.tick_counter()
         # a scan without a read, e.g. of a unit without register blocks, is not a communication
         if read > 0:
             self.last_comm_time = time.time()
@@ -130,7 +134,6 @@ class ModbusCacheMap:
                     vals = await func(group.address, quantity=group.count)
                     group.update(vals)
                     read += 1
-                group.tick_counter()
 
         except (TModbusError, TimeoutError) as E:
             # also the retries of the transport (RequestRetryFailedError), a noise on RS485 (CRCError)

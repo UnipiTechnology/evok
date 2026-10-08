@@ -96,6 +96,27 @@ async def test_slow_group_is_scanned_by_divider():
     assert seen == [(1, 0), (1, 0), (1, 1)]
 
 
+async def test_failed_scan_keeps_phase_of_slow_groups():
+    """ The groups read before an error were ticked, the other ones not, their phases drifted apart """
+    blocks = [{'start_reg': 0, 'count': 1, 'frequency': 2}, {'start_reg': 10, 'count': 1, 'frequency': 2}]
+    mb = FakeModbus()
+    cache = ModbusCacheMap(blocks, mb)
+    read = mb.read_holding_registers
+    reads = []
+
+    async def flaky(address, **kwargs):
+        reads.append(address)
+        if address == 10 and len(reads) == 2:
+            raise RequestRetryFailedError('no response')
+        return await read(address, **kwargs)
+    mb.read_holding_registers = flaky
+    assert not await cache.do_scan(initial=True)            # the second group fails
+    for _ in range(4):
+        assert await cache.do_scan()
+    # the failed scan is repeated, then both groups are read together every other scan
+    assert reads == [0, 10, 0, 10, 0, 10]
+
+
 async def test_scan_connection_error_returns_false():
     mb = FakeModbus()
     cache = ModbusCacheMap(BLOCKS, mb)
