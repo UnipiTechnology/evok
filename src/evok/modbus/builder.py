@@ -32,40 +32,36 @@ class IOParser:
             self.client.eventable_devices.append(device)
         Devices.register_device(devtype, device)
 
-    def io_circuit(self, counter, m_feature):
+    def io_circuit(self, i, m_feature):
         """ Circuit of the IO, start_index numbers the IOs of a feature following another one """
-        return "%s_%02d" % (self.circuit, counter + 1 + m_feature.get('start_index', 0))
+        return "%s_%02d" % (self.circuit, i + 1 + m_feature.get('start_index', 0))
 
     @staticmethod
-    def bit_reg(reg, counter):
+    def bit_reg(reg, i):
         """ Register of the IO with bits for 16 IOs in one register, the IOs 17-32 are in the next register """
-        return reg + counter // 16
+        return reg + i // 16
 
     def parse_feature_di(self, max_count, m_feature):
         """ The value and the DirectSwitch registers have the bits of 16 inputs, the next 16 are in the next ones """
         has_direct_switch = all(key in m_feature for key in ('ds_modes', 'direct_reg', 'polar_reg', 'toggle_reg'))
-        counter = 0
-        while counter < max_count:
+        for i in range(max_count):
             direct_switch = dict(ds_modes=m_feature['ds_modes'],
-                                 regmode=self.bit_reg(m_feature['direct_reg'], counter),
-                                 regtoggle=self.bit_reg(m_feature['toggle_reg'], counter),
-                                 regpolarity=self.bit_reg(m_feature['polar_reg'], counter)) if has_direct_switch else {}
-            _inp = DigitalInput(self.io_circuit(counter, m_feature), self.client,
-                                self.bit_reg(m_feature['val_reg'], counter), 0x1 << (counter % 16),
-                                regdebounce=m_feature['deboun_reg'] + counter,
-                                major_group=self.circuit, regcounter=m_feature['counter_reg'] + (2 * counter),
+                                 regmode=self.bit_reg(m_feature['direct_reg'], i),
+                                 regtoggle=self.bit_reg(m_feature['toggle_reg'], i),
+                                 regpolarity=self.bit_reg(m_feature['polar_reg'], i)) if has_direct_switch else {}
+            _inp = DigitalInput(self.io_circuit(i, m_feature), self.client,
+                                self.bit_reg(m_feature['val_reg'], i), 0x1 << (i % 16),
+                                regdebounce=m_feature['deboun_reg'] + i,
+                                major_group=self.circuit, regcounter=m_feature['counter_reg'] + (2 * i),
                                 modes=m_feature['modes'], **direct_switch)
             self._register(DI, _inp)
-            counter += 1
 
     def parse_feature_ro(self, max_count, m_feature):
-        counter = 0
-        while counter < max_count:
-            board_val_reg = self.bit_reg(m_feature['val_reg'], counter)
-            _r = Relay(self.io_circuit(counter, m_feature), self.client, m_feature['val_coil'] + counter,
-                       board_val_reg, 0x1 << (counter % 16), major_group=self.circuit)
+        for i in range(max_count):
+            board_val_reg = self.bit_reg(m_feature['val_reg'], i)
+            _r = Relay(self.io_circuit(i, m_feature), self.client, m_feature['val_coil'] + i,
+                       board_val_reg, 0x1 << (i % 16), major_group=self.circuit)
             self._register(RO, _r)
-            counter += 1
 
     def parse_feature_do(self, max_count, m_feature):
         if m_feature.get('pwm_reg') and m_feature.get('pwm_ps_reg') and m_feature.get('pwm_c_reg'):
@@ -74,24 +70,20 @@ class IOParser:
             pwm = SoftPwmFrequency(self.client, m_feature['pwm_preset_reg'], m_feature['pwm_cpres_reg'])
         else:
             raise ValueError(f"Unexpected feature  {m_feature['type']}")
-        counter = 0
-        while counter < max_count:
-            _r = DigitalOutput(self.io_circuit(counter, m_feature), self.client,
-                               m_feature['val_coil'] + counter, self.bit_reg(m_feature['val_reg'], counter),
-                               0x1 << (counter % 16),
+        for i in range(max_count):
+            _r = DigitalOutput(self.io_circuit(i, m_feature), self.client,
+                               m_feature['val_coil'] + i, self.bit_reg(m_feature['val_reg'], i),
+                               0x1 << (i % 16),
                                major_group=self.circuit, pwm=pwm,
-                               pwmdutyreg=m_feature['pwm_reg'] + counter, modes=m_feature['modes'])
+                               pwmdutyreg=m_feature['pwm_reg'] + i, modes=m_feature['modes'])
             self._register(DO, _r)
-            counter += 1
 
     def parse_feature_led(self, max_count, m_feature):
-        counter = 0
-        while counter < max_count:
-            board_val_reg = self.bit_reg(m_feature['val_reg'], counter)
-            _led = ULED(self.io_circuit(counter, m_feature), self.client, m_feature['val_coil'] + counter,
-                        board_val_reg, 0x1 << (counter % 16), major_group=self.circuit)
+        for i in range(max_count):
+            board_val_reg = self.bit_reg(m_feature['val_reg'], i)
+            _led = ULED(self.io_circuit(i, m_feature), self.client, m_feature['val_coil'] + i,
+                        board_val_reg, 0x1 << (i % 16), major_group=self.circuit)
             self._register(LED, _led)
-            counter += 1
 
     def parse_feature_owpower(self, m_feature):
         _owpower = OwPower(f"{self.circuit}", self.client, m_feature['val_coil'], major_group=self.circuit)
@@ -102,26 +94,22 @@ class IOParser:
         self._register(NV_SAVE, _nv_save)
 
     def parse_feature_wd(self, max_count, m_feature):
-        counter = 0
-        while counter < max_count:
+        for i in range(max_count):
             board_val_reg = m_feature['val_reg']
             board_timeout_reg = m_feature['timeout_reg']
-            _wd = Watchdog("%s_%02d" % (self.circuit, counter + 1), self.client, counter, board_val_reg + counter,
-                           board_timeout_reg + counter, major_group=self.circuit,
+            _wd = Watchdog("%s_%02d" % (self.circuit, i + 1), self.client, i, board_val_reg + i,
+                           board_timeout_reg + i, major_group=self.circuit,
                            nv_save_coil=m_feature['nv_sav_coil'], reset_coil=m_feature['reset_coil'])
             self._register(WATCHDOG, _wd)
-            counter += 1
 
     def parse_feature_ao(self, max_count, m_feature):
-        counter = 0
-        while counter < max_count:
+        for i in range(max_count):
             board_val_reg = m_feature['val_reg']
             modes = m_feature['modes']
             reg_mode = m_feature.get('mode_reg', None)
-            _ao = AnalogOutput("%s_%02d" % (self.circuit, counter + 1), self.client, board_val_reg + counter,
+            _ao = AnalogOutput("%s_%02d" % (self.circuit, i + 1), self.client, board_val_reg + i,
                                major_group=self.circuit, modes=modes, regmode=reg_mode)
             self._register(AO, _ao)
-            counter += 1
 
     def parse_feature_bao(self, max_count, m_feature):
         """ The Brain AO is a single output, its mode and resistance registers are not per output """
@@ -135,32 +123,28 @@ class IOParser:
         self._register(AO, _ao)
 
     def parse_feature_ai(self, max_count, m_feature):
-        counter = 0
-        while counter < max_count:
-            circuit = "%s_%02d" % (self.circuit, counter + 1)
-            board_val_reg = m_feature['val_reg'] + counter * 2
+        for i in range(max_count):
+            circuit = "%s_%02d" % (self.circuit, i + 1)
+            board_val_reg = m_feature['val_reg'] + i * 2
             modes = m_feature['modes']
             _ai = AnalogInput(circuit, self.client, board_val_reg,
-                              regmode=(m_feature['mode_reg'] + counter
+                              regmode=(m_feature['mode_reg'] + i
                                        if m_feature.get('mode_reg', None) is not None else None),
                               major_group=self.circuit, modes=modes)
 
             self._register(AI, _ai)
-            counter += 1
 
     def parse_feature_register(self, max_count, m_feature):
-        counter = 0
-        while counter < max_count:
+        for i in range(max_count):
             board_val_reg = m_feature['start_reg']
             if 'reg_type' in m_feature and m_feature['reg_type'] == 'input':
-                _reg = Register("%s_%d_inp" % (self.circuit, board_val_reg + counter), self.client,
-                                board_val_reg + counter, reg_type='input',
+                _reg = Register("%s_%d_inp" % (self.circuit, board_val_reg + i), self.client,
+                                board_val_reg + i, reg_type='input',
                                 major_group=self.circuit)
             else:
-                _reg = Register("%s_%d" % (self.circuit, board_val_reg + counter), self.client,
-                                board_val_reg + counter, major_group=self.circuit)
+                _reg = Register("%s_%d" % (self.circuit, board_val_reg + i), self.client,
+                                board_val_reg + i, major_group=self.circuit)
             self._register(REGISTER, _reg)
-            counter += 1
 
     def parse_feature_data_point(self, max_count, m_feature):
         """ The data points follow each other, a 32-bit one takes two registers """
@@ -170,17 +154,15 @@ class IOParser:
                        writable=m_feature.get("writable", False))
         _valid_mask_reg = m_feature.get('valid_mask_reg')
         reg = m_feature['value_reg']
-        counter = 0
-        while counter < max_count:
+        for i in range(max_count):
             _circuit = "{}_{}".format(self.circuit, reg)
             if _valid_mask_reg is not None:
-                _xgt = OwTemperature(_circuit, self.client, reg, _valid_mask_reg, 1 << counter, **_kwargs)
+                _xgt = OwTemperature(_circuit, self.client, reg, _valid_mask_reg, 1 << i, **_kwargs)
             else:
                 _xgt = DataPoint(_circuit, self.client, reg, **_kwargs)
 
             self._register(DATA_POINT, _xgt)
             reg += _xgt.accessor.count
-            counter += 1
 
     def parse_feature(self, m_feature):
         max_count = m_feature.get('count', 1)
