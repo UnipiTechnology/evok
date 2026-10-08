@@ -1,11 +1,11 @@
 import pytest
 
-from evok.devices import Devices, DI, DO, RO, AI, LED, WATCHDOG, NV_SAVE
+from evok.devices import Devices, DI, DO, RO, AI, AO, LED, WATCHDOG, NV_SAVE
 from evok.modbus.builder import IOParser
 from evok.modbus.digital import DigitalInput, DigitalOutput, ULED
 from evok.modbus.special import Watchdog, NvSave
 from evok.devices import DATA_POINT
-from evok.modbus.analog import AnalogInput, DataPoint, OwTemperature
+from evok.modbus.analog import AnalogInput, AnalogOutputBrain, DataPoint, OwTemperature
 
 from conftest import make_client, scan
 
@@ -109,6 +109,25 @@ def test_data_point_without_valid_mask_reg():
     assert circuits(DATA_POINT) == ['1_1', '1_2', '1_3']
     assert all(type(d) is DataPoint for d in Devices[DATA_POINT].values())
     assert not any(d.writable for d in Devices[DATA_POINT].values())
+
+
+def bao_hw(**feature):
+    return {'modbus_register_blocks': [{'start_reg': 0, 'count': 8, 'frequency': 1}],
+            'modbus_features': [dict(type='BAO', val_reg=0, res_val_reg=4, mode_reg=6, **feature)]}
+
+
+def test_bao_creates_one_output():
+    populate(bao_hw(count=1))
+    ao = Devices[AO]['1_01']
+    assert type(ao) is AnalogOutputBrain
+    assert (ao.ao_accessor.index, ao.res_accessor.index, ao.iomode.accessor.index) == (0, 4, 6)
+    assert circuits(AO) == ['1_01']
+
+
+def test_bao_with_more_outputs_is_an_error(caplog):
+    populate(bao_hw(count=2))
+    assert circuits(AO) == []
+    assert 'BAO can have only one output, count is 2' in caplog.text
 
 
 def test_invalid_feature_is_skipped(caplog):

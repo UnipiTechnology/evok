@@ -132,15 +132,16 @@ class IOParser:
             counter += 1
 
     def parse_feature_bao(self, max_count, m_feature):
-        counter = 0
-        while counter < max_count:
-            board_val_reg = m_feature['val_reg']
-            reg_mode = m_feature.get('mode_reg', None)
-            _ao = AnalogOutputBrain("%s_%02d" % (self.circuit, counter + 1), self.client, board_val_reg + counter,
-                                    regmode=reg_mode, reg_res=m_feature['res_val_reg'], major_group=self.circuit)
-            self.__register_eventable_device(_ao)
-            Devices.register_device(AO, _ao)
-            counter += 1
+        """ The Brain AO is a single output, its mode and resistance registers are not per output """
+        if max_count > 1:
+            raise ValueError(f"BAO can have only one output, count is {max_count}")
+        if max_count < 1:
+            return
+        _ao = AnalogOutputBrain("%s_01" % self.circuit, self.client, m_feature['val_reg'],
+                                regmode=m_feature.get('mode_reg'), reg_res=m_feature.get('res_val_reg'),
+                                major_group=self.circuit)
+        self.__register_eventable_device(_ao)
+        Devices.register_device(AO, _ao)
 
     def parse_feature_ai(self, max_count, m_feature):
         counter = 0
