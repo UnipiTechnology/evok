@@ -118,7 +118,8 @@ class ModbusScanner:
                'modbus_type': self.modbus_type,
                'modbus_spec': self.modbus_spec,
                'scan_interval': self.scan_interval,
-               'last_comm': time.time() - self.cache.last_comm_time,
+               'last_comm': time.time() - self.cache.last_comm_time if self.cache.last_comm_time is not None
+               else None,
                }
         if self.alias != '':
             ret['alias'] = self.alias

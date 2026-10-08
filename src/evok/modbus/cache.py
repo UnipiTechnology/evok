@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Thu Sep 24 15:10:48 2026
-
-@author: Miroslav Ondra
-"""
-
 import time
 
 from dataclasses import dataclass, field
@@ -23,7 +17,7 @@ class RegisterGroup:
     count: int
     f_divider: int = 1
     f_counter: int = 0
-    values: list[int] = field(init=False)
+    values: list[int | None] = field(init=False)     # None before the first read
 
     def __post_init__(self):
         self.values = [None] * self.count
@@ -61,23 +55,29 @@ def _make_group(block: dict) -> RegisterGroup:
                          f_divider=positive_int("frequency", 1))
 
 
-class ModbusCacheMap(object):
+class ModbusCacheMap:
 
     def __init__(self, modbus_reg_map, modbus_client):
         self.modbus_client: AsyncModbusClient = modbus_client
-        self.last_comm_time = 0
+        self.last_comm_time: float | None = None    # None before the first successful scan
         # the error of the last scan, None after a successful one
         self.scan_error: Exception | None = None
         self.groups = []
         self.igroups = []
         for block in modbus_reg_map:
             group = _make_group(block)
-            (self.igroups if block.get("type") == "input" else self.groups).append(group)
+            groups = self.igroups if block.get("type") == "input" else self.groups
+            # a register is read from the first group, the copy in an overlapping one would not be used
+            for other in groups:
+                if group.address < other.address + other.count and other.address < group.address + group.count:
+                    raise ValueError(f"Register block {block} overlaps the block of registers "
+                                     f"{other.address}..{other.address + other.count - 1}")
+            groups.append(group)
 
     async def do_scan(self, initial: bool = False) -> bool:
         if initial:
-            [g.clear_counter() for g in self.groups]
-            [g.clear_counter() for g in self.igroups]
+            for group in self.groups + self.igroups:
+                group.clear_counter()
 
         res = await self._do_scan_groups(self.groups, self.modbus_client.read_holding_registers) and \
             await self._do_scan_groups(self.igroups, self.modbus_client.read_input_registers)
@@ -92,7 +92,7 @@ class ModbusCacheMap(object):
                 return group
         raise ValueError(f"get_reg_group: Unknown register {address}!")
 
-    def get_register(self, count, index, is_input=False):
+    def get_register(self, index, count=1, is_input=False):
         group = self._find_group(index, is_input)
         offset = index - group.address
         values = group.values[offset:offset + count]
@@ -105,7 +105,7 @@ class ModbusCacheMap(object):
         """ Update cached registers after a successful write """
         self._find_group(index, is_input).update(values, index)
 
-    async def get_register_async(self, count, index, is_input=False):
+    async def get_register_async(self, index, count=1, is_input=False):
         group = self._find_group(index, is_input)
         # ^^ raise exception if index not in cache map!
         if is_input:
@@ -118,7 +118,7 @@ class ModbusCacheMap(object):
     async def _do_scan_groups(self, groups: list[RegisterGroup], func) -> bool:
         try:
             for group in groups:
-                if (group.f_counter == 0):
+                if group.f_counter == 0:
                     vals = await func(group.address, quantity=group.count)
                     group.update(vals)
                 group.tick_counter()

@@ -3579,10 +3579,10 @@ components:
               description: Device circuit (or "all"). You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
               readOnly: true
             last_comm:
-              type: number
+              type: [number, 'null']
               x-stoplight:
                 id: 2na0zkc0mlsal
-              description: 'Time elapsed since last successful communication [seconds]'
+              description: 'Time elapsed since last successful communication [seconds], null before the first one'
               readOnly: true
             modbus_type:
               x-stoplight:

@@ -52,7 +52,7 @@ class Client:
 
     def read_registers(self, index: int, count: int = 1, is_input: bool = False) -> list[int]:
         """ Return the cached values of count registers, the datatypes are decoded by the accessors """
-        return self.cache.get_register(count, index, is_input=is_input)
+        return self.cache.get_register(index, count, is_input=is_input)
 
     async def write_registers(self, index: int, values: list[int]):
         """ Write holding registers and update the cache, so the next check does not see a stale value """
@@ -210,7 +210,7 @@ class AccessorBit(Accessor):
 
     async def write_raw(self, client: Client, raw: int):
         """ Read-modify-write, the register is read from the unit, not from the cache """
-        curr = (await client.cache.get_register_async(1, self.index))[0]
+        curr = (await client.cache.get_register_async(self.index))[0]
         await client.write_registers(self.index, [curr | self.mask if raw else curr & ~self.mask])
 
 

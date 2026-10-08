@@ -44,25 +44,25 @@ def test_group_frequency_divider():
 async def test_get_register_before_scan_raises():
     cache = ModbusCacheMap(BLOCKS, FakeModbus())
     with pytest.raises(ENoCacheRegister):
-        cache.get_register(1, 0)
+        cache.get_register(0, 1)
 
 
 async def test_get_unknown_register_raises():
     cache = ModbusCacheMap(BLOCKS, FakeModbus())
     await cache.do_scan(initial=True)
     with pytest.raises(ValueError):
-        cache.get_register(1, 5)
+        cache.get_register(5, 1)
     with pytest.raises(ValueError):
-        cache.get_register(1, 0, is_input=True)
+        cache.get_register(0, 1, is_input=True)
 
 
 async def test_initial_scan_reads_all_groups():
     mb = FakeModbus(holding={0: 1, 1: 2, 10: 3, 13: 4}, inputs={100: 5, 101: 6})
     cache = ModbusCacheMap(BLOCKS, mb)
     assert await cache.do_scan(initial=True)
-    assert cache.get_register(2, 0) == [1, 2]
-    assert cache.get_register(4, 10) == [3, 0, 0, 4]
-    assert cache.get_register(2, 100, is_input=True) == [5, 6]
+    assert cache.get_register(0, 2) == [1, 2]
+    assert cache.get_register(10, 4) == [3, 0, 0, 4]
+    assert cache.get_register(100, 2, is_input=True) == [5, 6]
     assert cache.last_comm_time > 0
 
 
@@ -70,16 +70,16 @@ async def test_read_past_group_end_raises():
     cache = ModbusCacheMap(BLOCKS, FakeModbus())
     await cache.do_scan(initial=True)
     with pytest.raises(ENoCacheRegister):
-        cache.get_register(2, 1)
+        cache.get_register(1, 2)
 
 
 async def test_no_cached_value_names_the_register():
     cache = ModbusCacheMap(BLOCKS, FakeModbus())
     with pytest.raises(ENoCacheRegister, match='register 12$'):
-        cache.get_register(1, 12)                           # the address, not the offset 2 in the group
+        cache.get_register(12, 1)                           # the address, not the offset 2 in the group
     await cache.do_scan(initial=True)
     with pytest.raises(ENoCacheRegister, match='register 14$'):
-        cache.get_register(2, 13)                           # the second register is past the group
+        cache.get_register(13, 2)                           # the second register is past the group
 
 
 async def test_slow_group_is_scanned_by_divider():
@@ -90,7 +90,7 @@ async def test_slow_group_is_scanned_by_divider():
     seen = []
     for _ in range(3):
         await cache.do_scan()
-        seen.append((cache.get_register(1, 0)[0], cache.get_register(1, 10)[0]))
+        seen.append((cache.get_register(0, 1)[0], cache.get_register(10, 1)[0]))
     # fast group follows immediately, slow one every 3rd scan
     assert seen == [(1, 0), (1, 0), (1, 1)]
 
@@ -100,7 +100,7 @@ async def test_scan_connection_error_returns_false():
     cache = ModbusCacheMap(BLOCKS, mb)
     mb.connected = False
     assert not await cache.do_scan(initial=True)
-    assert cache.last_comm_time == 0
+    assert cache.last_comm_time is None
 
 
 async def test_set_register_and_get_register_async():
@@ -108,10 +108,10 @@ async def test_set_register_and_get_register_async():
     cache = ModbusCacheMap(BLOCKS, mb)
     await cache.do_scan(initial=True)
     cache.set_register(12, [7])
-    assert cache.get_register(1, 12) == [7]
+    assert cache.get_register(12, 1) == [7]
     mb.holding[11] = 43
-    assert await cache.get_register_async(1, 11) == [43]
-    assert cache.get_register(1, 11) == [43]
+    assert await cache.get_register_async(11, 1) == [43]
+    assert cache.get_register(11, 1) == [43]
 
 
 @pytest.mark.parametrize('error', [
@@ -133,6 +133,15 @@ async def test_scan_error_returns_false(error):
     mb.read_holding_registers = read
     assert await cache.do_scan(initial=True)
     assert cache.scan_error is None
+
+
+def test_overlapping_blocks_are_rejected():
+    blocks = [{'start_reg': 0, 'count': 4, 'frequency': 1}, {'start_reg': 3, 'count': 2, 'frequency': 5}]
+    with pytest.raises(ValueError, match='overlaps the block of registers 0..3'):
+        ModbusCacheMap(blocks, FakeModbus())
+    # the holding and input registers are separate, adjacent blocks do not overlap
+    ModbusCacheMap([blocks[0], {**blocks[1], 'type': 'input'}, {'start_reg': 4, 'count': 1, 'frequency': 1}],
+                   FakeModbus())
 
 
 @pytest.mark.parametrize('block', [
