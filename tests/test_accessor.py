@@ -217,6 +217,24 @@ async def test_write_input_register_is_read_only():
     assert client.mb_client.writes == []
 
 
+@pytest.mark.parametrize('datatype, kw, value', [
+    ('float32', {}, 1e39),                                  # too large for float32
+    ('float32', {}, -1e39),
+    ('uint16', {'ratio': 1e-308}, 1e10),                    # infinite after the inverse transformation
+    ('float32', {'ratio': 1e-308}, 1e10),
+])
+async def test_write_out_of_datatype_is_value_error(datatype, kw, value):
+    client = await make_client()
+    with pytest.raises(ValueError, match='out of range'):
+        await AccessorFactory.get(0, datatype, **kw).write(client, value)
+    assert client.mb_client.writes == []
+
+
+def test_ratio_zero_is_rejected():
+    with pytest.raises(ValueError, match='cannot be 0'):
+        AccessorFactory.get(0, 'uint16', ratio=0)
+
+
 async def test_write_unknown_datatype():
     client = await make_client()
     with pytest.raises(ValueError, match='unknown datatype'):

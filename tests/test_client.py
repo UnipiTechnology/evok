@@ -1,7 +1,9 @@
 import pytest
 
+from evok.devices import devents
+
 from evok.modbus.cache import ENoCacheRegister
-from evok.modbus.client import FLOAT32_BE, FLOAT32_LE, to_registers
+from evok.modbus.client import FLOAT32_BE, FLOAT32_LE, Proxy, to_registers
 
 import conftest
 
@@ -78,3 +80,67 @@ async def test_read_i32():
         client.read_i32(0, word_order="middle")
     with pytest.raises(ENoCacheRegister):
         client.read_i32(1)
+
+
+class FailingDevice:
+    devtype, circuit = 'ai', 'x'
+
+    def __init__(self):
+        self.fail = True
+
+    async def check_new_data(self):
+        if self.fail:
+            raise ValueError('broken')
+        return False
+
+
+async def test_failing_device_is_logged_once(caplog):
+    client = make_client()
+    device = FailingDevice()
+    client.eventable_devices.append(device)
+
+    def errors():
+        return [r for r in caplog.records if r.levelname == 'ERROR']
+
+    for _ in range(3):
+        assert await client.do_scan()
+    assert len(errors()) == 1
+    device.fail = False
+    await client.do_scan()
+    assert 'checks new data again' in caplog.text
+    device.fail = True
+    await client.do_scan()
+    assert len(errors()) == 2                               # logged again after it worked
+
+
+class CountingDevice:
+    def __init__(self, circuit):
+        self.circuit = circuit
+        self.calls = 0
+
+    def full(self):
+        self.calls += 1
+        return {'dev': 'di', 'circuit': self.circuit}
+
+
+def test_proxy_full_is_called_by_all_receivers():
+    devices = [CountingDevice('1_02'), CountingDevice('1_01')]
+    proxy = Proxy(devices)
+    states = [{'dev': 'di', 'circuit': '1_02'}, {'dev': 'di', 'circuit': '1_01'}]   # in the order of the scan
+    assert proxy.full() == states
+    assert proxy.full() == states
+    assert [d.calls for d in devices] == [1, 1]            # the states are made once
+
+
+async def test_do_scan_sends_proxy_of_changed_devices(monkeypatch):
+    client = make_client()
+    device = CountingDevice('1_01')
+
+    async def check_new_data():
+        return True
+    device.check_new_data = check_new_data
+    client.eventable_devices.append(device)
+    events = []
+    monkeypatch.setattr(devents, 'status', events.append)
+    assert await client.do_scan()
+    assert [event.full() for event in events] == [[{'dev': 'di', 'circuit': '1_01'}]]

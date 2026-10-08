@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Sep 29 13:40:31 2026
-
-@author: bokula
-"""
 import struct
+from math import isfinite
+import functools
 
 from typing import Literal
 from tmodbus import (
@@ -30,6 +27,14 @@ UINT32_WORD_ORDER = {"big": UINT32_BE, "little": UINT32_LE}
 INT32_WORD_ORDER = {"big": INT32_BE, "little": INT32_LE}
 
 
+def word_order_format(formats: dict, word_order: str):
+    """ Return the format of the word order, raise ValueError for an unknown one """
+    fmt = formats.get(word_order)
+    if fmt is None:
+        raise ValueError(f"Unknown word order '{word_order}'")
+    return fmt
+
+
 def from_registers(fmt: struct.Struct, registers):
     """ Decode a value from a list of 16-bit registers """
     return fmt.unpack(struct.pack(f">{len(registers)}H", *registers))[0]
@@ -50,6 +55,7 @@ class Client:
         self.cache = cache
         self.mb_client = mb_client
         self.eventable_devices = []
+        self.failing_devices = set()    # logged once, until they check new data again
 
     def read_u16(self, index: int, is_input: bool = False) -> int:
         """ Return the cached value of a 16-bit register """
@@ -81,10 +87,8 @@ class Client:
         return self._read32(INT32_WORD_ORDER, index, is_input, word_order)
 
     def _read32(self, formats: dict, index: int, is_input: bool, word_order: str):
-        fmt = formats.get(word_order)
-        if fmt is None:
-            raise ValueError(f"Unknown word order '{word_order}'")
-        return from_registers(fmt, self.cache.get_register(2, index, is_input=is_input))
+        return from_registers(word_order_format(formats, word_order),
+                              self.cache.get_register(2, index, is_input=is_input))
 
     async def write_registers(self, index: int, values: list[int]):
         """ Write holding registers and update the cache, so the next check does not see a stale value """
@@ -113,10 +117,7 @@ class Client:
         await self._write32(INT32_WORD_ORDER, index, value, word_order)
 
     async def _write32(self, formats: dict, index: int, value, word_order: str):
-        fmt = formats.get(word_order)
-        if fmt is None:
-            raise ValueError(f"Unknown word order '{word_order}'")
-        await self.write_registers(index, to_registers(fmt, value))
+        await self.write_registers(index, to_registers(word_order_format(formats, word_order), value))
 
     async def do_scan(self):
 
@@ -128,27 +129,34 @@ class Client:
                 if await device.check_new_data() is True:
                     changeset.append(device)
             except Exception as E:
-                m = (f"Error while checking new data in device '{device.devtype}"
-                     f"_{device.circuit}': {E}")
-                logger.exception(m)
+                # the error repeats on every scan, do not flood the log
+                if device not in self.failing_devices:
+                    self.failing_devices.add(device)
+                    logger.exception(f"Error while checking new data in device '{device.devtype}_{device.circuit}', "
+                                     f"next errors are not logged until it works again: {E}")
+            else:
+                if device in self.failing_devices:
+                    self.failing_devices.discard(device)
+                    logger.info(f"Device '{device.devtype}_{device.circuit}' checks new data again")
 
         if len(changeset) > 0:
-            proxy = Proxy(set(changeset))
+            proxy = Proxy(changeset)
             devents.status(proxy)
         return True
 
 
-class Proxy(object):
+class Proxy:
+    """ The changed devices of one scan, sent as one event; their states are made once for all receivers """
+
     def __init__(self, changeset):
         self.changeset = changeset
 
-    def full(self):
-        self.result = [c.full() for c in self.changeset]
-        self.full = self.fullcache
-        return self.result
+    @functools.cached_property
+    def states(self):
+        return [c.full() for c in self.changeset]
 
-    def fullcache(self):
-        return self.result
+    def full(self):
+        return self.states
 
 
 class Accessor:
@@ -162,6 +170,8 @@ class Accessor:
 
     def __init__(self, index: int, is_input: bool = False, *,
                  ratio=1, offset=0, decimals=None):
+        if ratio == 0:
+            raise ValueError(f'Ratio of register {index} cannot be 0')
         self.index = index
         self.is_input = is_input
         self.ratio = ratio
@@ -205,6 +215,8 @@ class Accessor:
         raw = value
         if self.ratio != 1 or self.offset != 0:
             raw = (raw - self.offset) / self.ratio
+        if not isfinite(raw):
+            raise ValueError(f'Value {value} out of range for {self.datatype} register {self.index}')
         if self.raw_range is not None:
             raw = round(raw)
             low, high = self.raw_range
@@ -263,8 +275,7 @@ class Accessor32(Accessor):
 
     def __init__(self, index: int, is_input: bool = False, *,
                  word_order: Literal["big", "little"] = "little", **kwargs):
-        if word_order not in ("big", "little"):
-            raise ValueError(f"Unknown word order '{word_order}'")
+        word_order_format(FLOAT32_WORD_ORDER, word_order)     # the same word orders for all 32-bit types
         super().__init__(index, is_input, **kwargs)
         self.word_order = word_order
 
@@ -301,6 +312,10 @@ class AccessorFloat32(Accessor32):
         return client.read_float32(self.index, is_input=self.is_input, word_order=self.word_order)
 
     async def write_raw(self, client: Client, raw: float):
+        try:
+            struct.pack('>f', raw)
+        except OverflowError:
+            raise ValueError(f'Value {raw} out of range for float32 register {self.index}') from None
         await client.write_float32(self.index, raw, word_order=self.word_order)
 
 
