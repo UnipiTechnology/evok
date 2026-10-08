@@ -61,12 +61,17 @@ comm_channels:
         - `port` - port of the Modbus server (Default value is `502`)
         - `timeout` - timeout of a response in seconds (Default value is `0.5`)
         - `connect_timeout` - timeout of connecting to the Modbus server in seconds (Default value is `1.0`)
+        - `retries` - count of retries of a request after a lost connection or a busy unit, an integer `>= 0`
+          (Default value is `1`). The bus waits for the retries, a unit which does not respond
+          is scanned less often by Evok.
     - `MODBUSRTU`
         - `port` - path to the Modbus device, required
         - `baudrate` - baudrate of the Modbus device (Default value is `19200`)
         - `parity` - parity of the Modbus device (`N` / `E` / `O`, Default value is `N`)
         - `stopbits` - stop bits of the Modbus device (Default value is `1`)
         - `timeout` - timeout of a response in seconds (Default value is `0.5`)
+        - `retries` - count of retries of a request after a failure of the port or a busy unit, an integer `>= 0`
+          (Default value is `1`)
     - `OWFS` (1-Wire bus, the former name `OWBUS` is not supported)
         - `interval` - interval of values updating in seconds, a positive number (Default value is `60`)
         - `scan_interval` - interval of the search for new devices in seconds, `0` searches only on request

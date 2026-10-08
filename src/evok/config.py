@@ -3,6 +3,7 @@ from typing import List, Dict, Union
 import asyncio
 
 from .modbus import ModbusScanner
+from tenacity import AsyncRetrying, retry_never, stop_after_attempt, stop_after_delay, wait_fixed
 from tmodbus import (
     AsyncRtuTransport,
     AsyncSmartTransport,
@@ -189,6 +190,35 @@ def create_devices(evok_config: EvokConfig, hw_dict):
             logger.exception(f"Error in config of bus '{bus_name}' - {str(E)}")
 
 
+def bus_retries(bus_data: dict) -> int:
+    """ The option retries of a Modbus bus, the count of retries of a request, 1 by default """
+    retries = bus_data.get("retries", 1)
+    if not isinstance(retries, int) or isinstance(retries, bool) or retries < 0:
+        raise ValueError(f"retries must be an integer >= 0, not '{retries}'")
+    return retries
+
+
+def retry_strategies(timeout: float, connect_timeout: float, retries: int = 1) -> dict:
+    """ Retries of AsyncSmartTransport, which fail fast
+
+        The bus is locked during the retries, the default ones of tmodbus took up to 60 s
+        for each request to an unavailable unit and the other units of the bus waited.
+        A unit which does not respond is slowed down by its ModbusScanner.
+    """
+    attempts = retries + 1
+    return dict(
+        # one attempt, its failure is a ModbusConnectionError
+        auto_reconnect=AsyncRetrying(stop=stop_after_attempt(1), wait=wait_fixed(0)),
+        # the retries of the request, e.g. with a new connection after a lost one;
+        # retry_never: the default retry of AsyncRetrying is any exception, the transport adds its reasons
+        response_retry_strategy=AsyncRetrying(
+            retry=retry_never,
+            stop=stop_after_attempt(attempts) | stop_after_delay(attempts * (timeout + connect_timeout)),
+            wait=wait_fixed(0.1),
+        ),
+    )
+
+
 def _create_bus(bus_name, bus_data: dict, hw_dict):
     if not bus_data.get("enabled", True):
         logger.info(f"Skipping disabled bus '{bus_name}'")
@@ -210,18 +240,20 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
     elif bus_type == 'MODBUSTCP':
         host = bus_data.get("hostname", "127.0.0.1")
         port = bus_data.get("port", 502)
+        timeout = float(bus_data.get("timeout", 0.5))
+        connect_timeout = float(bus_data.get("connect_timeout", 1.0))
         bus_driver = AsyncSmartTransport(
             AsyncTcpTransport(
                 host,
                 port,
-                timeout=float(bus_data.get("timeout", 0.5)),
-                connect_timeout=float(bus_data.get("connect_timeout", 1.0))
+                timeout=timeout,
+                connect_timeout=connect_timeout
             ),
             wait_between_requests=0.0,
             wait_after_connect=0.0,
-            auto_reconnect=True,
             retry_on_device_busy=True,
             retry_on_device_failure=False,
+            **retry_strategies(timeout, connect_timeout, bus_retries(bus_data)),
         )
         bus = TcpBusDevice(circuit=bus_name, bus_driver=bus_driver)
         Devices.register_device(TCPBUS, bus)
@@ -231,18 +263,20 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
         serial_baud_rate = bus_data.get("baudrate", 19200)
         serial_parity = bus_data.get("parity", 'N')
         serial_stopbits = bus_data.get("stopbits", 1)
+        timeout = float(bus_data.get("timeout", 0.5))
         bus_driver = AsyncSmartTransport(
             AsyncRtuTransport(
                 serial_port,
-                timeout=float(bus_data.get("timeout", 0.5)),
+                timeout=timeout,
                 baudrate=serial_baud_rate,
                 parity=serial_parity,
                 stopbits=serial_stopbits),
-            auto_reconnect=True,
             wait_between_requests=0.0,
             wait_after_connect=0.0,
             retry_on_device_busy=True,
-            retry_on_device_failure=False
+            retry_on_device_failure=False,
+            # the serial port is opened at once, its timeout is the response timeout
+            **retry_strategies(timeout, timeout, bus_retries(bus_data)),
         )
         bus = SerialBusDevice(circuit=bus_name, bus_driver=bus_driver)
         Devices.register_device(SERIALBUS, bus)

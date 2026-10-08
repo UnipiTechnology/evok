@@ -1,6 +1,9 @@
+import time
 from types import SimpleNamespace
 
 import pytest
+from tmodbus import AsyncSmartTransport
+from tmodbus.exceptions import CRCError, ModbusConnectionError, RequestRetryFailedError, ServerDeviceBusyError
 
 from evok import config
 from evok.devices import Devices, OWBUS, SENSOR, SERIALBUS, TCPBUS
@@ -120,6 +123,24 @@ def test_modbus_timeouts(bus, expected):
     assert {key: getattr(transport, key) for key in expected} == expected
 
 
+@pytest.mark.parametrize('bus, attempts', [
+    ({'type': 'MODBUSTCP'}, 2),
+    ({'type': 'MODBUSTCP', 'retries': 0}, 1),
+    ({'type': 'MODBUSRTU', 'port': '/dev/null', 'retries': 3}, 4),
+])
+def test_modbus_retries(bus, attempts):
+    create({'BUS': bus})
+    devtype = TCPBUS if bus['type'] == 'MODBUSTCP' else SERIALBUS
+    stop = Devices[devtype]['BUS'].bus_driver.response_retry_strategy.stop
+    assert [s.max_attempt_number for s in stop.stops if hasattr(s, 'max_attempt_number')] == [attempts]
+
+
+def test_modbus_invalid_retries_skips_the_bus(caplog):
+    create({'BUS': {'type': 'MODBUSTCP', 'retries': -1}})
+    assert 'BUS' not in Devices[TCPBUS]
+    assert "Error in config of bus 'BUS'" in caplog.text
+
+
 def test_hw_dict(tmp_path, caplog):
     (tmp_path / 'xS51.yaml').write_text('type: xS51\n')
     (tmp_path / 'my.yaml.yaml').write_text('type: my\n')
@@ -148,3 +169,86 @@ def test_load_aliases_invalid_file(tmp_path, text):
         path.write_text(text)
     config.load_aliases(str(path))
     assert Devices.aliases.initial_dict == {}
+
+
+class FakeTransport:
+    """ The base transport of AsyncSmartTransport, the results of open() and send_and_receive() are given """
+
+    def __init__(self, open_errors=(), responses=()):
+        self.open_errors = list(open_errors)
+        self.responses = list(responses)
+        self.opened = False
+        self.opens = 0
+        self.requests = 0
+
+    def is_open(self):
+        return self.opened
+
+    async def open(self):
+        self.opens += 1
+        error = self.open_errors.pop(0) if self.open_errors else None
+        if error is not None:
+            raise error
+        self.opened = True
+
+    async def close(self):
+        self.opened = False
+
+    async def send_and_receive(self, unit_id, pdu):
+        self.requests += 1
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
+def smart_transport(base, retries=1):
+    return AsyncSmartTransport(base, wait_between_requests=0.0, wait_after_connect=0.0,
+                               retry_on_device_busy=True, retry_on_device_failure=False,
+                               **config.retry_strategies(0.1, 0.1, retries))
+
+
+async def test_unavailable_unit_fails_fast():
+    """ The default retries of tmodbus locked the bus up to 60 s for each request """
+    base = FakeTransport(open_errors=[ModbusConnectionError('refused')] * 10)
+    start = time.monotonic()
+    with pytest.raises(RequestRetryFailedError):
+        await smart_transport(base).send_and_receive(1, 'pdu')
+    assert time.monotonic() - start < 1
+    assert (base.opens, base.requests) == (2, 0)              # one reconnect for each of two attempts
+
+
+async def test_lost_connection_is_reconnected():
+    base = FakeTransport(responses=[ModbusConnectionError('reset'), 'response'])
+    base.opened = True
+    assert await smart_transport(base).send_and_receive(1, 'pdu') == 'response'
+    assert (base.opens, base.requests) == (1, 2)
+
+
+@pytest.mark.parametrize('error', [CRCError('noise', response_bytes=b'\x01'), TimeoutError('no response')])
+async def test_other_errors_are_not_retried(error):
+    base = FakeTransport(responses=[error, 'response'])
+    base.opened = True
+    with pytest.raises(type(error)):
+        await smart_transport(base).send_and_receive(1, 'pdu')
+    assert base.requests == 1
+
+
+@pytest.mark.parametrize('retries, requests', [(0, 1), (1, 2), (3, 4)])
+async def test_retries_of_busy_unit_are_configured(retries, requests):
+    base = FakeTransport(responses=[ServerDeviceBusyError(0x03)] * 5)
+    base.opened = True
+    with pytest.raises(RequestRetryFailedError):
+        await smart_transport(base, retries).send_and_receive(1, 'pdu')
+    assert base.requests == requests
+
+
+@pytest.mark.parametrize('bus_data, retries', [({}, 1), ({'retries': 0}, 0), ({'retries': 3}, 3)])
+def test_bus_retries(bus_data, retries):
+    assert config.bus_retries(bus_data) == retries
+
+
+@pytest.mark.parametrize('value', [-1, 1.5, '2', True, None])
+def test_bus_retries_invalid(value):
+    with pytest.raises(ValueError, match='retries'):
+        config.bus_retries({'retries': value})
