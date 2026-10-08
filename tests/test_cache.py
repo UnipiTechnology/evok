@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from tmodbus.exceptions import CRCError, IllegalDataAddressError, RequestRetryFailedError
 
-from evok.modbus.cache import ModbusCacheMap, RegisterGroup, ENoCacheRegister
+from evok.modbus.cache import ModbusCacheMap, RegisterGroup, ENoCacheRegister, EUnknownRegister
 from evok.modbus.scanner import ModbusScanner
 
 from conftest import FakeModbus
@@ -31,6 +31,8 @@ def test_group_update_with_offset_is_clipped():
     assert g.values == [None, None, 1, 2]
     g.update([7], address=9)            # below the group: ignored
     assert g.values == [None, None, 1, 2]
+    g.update([7, 8], address=9)         # starting below the group, was ignored
+    assert g.values == [8, None, 1, 2]
 
 
 def test_group_frequency_divider():
@@ -51,10 +53,15 @@ async def test_get_register_before_scan_raises():
 async def test_get_unknown_register_raises():
     cache = ModbusCacheMap(BLOCKS, FakeModbus())
     await cache.do_scan(initial=True)
-    with pytest.raises(ValueError):
+    with pytest.raises(EUnknownRegister, match='holding registers 5..5 are not'):
         cache.get_register(5, 1)
-    with pytest.raises(ValueError):
+    with pytest.raises(EUnknownRegister, match='input registers 0..0 are not'):
         cache.get_register(0, 1, is_input=True)
+
+
+def test_unknown_register_is_not_client_error():
+    """ A ValueError was reported by the API as a bad request, it is an error of the hardware definition """
+    assert not issubclass(EUnknownRegister, ValueError)
 
 
 async def test_initial_scan_reads_all_groups():
@@ -68,9 +75,18 @@ async def test_initial_scan_reads_all_groups():
 
 
 async def test_read_past_group_end_raises():
+    """ The value was reported as not read yet, it was null forever """
     cache = ModbusCacheMap(BLOCKS, FakeModbus())
     await cache.do_scan(initial=True)
-    with pytest.raises(ENoCacheRegister):
+    with pytest.raises(EUnknownRegister, match='registers 1..2 are not in one'):
+        cache.get_register(1, 2)
+
+
+async def test_read_over_two_adjacent_groups_raises():
+    cache = ModbusCacheMap([{'start_reg': 0, 'count': 2, 'frequency': 1},
+                            {'start_reg': 2, 'count': 2, 'frequency': 1}], FakeModbus())
+    await cache.do_scan(initial=True)
+    with pytest.raises(EUnknownRegister):
         cache.get_register(1, 2)
 
 
@@ -78,9 +94,9 @@ async def test_no_cached_value_names_the_register():
     cache = ModbusCacheMap(BLOCKS, FakeModbus())
     with pytest.raises(ENoCacheRegister, match='register 12$'):
         cache.get_register(12, 1)                           # the address, not the offset 2 in the group
-    await cache.do_scan(initial=True)
-    with pytest.raises(ENoCacheRegister, match='register 14$'):
-        cache.get_register(13, 2)                           # the second register is past the group
+    cache.groups[1].values[0] = 0                           # the register 10 of the group is read
+    with pytest.raises(ENoCacheRegister, match='register 11$'):
+        cache.get_register(10, 2)                           # the second register is not read
 
 
 async def test_slow_group_is_scanned_by_divider():
@@ -148,6 +164,22 @@ async def test_set_register_and_get_register_async():
     mb.holding[11] = 43
     assert await cache.get_register_async(11, 1) == [43]
     assert cache.get_register(11, 1) == [43]
+
+
+async def test_set_register_skips_registers_out_of_blocks():
+    """ A successful write out of the blocks raised an error """
+    cache = ModbusCacheMap(BLOCKS, FakeModbus())
+    await cache.do_scan(initial=True)
+    cache.set_register(1000, [1])
+    cache.set_register(9, [1, 2])                           # the register 9 is before the group 10..13
+    cache.set_register(13, [3, 4])                          # the register 14 is past it
+    assert cache.get_register(10, 4) == [2, 0, 0, 3]
+
+
+async def test_get_register_async_out_of_blocks():
+    """ The read-modify-write of a bit out of the blocks failed before the read """
+    cache = ModbusCacheMap(BLOCKS, FakeModbus(holding={1000: 5}))
+    assert await cache.get_register_async(1000) == [5]
 
 
 @pytest.mark.parametrize('error', [

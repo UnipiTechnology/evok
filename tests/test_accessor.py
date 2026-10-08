@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from evok.modbus.cache import ENoCacheRegister
+from evok.modbus.cache import ENoCacheRegister, EUnknownRegister
 from evok.modbus.client import (
     FLOAT32_BE, FLOAT32_LE, Accessor, AccessorBit, AccessorFactory, AccessorFloat32, AccessorI16,
     AccessorI32, AccessorU16, AccessorU32, to_registers,
@@ -111,9 +111,9 @@ async def test_read_errors_propagate():
     with pytest.raises(ENoCacheRegister):  # before the first scan
         AccessorFactory.get(0, 'uint16').read(client)
     await client.cache.do_scan(initial=True)
-    with pytest.raises(ValueError):  # outside of register blocks
+    with pytest.raises(EUnknownRegister):  # outside of register blocks
         AccessorFactory.get(10, 'uint16').read(client)
-    with pytest.raises(ENoCacheRegister):  # second word outside of the block
+    with pytest.raises(EUnknownRegister):  # second word outside of the block, never cached
         AccessorFactory.get(3, 'uint32').read(client)
 
 

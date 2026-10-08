@@ -8,6 +8,15 @@ from tmodbus.exceptions import TModbusError
 
 
 class ENoCacheRegister(Exception):
+    """ The register was not read yet """
+    pass
+
+
+class EUnknownRegister(Exception):
+    """ The registers are not in one register block, an error of the hardware definition
+
+        Not a ValueError, the API reports it as an error of the server, not of the request.
+    """
     pass
 
 
@@ -26,11 +35,11 @@ class RegisterGroup:
         return self.address <= address and self.address + self.count >= address + count
 
     def update(self, values, address=None):
-        offset = address - self.address if address is not None else 0
-        if offset < 0:
-            return
-        for i in range(0, min(len(values), len(self.values) - offset)):
-            self.values[i + offset] = values[i]
+        """ Set the values of the registers from address, the registers out of the group are skipped """
+        start = self.address if address is None else address
+        for i, value in enumerate(values):
+            if self.is_member(start + i):
+                self.values[start + i - self.address] = value
 
     def clear_counter(self):
         self.f_counter = 0
@@ -96,33 +105,36 @@ class ModbusCacheMap:
         self.scan_error = None
         return True
 
-    def _find_group(self, address: int, is_input: bool) -> RegisterGroup:
+    def _find_group(self, address: int, count: int, is_input: bool) -> RegisterGroup:
+        """ The block of all count registers, a value over two blocks would be never cached """
         for group in (self.igroups if is_input else self.groups):
-            if group.is_member(address):
+            if group.is_member(address, count):
                 return group
-        raise ValueError(f"get_reg_group: Unknown register {address}!")
+        kind = "input" if is_input else "holding"
+        raise EUnknownRegister(f"The {kind} registers {address}..{address + count - 1} "
+                               f"are not in one register block")
 
     def get_register(self, index, count=1, is_input=False):
-        group = self._find_group(index, is_input)
+        group = self._find_group(index, count, is_input)
         offset = index - group.address
         values = group.values[offset:offset + count]
-        for i in range(count):
-            if i >= len(values) or values[i] is None:
+        for i, value in enumerate(values):
+            if value is None:
                 raise ENoCacheRegister(f"No cached value of register {index + i}")
         return values
 
     def set_register(self, index, values, is_input=False):
-        """ Update cached registers after a successful write """
-        self._find_group(index, is_input).update(values, index)
+        """ Update cached registers after a successful write or read, the registers out of the blocks are skipped """
+        for group in (self.igroups if is_input else self.groups):
+            group.update(values, index)
 
     async def get_register_async(self, index, count=1, is_input=False):
-        group = self._find_group(index, is_input)
-        # ^^ raise exception if index not in cache map!
+        """ Read the registers from the unit, also the ones out of the register blocks """
         if is_input:
             vals = await self.modbus_client.read_input_registers(index, quantity=count)
         else:
             vals = await self.modbus_client.read_holding_registers(index, quantity=count)
-        group.update(vals, index)
+        self.set_register(index, vals, is_input)
         return vals
 
     async def _do_scan_groups(self, groups: list[RegisterGroup], func) -> int | None:

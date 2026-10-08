@@ -2,7 +2,7 @@ import pytest
 
 from evok.devices import devents
 
-from evok.modbus.cache import ENoCacheRegister
+from evok.modbus.cache import ENoCacheRegister, EUnknownRegister
 from evok.modbus.client import Proxy
 
 import conftest
@@ -24,9 +24,9 @@ async def test_read_registers():
     await client.cache.do_scan(initial=True)
     assert client.read_registers(0, 2) == [1, 0xffff]
     assert client.read_registers(1, is_input=True) == [7]
-    with pytest.raises(ValueError):                         # outside of register blocks
+    with pytest.raises(EUnknownRegister):                   # outside of register blocks
         client.read_registers(5)
-    with pytest.raises(ENoCacheRegister):                   # past the end of the block
+    with pytest.raises(EUnknownRegister):                   # past the end of the block, never cached
         client.read_registers(1, 2)
 
 
@@ -37,6 +37,17 @@ async def test_write_registers_updates_cache():
     await client.write_registers(0, [6, 7])
     assert client.mb_client.writes == [('reg', 0, 5), ('regs', 0, [6, 7])]
     assert client.read_registers(0, 2) == [6, 7]
+
+
+async def test_write_registers_out_of_blocks():
+    """ The write succeeded, the update of the cache raised an error reported by the API """
+    client = make_client()
+    await client.cache.do_scan(initial=True)
+    await client.write_registers(1, [8, 9])                 # the register 2 is not in a block
+    assert client.mb_client.writes == [('regs', 1, [8, 9])]
+    assert client.read_registers(1) == [8]
+    await client.write_registers(1000, [1])
+    assert client.mb_client.writes[-1] == ('reg', 1000, 1)
 
 
 class FailingDevice:
