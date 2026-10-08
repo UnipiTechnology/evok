@@ -280,15 +280,18 @@ class DigitalInput(WithDIMode, IODevice):
         self.value = None
         self.counter = None
         self.debounce = None
+        self.scanned_state = None
 
     async def check_new_data(self):
-        mode_changed = self.dimode.update()
-
-        old = (self.value, self.counter, self.debounce)
+        """ Compare with the state of the previous scan, set() changes counter_mode and mode at once """
+        self.dimode.update()
         self.value = self.accessor.read(self.client)
         self.counter = self.read_counter()
         self.debounce = self.accessor_debounce.read(self.client)
-        return mode_changed or old != (self.value, self.counter, self.debounce)
+        state = (self.value, self.counter, self.debounce, self.counter_mode, self.mode, self.ds_mode)
+        changed = state != self.scanned_state
+        self.scanned_state = state
+        return changed
 
     def read_counter(self):
         return self.accessor_counter.read(self.client) if self.counter_mode == "Enabled" else 0

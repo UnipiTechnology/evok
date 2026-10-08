@@ -53,6 +53,21 @@ async def test_di_debounce_change_is_reported(unit):
     assert dev(DI, '1_02').debounce == 20
 
 
+@pytest.mark.parametrize('params', [
+    {'counter_mode': 'Disabled'}, {'mode': 'DirectSwitch'}, {'mode': 'DirectSwitch', 'ds_mode': 'Toggle'},
+])
+async def test_di_set_change_is_reported(unit, params):
+    # set() changes the state at once, the next scan sends it as an event, also with the counter 0
+    client = await unit()
+    di = dev(DI, '1_01')
+    if 'ds_mode' in params:
+        await di.set(mode='DirectSwitch')
+        await scan(client)
+    await di.set(**params)
+    assert await scan(client) == [di]
+    assert await scan(client) == []
+
+
 async def test_di_direct_switch_mode_from_registers(unit):
     await unit({1014: 0b0011, 1015: 0b0001, 1016: 0b0010})
     assert (dev(DI, '1_01').mode, dev(DI, '1_01').ds_mode) == ('DirectSwitch', 'Inverted')
