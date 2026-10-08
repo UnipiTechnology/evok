@@ -137,11 +137,11 @@ async def test_do_set_value_and_duty_conflict(unit):
 async def test_do_set_pwm_freq_updates_all_outputs(unit):
     client = await unit({1018: 47999, 1017: 9, 22: 24000})    # 1_02 at 50 %
     await dev(DO, '1_01').set(pwm_freq=100)
-    # 48 MHz / 100 Hz = 480000 = 10000 * 48
-    assert client.mb_client.holding[1018] == 9999
-    assert client.mb_client.holding[1017] == 47
+    # 48 MHz / 100 Hz = 480000 = 60000 * 8
+    assert client.mb_client.holding[1018] == 59999
+    assert client.mb_client.holding[1017] == 7
     # the other output keeps its duty cycle with the new period
-    assert client.mb_client.holding[22] == 5000
+    assert client.mb_client.holding[22] == 30000
     assert dev(DO, '1_02').pwm_freq == 100
 
 
@@ -157,7 +157,7 @@ async def test_do_set_pwm_duty(unit):
 
 
 @pytest.mark.parametrize('kw, duty_writes', [
-    ({'pwm_duty': 10}, [('reg', 22, 1000)]),               # only the new duty
+    ({'pwm_duty': 10}, [('reg', 22, 6000)]),               # only the new duty
     ({'value': 1}, [('reg', 22, 0)]),                       # PWM switched off
 ])
 async def test_do_set_pwm_freq_with_new_duty(unit, kw, duty_writes):

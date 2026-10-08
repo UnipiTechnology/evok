@@ -3141,8 +3141,11 @@ components:
       type: object
       properties:
         pwm_freq:
-          type: integer
+          type: number
           examples: [50, 1000, 50000]
+          description: Frequency in Hz shared by the PWM outputs of the group, up to 50000 Hz on the boards
+            with a HW timer, up to 1000 Hz with the PWM of the firmware. The nearest available frequency is set,
+            the result has it.
         pwm_duty:
           type: integer
           examples: [0, 25, 50, 100]
