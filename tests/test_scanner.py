@@ -61,3 +61,29 @@ async def test_unexpected_error_of_scan_task_is_logged(l0306, caplog):
     await asyncio.sleep(0)                                      # the done callback
     assert "Scan of device '1' stopped" in caplog.text
     assert 'RuntimeError: bug' in caplog.text
+
+
+async def test_started_again_scan_does_not_create_devices_again(l0306):
+    """ Without scan_enabled the task is done after the first scan, a new start registered the devices twice """
+    scanner, mb = make_scanner(l0306, scan_enabled=False)
+    scanner.start_scanning()
+    await asyncio.wait_for(scanner.scan_task, 1)
+
+    def populate_again():
+        raise AssertionError('the devices are created again')
+    scanner.parser.populate = populate_again
+    scanner.start_scanning()
+    await asyncio.wait_for(scanner.scan_task, 1)
+    assert sorted(Devices[DI]) == ['1_01', '1_02', '1_03', '1_04']
+
+
+async def test_unexpected_error_of_scan_is_reported(l0306):
+    """ Only the communication errors were reported by full(), the scan_error of a failing scan was null """
+    scanner, mb = make_scanner(l0306)
+    assert await scanner.cache.do_scan(initial=True)
+
+    async def broken():
+        raise RuntimeError('bug')
+    scanner.client.do_scan = broken
+    assert not await scanner._scan_unit()
+    assert scanner.full()['scan_error'] == 'RuntimeError: bug'

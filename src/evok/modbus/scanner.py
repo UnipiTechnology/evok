@@ -43,6 +43,7 @@ class ModbusScanner:
 
         self.scan_task: asyncio.Task | None = None
         self.scan_enabled = scan_enabled
+        self.populated = False      # the devices are created once, also when the scan is started again
 
         mb_client = AsyncModbusClient(transport,
                                       unit_id=unit_id,
@@ -74,24 +75,29 @@ class ModbusScanner:
         try:
             return await self.client.do_scan()
         except Exception as E:
+            # reported by full(), the communication errors are set by the cache
+            self.cache.scan_error = E
             logger.exception(f"{self.name}: Error while scanning: {E}")
             return False
 
     async def _scan_loop(self):
         """ Wait for the connected unit, a communication error is retried, it is logged once.
             Create its devices, then scan it periodically with scan_enabled.
+            A started again scan does not create the devices again.
         """
-        logged_error = None
-        while not await self.cache.do_scan(initial=True):
-            error = self.cache.scan_error
-            if repr(error) != repr(logged_error):
-                logger.warning(f"Waiting for device '{self.circuit}': {error!r}")
-                logged_error = error
-            await asyncio.sleep(self.INITIAL_SCAN_INTERVAL)
-        if logged_error is not None:
-            logger.info(f"Device '{self.circuit}' is connected")
+        if not self.populated:
+            logged_error = None
+            while not await self.cache.do_scan(initial=True):
+                error = self.cache.scan_error
+                if repr(error) != repr(logged_error):
+                    logger.warning(f"Waiting for device '{self.circuit}': {error!r}")
+                    logged_error = error
+                await asyncio.sleep(self.INITIAL_SCAN_INTERVAL)
+            if logged_error is not None:
+                logger.info(f"Device '{self.circuit}' is connected")
 
-        self.parser.populate()
+            self.parser.populate()
+            self.populated = True
         if not self.scan_enabled:
             return
 
@@ -107,9 +113,7 @@ class ModbusScanner:
             else:
                 if not err:
                     err = True
-                    # other errors are logged by _scan_unit()
-                    cause = f": {self.cache.scan_error!r}" if self.cache.scan_error is not None else ""
-                    logger.warning(f"Slowing down device: '{self.circuit}'{cause}")
+                    logger.warning(f"Slowing down device: '{self.circuit}': {self.cache.scan_error!r}")
                 # exponential growth interval with limitation [s]
                 interval = min(interval * 2, max(120, self.scan_interval))
 

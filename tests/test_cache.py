@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -159,6 +160,7 @@ def test_invalid_block_is_rejected(block):
 
 async def test_initial_scan_is_retried_after_an_error(caplog):
     """ An error of the first scan stopped the scan task, the unit was never created """
+    caplog.set_level(logging.INFO, logger='evok')               # "is connected" is logged as info
     mb = FakeModbus()
     cache = ModbusCacheMap(BLOCKS, mb)
     populated = asyncio.Event()
@@ -170,7 +172,7 @@ async def test_initial_scan_is_retried_after_an_error(caplog):
             raise failures.pop()
         return await read(*args, **kwargs)
     mb.read_holding_registers = flaky
-    slave = SimpleNamespace(cache=cache, circuit='1', INITIAL_SCAN_INTERVAL=0, scan_interval=10,
+    slave = SimpleNamespace(cache=cache, circuit='1', populated=False, INITIAL_SCAN_INTERVAL=0, scan_interval=10,
                             parser=SimpleNamespace(populate=populated.set))
     task = asyncio.create_task(ModbusScanner._scan_loop(slave))
     await asyncio.wait_for(populated.wait(), 1)
