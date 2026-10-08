@@ -69,10 +69,13 @@ class ModbusScanner:
             self.scan_task = asyncio.create_task(self._scan_loop())
             self.scan_task.add_done_callback(self._log_scan_task_error)
 
-    def stop_scanning(self):
-        if self.scan_task is not None:
-            self.scan_task.cancel()
-            self.scan_task = None
+    async def stop_scanning(self):
+        """ Cancel the scan and wait for it, it does not use the bus after the return """
+        task, self.scan_task = self.scan_task, None
+        if task is not None:
+            task.cancel()
+            # an error of the task is logged by its done callback, wait() does not raise it
+            await asyncio.wait([task])
 
     def _log_scan_task_error(self, task: asyncio.Task):
         """ An unexpected error stops the scan of the unit, it would not be logged by the task """

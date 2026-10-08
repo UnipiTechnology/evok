@@ -384,6 +384,8 @@ async def main():
 
     await stop_event.wait()
     httpServerApi.stop()
+    # the writes ending the pulses do not wait for the scans, a failing unit does not log its errors
+    await asyncio.gather(*(modbus_slave.stop_scanning() for modbus_slave in Devices.by_name(MODBUS_SLAVE)))
     # the pulses are timed by evok, do not leave the outputs in the state of a pulse
     await finish_pulses()
 

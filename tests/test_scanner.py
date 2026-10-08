@@ -157,7 +157,7 @@ async def test_scan_interval_is_period_of_scans(l0306):
     scanner.client.do_scan = slow_scan
     scanner.start_scanning()
     await asyncio.sleep(1)
-    scanner.stop_scanning()
+    await scanner.stop_scanning()
     assert len(scans) >= 17                                     # 20 per second, 12 with the pause after a scan
 
 
@@ -174,5 +174,35 @@ async def test_long_scan_is_not_caught_up(l0306):
     scanner.client.do_scan = scan
     scanner.start_scanning()
     await asyncio.sleep(0.5)
-    scanner.stop_scanning()
+    await scanner.stop_scanning()
     assert scans[2] - scans[1] > 0.04                           # not the 5 missed scans at once
+
+
+async def test_stop_scanning_waits_for_scan(l0306):
+    """ stop_scanning() was never called, the units were scanned during the shutdown """
+    scanner, mb = make_scanner(l0306)
+    scanner.populated = True
+    scanning = asyncio.Event()
+
+    async def endless_scan():
+        scanning.set()
+        await asyncio.sleep(10)
+    scanner.client.do_scan = endless_scan
+    scanner.start_scanning()
+    await asyncio.wait_for(scanning.wait(), 1)
+    task = scanner.scan_task
+    await scanner.stop_scanning()
+    assert task.cancelled() and scanner.scan_task is None
+    await scanner.stop_scanning()                               # stopped twice
+
+
+async def test_stop_scanning_after_error_of_scan_task(l0306, caplog):
+    scanner, mb = make_scanner(l0306)
+
+    def broken():
+        raise RuntimeError('bug')
+    scanner.parser.populate = broken
+    scanner.start_scanning()
+    await asyncio.wait([scanner.scan_task])
+    await scanner.stop_scanning()                               # the error is not raised again
+    assert caplog.text.count('RuntimeError: bug') == 1
