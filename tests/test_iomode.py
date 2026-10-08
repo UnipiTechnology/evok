@@ -79,9 +79,36 @@ async def test_dimode_update_reports_change_once():
 async def test_dimode_without_direct_switch_ignores_registers():
     client, dimode = await make_dimode({0: 0b10, 1: 0b10}, modes=('Simple',))
     assert not dimode.update()
-    await dimode.set('Simple', 'Inverted')
+    await dimode.set('Simple')
     assert (dimode.mode, dimode.ds_mode) == ('Simple', 'Simple')
     assert client.mb_client.writes == [('reg', 0, 0)]
+
+
+@pytest.mark.parametrize('mode', [None, 'Simple'])
+async def test_dimode_ds_mode_without_direct_switch_is_rejected(mode):
+    """ ds_mode was ignored out of the DirectSwitch mode, the request succeeded without a write """
+    client, dimode = await make_dimode({0: 0, 1: 0, 2: 0})
+    dimode.update()
+    with pytest.raises(ValueError, match='only in the DirectSwitch mode'):
+        await dimode.set(mode, 'Inverted')
+    assert client.mb_client.writes == []
+
+
+async def test_dimode_ds_mode_is_written_before_mode():
+    """ The input was switched to DirectSwitch with the old ds_mode, the output followed it for a moment """
+    client, dimode = await make_dimode({0: 0, 1: 0, 2: 0})
+    dimode.update()
+    await dimode.set('DirectSwitch', 'Inverted')
+    assert [w[1] for w in client.mb_client.writes] == [2, 1, 0]   # toggle cleared, polarity set, then mode
+
+
+async def test_dimode_cleared_ds_bit_is_written_first():
+    """ From Toggle to Inverted the polarity was set before the toggle was cleared """
+    client, dimode = await make_dimode({0: 0b10, 1: 0, 2: 0b10})
+    dimode.update()
+    await dimode.set(ds_mode='Inverted')
+    assert client.mb_client.writes == [('reg', 2, 0), ('reg', 1, 0b10)]
+    assert (dimode.mode, dimode.ds_mode) == ('DirectSwitch', 'Inverted')
 
 
 async def test_dimode_set_keeps_other_bits():

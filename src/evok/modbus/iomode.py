@@ -157,32 +157,37 @@ class DIMode:
         return old != (self.mode, self.ds_mode)
 
     def check(self, mode=None, ds_mode=None):
-        """ Raise ValueError for an unknown mode or ds_mode """
+        """ Raise ValueError for an unknown mode or ds_mode, ds_mode only with the DirectSwitch mode """
         if mode is not None and mode not in self.modes:
             raise ValueError(f'{self.name}: unknown mode "{mode}"')
-        if ds_mode is not None and ds_mode not in self.ds_modes:
-            raise ValueError(f'{self.name}: unknown ds_mode "{ds_mode}"')
+        if ds_mode is not None:
+            if ds_mode not in self.ds_modes:
+                raise ValueError(f'{self.name}: unknown ds_mode "{ds_mode}"')
+            # it was ignored, the request succeeded without a write
+            if (mode if mode is not None else self.mode) != 'DirectSwitch':
+                raise ValueError(f'{self.name}: ds_mode can be set only in the DirectSwitch mode')
 
     async def set(self, mode=None, ds_mode=None):
-        """ Write the mode and the DirectSwitch mode, unknown values are rejected,
-            ds_mode is written only in the DirectSwitch mode
+        """ Write the DirectSwitch mode, then the mode, invalid values are rejected before the first write
 
-            Decide by the requested values and always read-modify-write the registers:
-            self.mode and self.ds_mode can be stale or rewritten by update()
-            in the scan task while this coroutine awaits.
+            The input switches to the DirectSwitch mode with its new ds_mode, the output is not driven
+            by the old one for a moment. Of the polarity and the toggle bits the cleared one is written
+            first, the input never has both.
+
+            Always read-modify-write the registers: self.mode and self.ds_mode can be stale
+            or rewritten by update() in the scan task while this coroutine awaits.
         """
         self.check(mode, ds_mode)
+        if ds_mode is not None:
+            bits = [(self.accessor_polarity, int(ds_mode == 'Inverted')),
+                    (self.accessor_toggle, int(ds_mode == 'Toggle'))]
+            for accessor, bit in sorted(bits, key=lambda item: item[1]):
+                await accessor.write(self.client, bit)
+            self.ds_mode = ds_mode
         if mode is not None:
-            self.mode = mode
             if self.accessor_mode.index is not None:
                 await self.accessor_mode.write(self.client, int(mode == 'DirectSwitch'))
-        else:
-            mode = self.mode
-
-        if mode == 'DirectSwitch' and ds_mode in self.ds_modes:
-            self.ds_mode = ds_mode
-            await self.accessor_polarity.write(self.client, int(ds_mode == 'Inverted'))
-            await self.accessor_toggle.write(self.client, int(ds_mode == 'Toggle'))
+            self.mode = mode
 
 
 class WithDIMode:

@@ -3265,6 +3265,13 @@ components:
             - DirectSwitch
           default: Simple
           description: 'For info about DirectSwitch, read the manual. Feature NOT available on all inputs.'
+        ds_mode:
+          enum:
+            - Simple
+            - Inverted
+            - Toggle
+          description: Behaviour of the DirectSwitch mode, for info read the manual. It can be set only
+            in the DirectSwitch mode, also together with mode DirectSwitch.
     Analog_output_params:
       title: Analog output params
       x-stoplight:
