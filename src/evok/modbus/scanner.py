@@ -24,6 +24,7 @@ class ModbusScanner:
     """
 
     INITIAL_SCAN_INTERVAL = 2
+    MAX_SCAN_INTERVAL = 16          # [s] the slowed down scan of a failing unit
 
     def __init__(self, transport: AsyncSmartTransport,
                  circuit, scan_freq, scan_enabled, hw_definition,
@@ -128,7 +129,7 @@ class ModbusScanner:
                     err = True
                     logger.warning(f"Slowing down device: '{self.circuit}': {self.cache.scan_error!r}")
                 # exponential growth interval with limitation [s]
-                interval = min(interval * 2, max(120, self.scan_interval))
+                interval = min(interval * 2, max(self.MAX_SCAN_INTERVAL, self.scan_interval))
 
     def full(self):
         last_comm_time = self.cache.last_comm_time
