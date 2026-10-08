@@ -1,7 +1,7 @@
 import asyncio
 
 import pytest
-from tmodbus import AsyncSmartTransport, AsyncTcpTransport
+from tmodbus import AsyncRtuTransport, AsyncSmartTransport, AsyncTcpTransport
 from tmodbus.exceptions import RequestRetryFailedError
 
 from evok.devices import Devices, DI
@@ -10,9 +10,9 @@ from evok.modbus.scanner import ModbusScanner
 from conftest import FakeModbus
 
 
-def make_scanner(l0306, scan_freq=50, scan_enabled=True):
+def make_scanner(l0306, scan_freq=50, scan_enabled=True, unit_id=1):
     scanner = ModbusScanner(AsyncSmartTransport(AsyncTcpTransport('127.0.0.1', 502)), '1', scan_freq,
-                            scan_enabled, l0306, unit_id=1)
+                            scan_enabled, l0306, unit_id=unit_id)
     mb = FakeModbus()
     scanner.cache.modbus_client = scanner.client.mb_client = mb
     return scanner, mb
@@ -23,6 +23,41 @@ def test_invalid_scan_frequency(l0306, scan_freq):
     # 0 scanned the bus without a pause
     with pytest.raises(ValueError, match='scan_frequency'):
         make_scanner(l0306, scan_freq)
+
+
+@pytest.mark.parametrize('scan_enabled', ['false', 0, None])
+def test_invalid_scan_enabled(l0306, scan_enabled):
+    # the string 'false' enabled the scan
+    with pytest.raises(ValueError, match='scan_enabled'):
+        make_scanner(l0306, scan_enabled=scan_enabled)
+
+
+@pytest.mark.parametrize('unit_id', [-1, 256, '1', True, None])
+def test_invalid_tcp_unit_id(l0306, unit_id):
+    # True was the unit 1, a string failed on the first request
+    with pytest.raises(ValueError, match='slave-id'):
+        make_scanner(l0306, unit_id=unit_id)
+
+
+@pytest.mark.parametrize('unit_id, valid', [(0, False), (1, True), (247, True), (248, False)])
+def test_rtu_unit_id(l0306, unit_id, valid):
+    """ 0 is the broadcast of RTU, the unit does not respond """
+    transport = AsyncSmartTransport(AsyncRtuTransport('/dev/null'))
+    if valid:
+        assert ModbusScanner(transport, '1', 50, True, l0306, unit_id=unit_id).modbus_address == unit_id
+    else:
+        with pytest.raises(ValueError, match=r'slave-id must be an integer 1\.\.247'):
+            ModbusScanner(transport, '1', 50, True, l0306, unit_id=unit_id)
+
+
+def test_tcp_gateway_unit_id(l0306):
+    for unit_id in (0, 255):
+        assert make_scanner(l0306, unit_id=unit_id)[0].modbus_address == unit_id
+
+
+def test_full_reports_scan_enabled(l0306):
+    assert make_scanner(l0306)[0].full()['scan_enabled'] is True
+    assert make_scanner(l0306, scan_enabled=False)[0].full()['scan_enabled'] is False
 
 
 async def test_devices_are_created_without_scan_enabled(l0306):

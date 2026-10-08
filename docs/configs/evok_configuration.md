@@ -86,10 +86,10 @@ comm_channels:
 #### MODBUSTCP & MODBUSRTU
 
 - `model` - assigns a Modbus register map (examples: `xS51`, `xS11`), see [hw_definitions](./hw_definitions.md), required.
-- `slave-id` - slave address or unit-ID of the Modbus device (Default value is `1`).
+- `slave-id` - slave address or unit-ID of the Modbus device, `1`..`247` on RTU, `0`..`255` on TCP (Default value is `1`).
 - `scan_frequency` - an optional parameter, determines how often values are read from the device per second,
   a positive number (Default value is 50).
-- `scan_enabled` - an optional parameter, the device is not read periodically if it is `false` (Default value is `true`).
+- `scan_enabled` - an optional parameter, `true` or `false`, the device is not read periodically if it is `false` (Default value is `true`).
   Its devices are created after the first read, their values are then changed only by the writes of Evok.
 - `device_info` - an optional parameter, describes the device: `family`, `model`, `sn`, `board_count`.
 

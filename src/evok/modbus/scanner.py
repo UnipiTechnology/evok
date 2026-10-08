@@ -31,11 +31,17 @@ class ModbusScanner:
                  unit_id: int):
         if not isinstance(scan_freq, (int, float)) or isinstance(scan_freq, bool) or not scan_freq > 0:
             raise ValueError(f"scan_frequency must be a positive number, not '{scan_freq}'")
+        if not isinstance(scan_enabled, bool):
+            raise ValueError(f"scan_enabled must be true or false, not '{scan_enabled}'")
+        is_tcp = isinstance(transport.base_transport, AsyncTcpTransport)
+        # 0 is the broadcast of RTU without a response, a TCP gateway uses also 0 and 248..255
+        min_id, max_id = (0, 255) if is_tcp else (1, 247)
+        if not isinstance(unit_id, int) or isinstance(unit_id, bool) or not min_id <= unit_id <= max_id:
+            raise ValueError(f"slave-id must be an integer {min_id}..{max_id}, not '{unit_id}'")
         self.alias = ""
         self.devtype = MODBUS_SLAVE
         self.circuit: str | None = circuit
         self.modbus_address = unit_id
-        is_tcp = isinstance(transport.base_transport, AsyncTcpTransport)
         self.modbus_type = 'TCP' if is_tcp else 'RTU'
         self.modbus_spec = transport.base_transport.host if is_tcp else \
             transport.base_transport.port
@@ -140,6 +146,7 @@ class ModbusScanner:
                'modbus_type': self.modbus_type,
                'modbus_spec': self.modbus_spec,
                'scan_interval': self.scan_interval,
+               'scan_enabled': self.scan_enabled,
                'last_comm': time.time() - last_comm_time if last_comm_time is not None else None,
                'scan_error': f"{type(scan_error).__name__}: {scan_error}" if scan_error is not None else None,
                }
