@@ -3350,6 +3350,11 @@ components:
               examples: ['1_01', '2_01', '2_02']
               description: Device circuit (or "all"). You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
               readOnly: true
+            value:
+              type: [number, string, 'null']
+              examples: [2.2, 'NaN', null]
+              description: Value in the unit of the mode, 'NaN', 'Infinity' or '-Infinity' for a float value which is not finite, null in an unknown mode or before the first read
+              readOnly: true
             modes:
               readOnly: true
               description: Supported modes is specify for analog input device.
@@ -3984,7 +3989,7 @@ components:
               x-stoplight:
                 id: aqz0wn45se7n3
               examples: [458.16, 'NaN', null]
-              description: Value in the unit of the data point, 'NaN' for an invalid float value, null before the first read
+              description: Value in the unit of the data point, 'NaN', 'Infinity' or '-Infinity' for a float value which is not finite, null before the first read
             unit:
               type: string
               x-stoplight:

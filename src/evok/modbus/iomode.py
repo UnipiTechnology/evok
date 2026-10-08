@@ -54,20 +54,24 @@ class IOMode:
             logger.warning(f'Undefined mode "{mode_value}" in mode setting for {self.name}')
         return True
 
+    def check(self, mode: str) -> dict:
+        """ Return the definition of the mode, raise ValueError if it cannot be set """
+        if mode not in self.modes:
+            raise ValueError(f'{self.name}: unknown mode "{mode}"!')
+        data = self.modes[mode]
+        if self.accessor.index is not None and data.get('value') is None:
+            raise ValueError(f"{self.name}: this device cant switch mode!")
+        return data
+
     async def set(self, mode: str) -> dict:
         """ Write the mode to the mode register, return its definition
 
             The write updates the cache, the current mode is changed by the next update().
             Without a mode register nothing is written and any defined mode is accepted.
         """
-        if mode not in self.modes:
-            raise ValueError(f'{self.name}: unknown mode "{mode}"!')
-        data = self.modes[mode]
-        mode_value = data.get('value')
+        data = self.check(mode)
         if self.accessor.index is not None:
-            if mode_value is None:
-                raise ValueError(f"{self.name}: this device cant switch mode!")
-            await self.accessor.write(self.client, int(mode_value))
+            await self.accessor.write(self.client, int(data['value']))
         return data
 
 

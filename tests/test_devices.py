@@ -1,4 +1,5 @@
 import asyncio
+import json
 import math
 
 import pytest
@@ -436,6 +437,35 @@ async def test_ai_unknown_mode_reads_none():
     assert (ai.mode, ai.value) == (None, None)
 
 
+@pytest.mark.parametrize('value, expected', [
+    (float('nan'), 'NaN'), (float('inf'), 'Infinity'), (float('-inf'), '-Infinity'),
+])
+async def test_ai_non_finite_is_a_string_and_reported_once(value, expected):
+    client, ai = make_ai(2, to_registers(FLOAT32_LE, value))
+    await client.cache.do_scan(initial=True)
+    assert await ai.check_new_data()
+    assert ai.value == expected
+    assert json.loads(json.dumps(ai.full()))['value'] == expected
+    assert not await ai.check_new_data()
+
+
+async def test_ai_fixed_mode_applies_transformation():
+    # without a mode register the single mode is known before the first scan
+    client = make_client([{'start_reg': 0, 'count': 2, 'frequency': 1}], {0: 1234})
+    ai = AnalogInput('x', client, 0, modes={'Raw': {'transformation': {'datatype': 'uint16', 'ratio': 0.1}}})
+    await client.cache.do_scan(initial=True)
+    await ai.check_new_data()
+    assert (ai.mode, ai.value) == ('Raw', pytest.approx(123.4))
+
+
+async def test_ai_rejected_mode_keeps_alias(unit):
+    await unit()
+    ai = dev(AI, '1_01')
+    with pytest.raises(ValueError):
+        await ai.set(mode='Unknown', alias='rejected')
+    assert ai.alias == ''
+
+
 # --- NvSave -----------------------------------------------------------------
 
 @pytest.fixture
@@ -508,17 +538,43 @@ async def test_led_pulse(unit):
 
 # --- AnalogOutput -----------------------------------------------------------
 
-async def test_analog_output_scaling_and_clamp():
+async def test_analog_output_scaling():
     client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1}], {0: 2000})
     ao = AnalogOutput('x', client, 0, modes={'Voltage': {'value': 0, 'unit': 'V'}})
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
     assert (ao.value, ao.mode, ao.unit_name) == (5.0, 'Voltage', 'V')
-    assert await ao.set_value(20) == 10.238
+    assert await ao.set_value(10.2375) == 10.238          # the 12-bit maximum without a range
     assert client.mb_client.holding[0] == 4095
-    assert await ao.set_value(-1) == 0
     assert await ao.set_value('1.23456') == 1.235     # rounded to the nearest step
     assert client.mb_client.holding[0] == 494
+
+
+@pytest.mark.parametrize('modes, value', [
+    ({'Voltage': {'value': 0}}, 10.3),                                  # above the 12-bit maximum
+    ({'Voltage': {'value': 0}}, -1),
+    ({'Voltage': {'value': 0, 'range': [0, 10]}}, 10.1),                # above the range of the mode
+])
+async def test_analog_output_rejects_value_out_of_range(modes, value):
+    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1}], {0: 0})
+    ao = AnalogOutput('x', client, 0, modes=modes)
+    await client.cache.do_scan(initial=True)
+    await ao.check_new_data()
+    for set_value in (ao.set_value(value), ao.set(value=value)):
+        with pytest.raises(ValueError, match='out of limit'):
+            await set_value
+    assert client.mb_client.writes == []
+
+
+async def test_analog_output_value_checked_in_new_mode():
+    modes = {'Voltage': {'value': 0, 'range': [0, 10]}, 'Current': {'value': 1, 'range': [0, 20]}}
+    client = make_client([{'start_reg': 0, 'count': 2, 'frequency': 1}], {0: 0, 1: 1})
+    ao = AnalogOutput('x', client, 0, regmode=1, modes=modes)
+    await client.cache.do_scan(initial=True)
+    await ao.check_new_data()
+    with pytest.raises(ValueError):
+        await ao.set(mode='Voltage', value=15)
+    assert client.mb_client.writes == []
 
 
 async def test_analog_output_mode_register():
@@ -593,6 +649,52 @@ async def test_analog_output_brain_set_mode():
     assert ao.unit_name == 'Ohm'
 
 
+async def test_analog_output_brain_same_mode_keeps_value():
+    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 0})
+    ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
+    await client.cache.do_scan(initial=True)
+    await ao.check_new_data()
+    await ao.set(mode='Voltage')
+    assert client.mb_client.writes == [('reg', 4, 0)]       # no reset to 0
+
+
+@pytest.mark.parametrize('params', [
+    {'mode': 'Voltage', 'value': 15},                       # out of the range of the new mode
+    {'mode': 'Unknown', 'value': 1},
+    {'mode': 'Resistance', 'value': 1},                     # no value in Resistance
+    {'mode': 'Voltage', 'value': 'x'},
+])
+async def test_analog_output_brain_rejected_request_writes_nothing(params):
+    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 1})     # Current
+    ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
+    await client.cache.do_scan(initial=True)
+    await ao.check_new_data()
+    with pytest.raises(ValueError):
+        await ao.set(alias='rejected', **params)
+    assert client.mb_client.writes == []
+    assert (ao.mode, ao.alias) == ('Current', '')
+
+
+async def test_analog_output_brain_value_checked_in_new_mode():
+    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 0})     # Voltage
+    ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
+    await client.cache.do_scan(initial=True)
+    await ao.check_new_data()
+    await ao.set(mode='Current', value=15)
+    assert client.mb_client.writes == [('reg', 4, 1), ('regs', 0, to_registers(FLOAT32_LE, 15.0))]
+
+
+@pytest.mark.parametrize('params', [{'mode': 'Unknown', 'value': 1}, {'mode': 'Current', 'value': 'x'}])
+async def test_analog_output_rejected_request_writes_nothing(params):
+    modes = {'Voltage': {'value': 0}, 'Current': {'value': 1}}
+    client = make_client([{'start_reg': 0, 'count': 2, 'frequency': 1}], {0: 0, 1: 0})
+    ao = AnalogOutput('x', client, 0, regmode=1, modes=modes)
+    with pytest.raises(ValueError):
+        await ao.set(alias='rejected', **params)
+    assert client.mb_client.writes == []
+    assert ao.alias == ''
+
+
 # --- Register, DataPoint ----------------------------------------------------
 
 async def test_register_holding_and_input():
@@ -630,11 +732,12 @@ async def test_data_point_float32_factor_offset():
     assert dp.value == 21.0
 
 
-async def test_data_point_nan():
-    client, dp = make_dp(to_registers(FLOAT32_BE, math.nan), datatype='float32')
+@pytest.mark.parametrize('value, expected', [(math.nan, 'NaN'), (math.inf, 'Infinity'), (-math.inf, '-Infinity')])
+async def test_data_point_non_finite(value, expected):
+    client, dp = make_dp(to_registers(FLOAT32_BE, value), datatype='float32')
     await client.cache.do_scan(initial=True)
     await dp.check_new_data()
-    assert dp.value == 'NaN'
+    assert dp.value == expected
 
 
 async def test_data_point_read_only_without_valid():

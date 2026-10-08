@@ -5,7 +5,7 @@ Created on Tue Sep 29 09:46:51 2026
 
 @author: bokula
 """
-from math import isnan
+from math import isfinite, isnan
 
 from ..devices import AI, AO, REGISTER, DATA_POINT, to_float
 from ..log import logger
@@ -13,6 +13,13 @@ from .cache import ENoCacheRegister
 from .base import IODevice
 from .client import Client, Accessor, Accessor32, AccessorBit, AccessorFactory
 from .iomode import IOMode, WithIOMode
+
+
+def non_finite_to_str(value):
+    """ NaN and infinity are not valid JSON, NaN is not equal to itself, it would be an event on every scan """
+    if isinstance(value, float) and not isfinite(value):
+        return 'NaN' if isnan(value) else 'Infinity' if value > 0 else '-Infinity'
+    return value
 
 
 class AnalogInput(WithIOMode, IODevice):
@@ -24,6 +31,7 @@ class AnalogInput(WithIOMode, IODevice):
         self.iomode = IOMode(client, regmode, modes, f"{self.devtype.upper()} {circuit}")
         self.value = None
         self.accessor = self._default_accessor(reg)
+        self.accessor_mode = None   # the mode of the accessor, the default one is used before a mode is known
 
     @staticmethod
     def _default_accessor(reg) -> Accessor:
@@ -43,21 +51,22 @@ class AnalogInput(WithIOMode, IODevice):
 
     async def check_new_data(self):
         has_changed = self.iomode.update()
-        if has_changed:
+        # a fixed mode without a mode register is known before the first update
+        if has_changed or self.mode != self.accessor_mode:
             self.accessor = self._make_accessor()
+            self.accessor_mode = self.mode
 
         old_value = self.value
         try:
-            self.value = self.accessor.read(self.client)
+            self.value = non_finite_to_str(self.accessor.read(self.client))
         except ENoCacheRegister:
             self.value = None
         return self.value != old_value or has_changed
 
     async def set(self, mode=None, alias=None):
-        self.set_alias(alias)
-
         if mode is not None:
             await self.iomode.set(mode)
+        self.set_alias(alias)
 
     def full(self):
         ret = {'dev': self.devtype,
@@ -87,20 +96,34 @@ class AnalogOutput(AnalogInput):
         """ The scaling of the output value does not depend on the mode """
         return self.accessor
 
+    def _check_value(self, value, mode) -> float:
+        """ Return the value as a float, it must be in the range of the mode,
+            without a range in the 12-bit range of the output
+        """
+        value = to_float(value)
+        low, high = self.iomode.modes.get(mode, {}).get('range') or (0.0, 4095 * self.accessor.ratio)
+        if not low <= value <= high:
+            raise ValueError(f'AO {self.circuit}: value "{value}" is out of limit <{low}..{high}>')
+        return value
+
     async def set_value(self, value):
-        """ The value is clamped to the 12-bit range of the output, return the value written """
-        value = min(max(to_float(value), 0.0), 4095 * self.accessor.ratio)
+        """ Set the value in the current mode, return the value written, it is used also by RPC """
+        value = self._check_value(value, self.iomode.mode)
         await self.accessor.write(self.client, value)
         return self.accessor.read(self.client)
 
     async def set(self, value=None, mode=None, alias=None):
-        self.set_alias(alias)
+        """ All params are validated before the first write, the value is checked in the new mode """
+        if mode is not None:
+            self.iomode.check(mode)
+        if value is not None:
+            value = self._check_value(value, mode if mode is not None else self.iomode.mode)
 
         if mode is not None:
             await self.iomode.set(mode)
-
         if value is not None:
-            await self.set_value(value)
+            await self.accessor.write(self.client, value)
+        self.set_alias(alias)
 
 
 class AnalogOutputBrain(AnalogInput):
@@ -134,28 +157,42 @@ class AnalogOutputBrain(AnalogInput):
     def _make_accessor(self) -> Accessor:
         return self.res_accessor if self.mode == "Resistance" else self.ao_accessor
 
-    async def set_value(self, value: float):
-        """ The value can be set only in the Voltage and Current modes, it is used also by RPC """
-        if self.iomode.mode not in ("Voltage", "Current"):
-            raise ValueError(f'AO {self.circuit}: value cannot be set in mode "{self.iomode.mode}"')
+    def _check_value(self, value, mode) -> float:
+        """ The value can be set only in the Voltage and Current modes, return it as a float """
+        if mode not in ("Voltage", "Current"):
+            raise ValueError(f'AO {self.circuit}: value cannot be set in mode "{mode}"')
         value = to_float(value)
-        low, high = self.range
+        low, high = self.iomode.modes[mode]['range']
         if low > value or value > high:
             raise ValueError(f'AO {self.circuit}: value "{value}" is out of limit <{low}..{high}>')
+        return value
 
+    async def set_value(self, value: float):
+        """ Set the value in the current mode, it is used also by RPC """
+        value = self._check_value(value, self.iomode.mode)
         await self.ao_accessor.write(self.client, value)
         return value
 
     async def set(self, value=None, mode=None, alias=None):
-        self.set_alias(alias)
+        """ All params are validated before the first write, the value is checked
+            in the new mode. A change of the mode to Voltage or Current sets 0 without
+            a value, the current mode keeps the value.
+        """
+        new_mode = self.iomode.mode
+        if mode is not None:
+            self.iomode.check(mode)
+            if mode != self.iomode.mode and mode in ("Voltage", "Current") and value is None:
+                value = 0
+            new_mode = mode
+        if value is not None:
+            value = self._check_value(value, new_mode)
 
         if mode is not None:
             await self.iomode.set(mode)
             self.iomode.mode = mode
-            if mode in ("Voltage", "Current") and value is None:
-                value = 0  # Set 0 after mode change
         if value is not None:
-            await self.set_value(value)
+            await self.ao_accessor.write(self.client, value)
+        self.set_alias(alias)
 
 
 class DataPoint(IODevice):
@@ -186,12 +223,9 @@ class DataPoint(IODevice):
 
     def read_value(self):
         try:
-            value = self.accessor.read(self.client)
+            return non_finite_to_str(self.accessor.read(self.client))
         except ENoCacheRegister:
             return None
-        if isinstance(value, float) and isnan(value):
-            return 'NaN'
-        return value
 
     async def set(self, value=None, alias=None, **kwargs):
         """ Write the value with the inverse transformation of the datatype,
