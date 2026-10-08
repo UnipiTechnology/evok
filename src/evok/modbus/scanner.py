@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Sep 29 09:58:27 2026
-
-@author: bokula
-"""
-
 import asyncio
 import time
 
@@ -14,8 +8,6 @@ from tmodbus import (
     AsyncTcpTransport,
     AsyncSmartTransport
 )
-from typing import Union
-
 
 from ..devices import MODBUS_SLAVE
 from ..log import logger
@@ -25,27 +17,32 @@ from .client import Client
 
 
 class ModbusScanner:
+    """ A Modbus unit, its devices are created after its first scan
+
+        With scan_enabled the unit is scanned periodically, without it the values
+        of its devices are changed only by the writes of Evok.
+    """
 
     INITIAL_SCAN_INTERVAL = 2
 
     def __init__(self, transport: AsyncSmartTransport,
                  circuit, scan_freq, scan_enabled, hw_definition,
                  unit_id: int):
+        if not isinstance(scan_freq, (int, float)) or isinstance(scan_freq, bool) or not scan_freq > 0:
+            raise ValueError(f"scan_frequency must be a positive number, not '{scan_freq}'")
         self.alias = ""
         self.devtype = MODBUS_SLAVE
-        self.circuit: Union[None, str] = circuit
+        self.circuit: str | None = circuit
         self.modbus_address = unit_id
         is_tcp = isinstance(transport.base_transport, AsyncTcpTransport)
         self.modbus_type = 'TCP' if is_tcp else 'RTU'
         self.modbus_spec = transport.base_transport.host if is_tcp else \
             transport.base_transport.port
         self.name = f"{self.modbus_type}:{self.modbus_spec}:{self.modbus_address}"
-        self.scan_interval = 1.0 / scan_freq if scan_freq != 0 else 0.0001
+        self.scan_interval = 1.0 / scan_freq
 
-        # self.boards = list()
-        self.scan_task: Union[None, asyncio.Task] = None
+        self.scan_task: asyncio.Task | None = None
         self.scan_enabled = scan_enabled
-        self.versions = []
 
         mb_client = AsyncModbusClient(transport,
                                       unit_id=unit_id,
@@ -58,13 +55,20 @@ class ModbusScanner:
         self.parser = IOParser(self.client, hw_definition.get('modbus_features', []), circuit)
 
     def start_scanning(self):
+        """ Create the devices after the first scan, then scan periodically with scan_enabled """
         if self.scan_task is None or self.scan_task.done():
             self.scan_task = asyncio.create_task(self._scan_loop())
+            self.scan_task.add_done_callback(self._log_scan_task_error)
 
     def stop_scanning(self):
         if self.scan_task is not None:
             self.scan_task.cancel()
             self.scan_task = None
+
+    def _log_scan_task_error(self, task: asyncio.Task):
+        """ An unexpected error stops the scan of the unit, it would not be logged by the task """
+        if not task.cancelled() and task.exception() is not None:
+            logger.error(f"{self.name}: Scan of device '{self.circuit}' stopped", exc_info=task.exception())
 
     async def _scan_unit(self) -> bool:
         try:
@@ -74,10 +78,9 @@ class ModbusScanner:
             return False
 
     async def _scan_loop(self):
-        '''
-            Wait for connected device, a communication error is retried, it is logged once.
-            Create IO devices.
-        '''
+        """ Wait for the connected unit, a communication error is retried, it is logged once.
+            Create its devices, then scan it periodically with scan_enabled.
+        """
         logged_error = None
         while not await self.cache.do_scan(initial=True):
             error = self.cache.scan_error
@@ -89,6 +92,8 @@ class ModbusScanner:
             logger.info(f"Device '{self.circuit}' is connected")
 
         self.parser.populate()
+        if not self.scan_enabled:
+            return
 
         interval = self.scan_interval
         err = False
@@ -108,18 +113,17 @@ class ModbusScanner:
                 # exponential growth interval with limitation [s]
                 interval = min(interval * 2, max(120, self.scan_interval))
 
-    def get(self):
-        return self.full()
-
     def full(self):
+        last_comm_time = self.cache.last_comm_time
+        scan_error = self.cache.scan_error
         ret = {'dev': 'modbus_slave',
                'circuit': self.circuit,
                'slave_id': self.modbus_address,
                'modbus_type': self.modbus_type,
                'modbus_spec': self.modbus_spec,
                'scan_interval': self.scan_interval,
-               'last_comm': time.time() - self.cache.last_comm_time if self.cache.last_comm_time is not None
-               else None,
+               'last_comm': time.time() - last_comm_time if last_comm_time is not None else None,
+               'scan_error': f"{type(scan_error).__name__}: {scan_error}" if scan_error is not None else None,
                }
         if self.alias != '':
             ret['alias'] = self.alias

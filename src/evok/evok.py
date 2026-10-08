@@ -366,9 +366,9 @@ async def main():
         for device in Devices.by_name(bustype):
             device.switch_to_async()
 
+    # the devices of a unit are created after its first scan, also without scan_enabled
     for modbus_slave in Devices.by_name(MODBUS_SLAVE):
-        if modbus_slave.scan_enabled:
-            modbus_slave.start_scanning()
+        modbus_slave.start_scanning()
 
     # graceful shutdown: let main() return, so asyncio.run() can clean up
     stop_event = asyncio.Event()

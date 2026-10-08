@@ -87,8 +87,10 @@ comm_channels:
 
 - `model` - assigns a Modbus register map (examples: `xS51`, `xS11`), see [hw_definitions](./hw_definitions.md), required.
 - `slave-id` - slave address or unit-ID of the Modbus device (Default value is `1`).
-- `scan_frequency` - an optional parameter, determines how often values are read from the device (Default value is 50).
+- `scan_frequency` - an optional parameter, determines how often values are read from the device per second,
+  a positive number (Default value is 50).
 - `scan_enabled` - an optional parameter, the device is not read periodically if it is `false` (Default value is `true`).
+  Its devices are created after the first read, their values are then changed only by the writes of Evok.
 - `device_info` - an optional parameter, describes the device: `family`, `model`, `sn`, `board_count`.
 
 #### OWFS

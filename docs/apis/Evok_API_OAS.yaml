@@ -3602,6 +3602,12 @@ components:
               x-stoplight:
                 id: 1r78ymgsba7ij
               description: 'Period of slave scanning [seconds]'
+            scan_error:
+              type: [string, 'null']
+              examples: ['RequestRetryFailedError: Failed to get a valid response after 2 attempts', null]
+              description: The error of the last scan, null after a successful one. The scan of a failing slave
+                is slowed down up to 120 s.
+              readOnly: true
       examples:
         - dev: modbus_slave
           circuit: '1'
@@ -3609,6 +3615,7 @@ components:
           slave_id: 1
           modbus_type: TCP
           scan_interval: 0.02
+          scan_error: null
     Device_info:
       title: Device info
       x-stoplight:
