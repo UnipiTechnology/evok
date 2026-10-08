@@ -9,7 +9,8 @@ from tmodbus import (
     AsyncSmartTransport
 )
 
-from ..devices import MODBUS_SLAVE
+from .. import devents
+from ..devices import MODBUS_SLAVE, Devices, to_bool
 from ..log import logger
 from .builder import IOParser
 from .cache import ModbusCacheMap
@@ -76,6 +77,28 @@ class ModbusScanner:
             task.cancel()
             # an error of the task is logged by its done callback, wait() does not raise it
             await asyncio.wait([task])
+
+    async def set(self, scan_enabled=None, alias=None):
+        """ Enable or disable the periodic scan, set the alias
+
+            scan_enabled true also starts again a scan stopped by an unexpected error. The first scan,
+            which creates the devices, runs also with scan_enabled false.
+        """
+        if scan_enabled is not None:
+            scan_enabled = to_bool(scan_enabled)
+        # an invalid alias raises ValueError before the scan is changed
+        if alias is not None:
+            Devices.set_alias(alias, self)
+        if scan_enabled is not None:
+            self.scan_enabled = scan_enabled
+            if scan_enabled:
+                self.start_scanning()
+            elif self.populated:
+                # the task waiting for the first scan ends after creating the devices
+                await self.stop_scanning()
+        if scan_enabled is not None or alias is not None:
+            # the clients of WebSocket get the new state
+            devents.status(self)
 
     def _log_scan_task_error(self, task: asyncio.Task):
         """ An unexpected error stops the scan of the unit, it would not be logged by the task """

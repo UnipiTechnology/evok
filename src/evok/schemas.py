@@ -209,6 +209,21 @@ owbus_post_inp_schema = {
 
 owbus_post_inp_example = {"do_reset": True, "do_scan": True}
 
+modbus_slave_post_inp_schema = {
+    "$schema": SCHEMA,
+    "title": "Modbus_slave",
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "scan_enabled": {
+            "type": ["boolean", "number", "string"]   # a form of REST sends strings, converted by to_bool()
+        },
+        "alias": ALIAS
+    }
+}
+
+modbus_slave_post_inp_example = {"scan_enabled": False}
+
 owpower_post_inp_schema = {
     "$schema": SCHEMA,
     "title": "OneWire_power",
@@ -326,6 +341,7 @@ schemas: dict[str, tuple[dict, dict]] = {
     'watchdog': (wd_post_inp_schema, wd_post_inp_example),
     '1wdevice': (owire_post_inp_schema, owire_post_inp_example),
     'owbus': (owbus_post_inp_schema, owbus_post_inp_example),
+    'modbus_slave': (modbus_slave_post_inp_schema, modbus_slave_post_inp_example),
     'owpower': (owpower_post_inp_schema, owpower_post_inp_example),
     'run': (run_post_inp_schema, run_post_inp_example),
     'nv_save': (nv_save_post_inp_schema, nv_save_post_inp_example),

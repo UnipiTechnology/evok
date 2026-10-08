@@ -62,9 +62,11 @@ class MySensor(object):
             self.interval = check_interval(interval)
             self.time = anyio.current_time() + self.calc_interval()
             self.bus.wake()
-            devents.config(self)
         if alias is not None:
             Devices.set_alias(alias, self)
+        if interval is not None or alias is not None:
+            # the clients of WebSocket get the new state
+            devents.status(self)
 
     async def read_val_from_sens(self, sens) -> bool:
         """ Read the values, return True if they have changed, the change is reported by poll() """
@@ -276,7 +278,8 @@ class OwBusDriver:
             was_changed = True
 
         if was_changed:
-            devents.config(self)
+            # the clients of WebSocket get the new state
+            devents.status(self)
 
     def register_sensor(self, mysensor):
         self.mysensors.append(mysensor)

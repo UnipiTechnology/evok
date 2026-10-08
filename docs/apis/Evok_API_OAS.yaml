@@ -1076,6 +1076,7 @@ paths:
                     modbus_type: TCP
                     modbus_spec: 127.0.0.1
                     scan_interval: 0.02
+                    scan_enabled: true
                 2:
                   value:
                     dev: modbus_slave
@@ -1085,6 +1086,7 @@ paths:
                     modbus_type: TCP
                     modbus_spec: 127.0.0.1
                     scan_interval: 0.02
+                    scan_enabled: true
                 3:
                   value:
                     dev: modbus_slave
@@ -1094,6 +1096,7 @@ paths:
                     modbus_type: TCP
                     modbus_spec: 127.0.0.1
                     scan_interval: 0.02
+                    scan_enabled: true
                 all:
                   value:
                     - dev: modbus_slave
@@ -1103,6 +1106,7 @@ paths:
                       modbus_type: TCP
                       modbus_spec: 127.0.0.1
                       scan_interval: 0.02
+                      scan_enabled: true
                     - dev: modbus_slave
                       circuit: "2"
                       last_comm: 0.0698413684651396
@@ -1110,6 +1114,7 @@ paths:
                       modbus_type: TCP
                       modbus_spec: 127.0.0.1
                       scan_interval: 0.02
+                      scan_enabled: true
                     - dev: modbus_slave
                       circuit: "3"
                       last_comm: 0.0324178964541674
@@ -1117,6 +1122,7 @@ paths:
                       modbus_type: TCP
                       modbus_spec: 127.0.0.1
                       scan_interval: 0.02
+                      scan_enabled: true
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: read-modbus_slave-object
@@ -1144,6 +1150,38 @@ paths:
             - rest
           default: json
         description: Content type - use "json" for application/json OR "rest" for text/html.
+    post:
+      summary: Set modbus_slave properties
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    $ref: '#/components/schemas/Status'
+                  result:
+                    $ref: '#/components/schemas/Modbus_slave'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: post-rest-modbus_slave-circuit
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Modbus_slave_params'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Modbus_slave_params'
+      description: Enable or disable the periodic scan of the slave, or set its alias.
+      tags:
+        - Modbus slave
+        - Setter
   '/{format}/device_info/{circuit}':
     get:
       summary: Read device info
@@ -3611,8 +3649,11 @@ components:
             scan_enabled:
               type: boolean
               description: The slave is scanned periodically, without it the values of its devices are changed
-                only by the writes of Evok.
-              readOnly: true
+                only by the writes of Evok. Set by POST.
+            alias:
+              type: string
+              examples: ['unit_1']
+              description: Alias of the slave, set by POST.
             scan_error:
               type: [string, 'null']
               examples: ['RequestRetryFailedError: Failed to get a valid response after 2 attempts', null]
@@ -3762,6 +3803,20 @@ components:
           examples: [1]
           default: 1
           description: Set 1 to save to non-volatile memory.
+    Modbus_slave_params:
+      title: Modbus slave params
+      type: object
+      properties:
+        scan_enabled:
+          type: [boolean, integer, string]
+          examples: [false]
+          description: Enable or disable the periodic scan, also `1` or `'true'` in a form. `true` also starts again
+            a scan stopped by an error. The first scan, which creates the devices of the slave, runs also with
+            `false`.
+        alias:
+          type: string
+          examples: ['unit_1']
+          description: Alias of the slave, an empty string deletes it
     Owbus_params:
       title: 1-Wire bus params
       x-stoplight:

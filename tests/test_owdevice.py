@@ -105,6 +105,25 @@ async def test_scan_interval(bus):
         await bus.set(scan_interval=-1)
 
 
+async def test_set_sends_status(bus, events):
+    """ The change was sent as a config event, which has no receiver """
+    await bus.set(scan_interval=120)
+    assert events == [bus]
+    await bus.set(scan_interval=120)                            # no change, no event
+    assert events == [bus]
+
+
+async def test_sensor_set_sends_status(bus, events):
+    """ The change of interval was sent as a config event, which has no receiver """
+    sensor = DS18B20('28.000001', 'DS18B20', bus)
+    events.clear()
+    await sensor.set(interval=30)
+    await sensor.set(alias='outdoor')
+    assert events == [sensor, sensor]
+    await sensor.set()                                          # nothing set, no event
+    assert len(events) == 2
+
+
 async def test_reconnect_after_failure(bus, events, monkeypatch, caplog):
     import asyncio
     from evok import owdevice

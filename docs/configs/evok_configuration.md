@@ -91,6 +91,7 @@ comm_channels:
   a positive number (Default value is 50).
 - `scan_enabled` - an optional parameter, `true` or `false`, the device is not read periodically if it is `false` (Default value is `true`).
   Its devices are created after the first read, their values are then changed only by the writes of Evok.
+  The scan can be enabled or disabled at runtime by `POST /json/modbus_slave/<device_name>` with `scan_enabled`.
 - `device_info` - an optional parameter, describes the device: `family`, `model`, `sn`, `board_count`.
 
 #### OWFS

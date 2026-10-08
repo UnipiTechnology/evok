@@ -4,7 +4,8 @@ import pytest
 from tmodbus import AsyncRtuTransport, AsyncSmartTransport, AsyncTcpTransport
 from tmodbus.exceptions import RequestRetryFailedError
 
-from evok.devices import Devices, DI
+from evok import devents
+from evok.devices import Devices, DI, MODBUS_SLAVE
 from evok.modbus.scanner import ModbusScanner
 
 from conftest import FakeModbus
@@ -206,3 +207,95 @@ async def test_stop_scanning_after_error_of_scan_task(l0306, caplog):
     await asyncio.wait([scanner.scan_task])
     await scanner.stop_scanning()                               # the error is not raised again
     assert caplog.text.count('RuntimeError: bug') == 1
+
+
+async def test_set_disables_and_enables_scan(l0306):
+    scanner, mb = make_scanner(l0306)
+    scanner.start_scanning()
+    while not scanner.populated:
+        await asyncio.sleep(0.01)
+    scans = []
+    do_scan = scanner.client.do_scan
+
+    async def counted_scan():
+        scans.append(1)
+        return await do_scan()
+    scanner.client.do_scan = counted_scan
+
+    await scanner.set(scan_enabled='false')                     # a form of REST sends strings
+    assert scanner.scan_task is None and scanner.full()['scan_enabled'] is False
+    count = len(scans)
+    await asyncio.sleep(0.1)
+    assert len(scans) == count
+
+    await scanner.set(scan_enabled=True)
+    await asyncio.sleep(0.1)
+    assert len(scans) > count
+    assert sorted(Devices[DI]) == ['1_01', '1_02', '1_03', '1_04']   # the devices are not created again
+    await scanner.stop_scanning()
+
+
+async def test_set_scan_enabled_false_before_first_scan_creates_devices(l0306):
+    """ The task waiting for the unit is not stopped, it creates the devices and ends """
+    scanner, mb = make_scanner(l0306)
+    mb.connected = False
+    scanner.INITIAL_SCAN_INTERVAL = 0.01
+    scanner.start_scanning()
+    await asyncio.sleep(0.05)
+    await scanner.set(scan_enabled=False)
+    mb.connected = True
+    await asyncio.wait_for(scanner.scan_task, 1)
+    assert sorted(Devices[DI]) == ['1_01', '1_02', '1_03', '1_04']
+
+
+async def test_set_scan_enabled_restarts_stopped_scan(l0306, caplog):
+    """ A scan stopped by an unexpected error was started again only by a restart of Evok """
+    scanner, mb = make_scanner(l0306)
+    populate = scanner.parser.populate
+
+    def broken():
+        raise RuntimeError('bug')
+    scanner.parser.populate = broken
+    scanner.start_scanning()
+    await asyncio.wait([scanner.scan_task])
+    scanner.parser.populate = populate
+    await scanner.set(scan_enabled=True)
+    while not scanner.populated:
+        await asyncio.sleep(0.01)
+    assert sorted(Devices[DI]) == ['1_01', '1_02', '1_03', '1_04']
+    await scanner.stop_scanning()
+
+
+async def test_set_alias(l0306):
+    scanner, mb = make_scanner(l0306)
+    Devices.register_device(MODBUS_SLAVE, scanner)
+    await scanner.set(alias='unit_1')
+    assert scanner.full()['alias'] == 'unit_1'
+    assert Devices.by_name(MODBUS_SLAVE, 'unit_1') is scanner
+
+
+async def test_set_invalid_alias_does_not_change_scan(l0306):
+    scanner, mb = make_scanner(l0306, scan_enabled=False)
+    with pytest.raises(ValueError):
+        await scanner.set(scan_enabled=True, alias='no spaces')
+    assert scanner.scan_enabled is False and scanner.scan_task is None
+
+
+async def test_set_invalid_scan_enabled(l0306):
+    scanner, mb = make_scanner(l0306)
+    with pytest.raises(ValueError):
+        await scanner.set(scan_enabled='maybe')
+    assert scanner.scan_enabled is True
+
+
+async def test_set_sends_status(l0306, monkeypatch):
+    """ The change was sent as a config event, which has no receiver """
+    events = []
+    monkeypatch.setattr(devents, 'status', lambda device, **kw: events.append(device))
+    scanner, mb = make_scanner(l0306, scan_enabled=False)
+    Devices.register_device(MODBUS_SLAVE, scanner)
+    await scanner.set(alias='unit_1')
+    await scanner.set(scan_enabled=False)
+    assert events == [scanner, scanner]
+    await scanner.set()                                         # nothing set, no event
+    assert len(events) == 2

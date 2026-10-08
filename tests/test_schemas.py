@@ -6,6 +6,7 @@ import pytest
 from evok.devices import Aliases
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, Register
 from evok.modbus.digital import DigitalInput, DigitalOutput, Relay, ULED
+from evok.modbus.scanner import ModbusScanner
 from evok.modbus.special import NvSave, OwPower, Watchdog
 from evok.owdevice import MySensor, OwBusDriver
 from evok.schemas import schemas, bulk_post_inp_schema, bulk_post_inp_example
@@ -25,6 +26,7 @@ SET_CLASSES = {
     'owpower': [OwPower],
     '1wdevice': [MySensor], 'sensor': [MySensor], 'temp': [MySensor],
     'owbus': [OwBusDriver],
+    'modbus_slave': [ModbusScanner],
     'run': [Aliases],
 }
 
