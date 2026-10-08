@@ -104,6 +104,20 @@ async def test_scan_connection_error_returns_false():
     assert cache.last_comm_time is None
 
 
+async def test_scan_without_read_is_not_communication():
+    """ A unit without register blocks reported a communication on every scan """
+    cache = ModbusCacheMap([], FakeModbus())
+    assert await cache.do_scan(initial=True)
+    assert cache.last_comm_time is None
+
+    # the scans between the reads of a slow group
+    cache = ModbusCacheMap([{'start_reg': 0, 'count': 1, 'frequency': 3}], FakeModbus())
+    assert await cache.do_scan(initial=True)
+    last_comm_time = cache.last_comm_time
+    assert await cache.do_scan()
+    assert cache.last_comm_time == last_comm_time
+
+
 async def test_set_register_and_get_register_async():
     mb = FakeModbus(holding={11: 42})
     cache = ModbusCacheMap(BLOCKS, mb)

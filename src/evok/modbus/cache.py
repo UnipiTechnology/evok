@@ -79,12 +79,18 @@ class ModbusCacheMap:
             for group in self.groups + self.igroups:
                 group.clear_counter()
 
-        res = await self._do_scan_groups(self.groups, self.modbus_client.read_holding_registers) and \
-            await self._do_scan_groups(self.igroups, self.modbus_client.read_input_registers)
-        if res:
+        read = 0
+        for groups, func in ((self.groups, self.modbus_client.read_holding_registers),
+                             (self.igroups, self.modbus_client.read_input_registers)):
+            count = await self._do_scan_groups(groups, func)
+            if count is None:
+                return False
+            read += count
+        # a scan without a read, e.g. of a unit without register blocks, is not a communication
+        if read > 0:
             self.last_comm_time = time.time()
-            self.scan_error = None
-        return res
+        self.scan_error = None
+        return True
 
     def _find_group(self, address: int, is_input: bool) -> RegisterGroup:
         for group in (self.igroups if is_input else self.groups):
@@ -115,18 +121,21 @@ class ModbusCacheMap:
         group.update(vals, index)
         return vals
 
-    async def _do_scan_groups(self, groups: list[RegisterGroup], func) -> bool:
+    async def _do_scan_groups(self, groups: list[RegisterGroup], func) -> int | None:
+        """ The number of the read groups, None after a communication error """
+        read = 0
         try:
             for group in groups:
                 if group.f_counter == 0:
                     vals = await func(group.address, quantity=group.count)
                     group.update(vals)
+                    read += 1
                 group.tick_counter()
 
         except (TModbusError, TimeoutError) as E:
             # also the retries of the transport (RequestRetryFailedError), a noise on RS485 (CRCError)
             # and the exception responses of the unit, e.g. an address out of its registers
             self.scan_error = E
-            return False
+            return None
 
-        return True
+        return read
