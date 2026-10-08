@@ -193,14 +193,13 @@ its circuit is the name of the device.
 
 - `val_reg` - value register address
 - `timeout_reg` - timeout register address
-- `nv_sav_coil` - NV save coil address
 - `reset_coil` - reset coil address
+- `nv_sav_coil` - not used, the settings are saved by the NV_SAVE feature
 
 ```yaml title="Example"
   - type        : WD
     val_reg     : 6
     timeout_reg : 1008
-    nv_sav_coil : 1003
     reset_coil  : 1002
 ```
 

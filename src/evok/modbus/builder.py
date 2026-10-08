@@ -97,7 +97,6 @@ class IOParser:
         _wd = Watchdog(self.circuit, self.client,
                        m_feature['val_reg'],
                        m_feature['timeout_reg'],
-                       m_feature['nv_sav_coil'],
                        m_feature['reset_coil'],
                        major_group=self.circuit)
         self._register(WATCHDOG, _wd)

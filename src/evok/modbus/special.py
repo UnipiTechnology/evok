@@ -89,12 +89,9 @@ class Watchdog(IODevice):
 
     devtype = WATCHDOG
 
-    def __init__(self, circuit, client: Client, reg, timeout_reg, nv_save_coil, reset_coil,
-                 major_group=0):
+    def __init__(self, circuit, client: Client, reg, timeout_reg, reset_coil, major_group=0):
         super().__init__(circuit, client, major_group)
-        self.nvsavvalue = 0
         self.resetvalue = 0
-        self.nv_save_coil = nv_save_coil
         self.reset_coil = reset_coil
         self.wdwasresetvalue = 0
         self.accessor = AccessorU16(reg)
@@ -110,7 +107,6 @@ class Watchdog(IODevice):
                'value': self.value,
                'timeout': self.timeout,
                'was_wd_reset': self.was_wd_boot_value,
-               'nv_save': self.nvsavvalue,
                }
         self._with_alias(ret)
         return ret
@@ -124,7 +120,13 @@ class Watchdog(IODevice):
 
     async def set(self, value=None, timeout=None, reset=None, nv_save=None, alias=None):
         """ Sets new on/off status. Disable pending timeouts
+
+            nv_save is deprecated and not supported, it is rejected before any change: nv_save=0
+            saved the settings too, the device nv_save of the unit saves them.
         """
+        if nv_save is not None:
+            raise ValueError(f"WD {self.circuit}: nv_save is deprecated and not supported, "
+                             f"use the device nv_save {self.major_group}")
         self.set_alias(alias)
 
         if value is not None:
@@ -134,15 +136,7 @@ class Watchdog(IODevice):
             timeout = min(int(timeout), 65535)
             await self.accessor_timeout.write(self.client, timeout)
 
-        if self.nv_save_coil >= 0 and nv_save is not None and int(to_bool(nv_save)) != self.nvsavvalue:
-            if to_bool(nv_save):
-                self.nvsavvalue = 1
-            else:
-                self.nvsavvalue = 0
-            await self.client.mb_client.write_single_coil(self.nv_save_coil, 1)
-
         if self.reset_coil >= 0 and reset is not None:
             if to_bool(reset):
-                self.nvsavvalue = 0
                 await self.client.mb_client.write_single_coil(self.reset_coil, 1)
                 logger.info("Performed reset of board %s" % self.circuit)

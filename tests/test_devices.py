@@ -518,6 +518,17 @@ async def test_watchdog(unit):
     assert (wd.value, wd.timeout) == (0, 65535)
 
 
+@pytest.mark.parametrize('nv_save', [1, 0, 'true'])
+async def test_watchdog_nv_save_is_rejected(unit, nv_save):
+    """ nv_save=0 saved the settings, it is deprecated and not supported """
+    client = await unit()
+    wd = dev(WATCHDOG, '1')
+    with pytest.raises(ValueError, match='nv_save is deprecated'):
+        await wd.set(value=1, nv_save=nv_save, alias='wd')
+    assert client.mb_client.writes == [] and wd.alias == ''         # rejected before any change
+    assert 'nv_save' not in wd.full()
+
+
 async def test_led(unit):
     client = await unit({3998: 0b101})
     assert [dev(LED, c).value for c in ('1_01', '1_02', '1_03')] == [1, 0, 1]

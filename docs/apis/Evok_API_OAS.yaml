@@ -223,7 +223,6 @@ paths:
                       value: 0
                       timeout: 5000
                       was_wd_reset: 0
-                      nv_save: 0
                     - dev: modbus_slave
                       circuit: '1'
                       last_comm: 0.021920204162597656
@@ -1646,7 +1645,6 @@ paths:
                     value: 0
                     timeout: 2500
                     was_wd_reset: 0
-                    nv_save: 0
                 '2':
                   value:
                     dev: wd
@@ -1654,7 +1652,6 @@ paths:
                     value: 0
                     timeout: 5000
                     was_wd_reset: 0
-                    nv_save: 0
                 all:
                   value:
                     - dev: wd
@@ -1662,19 +1659,16 @@ paths:
                       value: 0
                       timeout: 2500
                       was_wd_reset: 0
-                      nv_save: 0
                     - dev: wd
                       circuit: '2'
                       value: 0
                       timeout: 5000
                       was_wd_reset: 0
-                      nv_save: 0
                     - dev: wd
                       circuit: '3'
                       value: 0
                       timeout: 2500
                       was_wd_reset: 0
-                      nv_save: 0
             application/json:
               schema:
                 anyOf:
@@ -1690,7 +1684,6 @@ paths:
                     value: 0
                     timeout: 2500
                     was_wd_reset: 0
-                    nv_save: 0
                 '2':
                   value:
                     dev: wd
@@ -1698,7 +1691,6 @@ paths:
                     value: 0
                     timeout: 5000
                     was_wd_reset: 0
-                    nv_save: 0
                 all:
                   value:
                     - dev: wd
@@ -1706,19 +1698,16 @@ paths:
                       value: 0
                       timeout: 2500
                       was_wd_reset: 0
-                      nv_save: 0
                     - dev: wd
                       circuit: '2'
                       value: 0
                       timeout: 5000
                       was_wd_reset: 0
-                      nv_save: 0
                     - dev: wd
                       circuit: '3'
                       value: 0
                       timeout: 2500
                       was_wd_reset: 0
-                      nv_save: 0
         '404':
           $ref: '#/components/responses/NotFound'
       description: Get all properties of internal [master watchdog](https://kb.unipi.technology/en:hw:007-patron:description-of-io:02-description-of-do#mwd).
@@ -3556,7 +3545,6 @@ components:
           value: 0
           timeout: 5000
           was_wd_reset: 0
-          nv_save: 0
       properties:
         value:
           type:
@@ -3571,7 +3559,9 @@ components:
           default: 5000
           examples: [3000]
         nv_save:
-          description: __Deprecated__. Store current settings to internal non-volatile memory. See manual fot details.
+          deprecated: true
+          description: __Deprecated__ and not supported, setting it returns an error. Use the device
+            *nv_save* of the unit to store the settings to the non-volatile memory.
           enum:
             - 0
             - 1
@@ -3582,7 +3572,6 @@ components:
           value: 0
           timeout: 5000
           was_wd_reset: 0
-          nv_save: 0
     Watchdog:
       title: Master Watchdog
       x-stoplight:
