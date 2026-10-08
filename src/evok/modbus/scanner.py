@@ -44,6 +44,7 @@ class ModbusScanner:
         self.scan_task: asyncio.Task | None = None
         self.scan_enabled = scan_enabled
         self.populated = False      # the devices are created once, also when the scan is started again
+        self.logged_scan_error: str | None = None  # repr of an unexpected error, logged once until a scan succeeds
 
         mb_client = AsyncModbusClient(transport,
                                       unit_id=unit_id,
@@ -73,12 +74,19 @@ class ModbusScanner:
 
     async def _scan_unit(self) -> bool:
         try:
-            return await self.client.do_scan()
+            res = await self.client.do_scan()
         except Exception as E:
             # reported by full(), the communication errors are set by the cache
             self.cache.scan_error = E
-            logger.exception(f"{self.name}: Error while scanning: {E}")
+            # the error repeats on every scan, do not flood the log
+            if repr(E) != self.logged_scan_error:
+                self.logged_scan_error = repr(E)
+                logger.exception(f"{self.name}: Error while scanning, the same error is not logged "
+                                 f"until a scan succeeds: {E}")
             return False
+        if res:
+            self.logged_scan_error = None
+        return res
 
     async def _scan_loop(self):
         """ Wait for the connected unit, a communication error is retried, it is logged once.

@@ -87,3 +87,23 @@ async def test_unexpected_error_of_scan_is_reported(l0306):
     scanner.client.do_scan = broken
     assert not await scanner._scan_unit()
     assert scanner.full()['scan_error'] == 'RuntimeError: bug'
+
+
+async def test_repeated_unexpected_error_of_scan_is_logged_once(l0306, caplog):
+    """ The traceback of the same error was logged on every scan """
+    scanner, mb = make_scanner(l0306)
+    assert await scanner.cache.do_scan(initial=True)
+    do_scan = scanner.client.do_scan
+
+    async def broken():
+        raise RuntimeError('bug')
+    scanner.client.do_scan = broken
+    for _ in range(3):
+        assert not await scanner._scan_unit()
+    assert caplog.text.count('RuntimeError: bug') == 1
+
+    scanner.client.do_scan = do_scan                            # a successful scan logs the error again
+    assert await scanner._scan_unit()
+    scanner.client.do_scan = broken
+    assert not await scanner._scan_unit()
+    assert caplog.text.count('RuntimeError: bug') == 2
