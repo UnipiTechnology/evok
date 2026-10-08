@@ -1,25 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Sep 29 09:34:57 2026
-
-@author: bokula
-"""
 import asyncio
 
 from typing import Union
 
-from ..devices import DI, DO, RO, LED, Devices, to_float
+from ..devices import DI, DO, RO, LED, Devices, to_bool, to_float
 from ..log import logger
 from .base import IODevice
 from .client import Client, Accessor, AccessorBit, AccessorU16, AccessorU32
 from .iomode import DIMode, WithDIMode
 from .pwm import PwmFrequency
-
-
-def parse_value(value) -> Union[None, int]:
-    """ The on/off value of an output, 1 or 0 """
-    return None if value is None else 1 if int(value) else 0
 
 
 class WithPulse:
@@ -71,12 +61,13 @@ class DigitalOutput(WithPulse, IODevice):
     devtype = DO
 
     def __init__(self, circuit, client: Client, coil, reg, mask, major_group=0,
-                 pwm: Union[None, PwmFrequency] = None, pwmdutyreg=-1, modes=None):
+                 pwm: Union[None, PwmFrequency] = None, pwmdutyreg=None, modes=None):
         """ pwm is the frequency shared by the outputs of the group, pwmdutyreg the duty register of this output """
         super().__init__(circuit, client, major_group)
+        if pwm is not None and pwmdutyreg is None:
+            raise ValueError(f'DO {circuit}: pwm requires pwmdutyreg')
         self.modes = modes if modes is not None else ['Simple']
         self.pwm = pwm
-        self.pwmdutyreg = pwmdutyreg
         self.accessor_pwm_duty = AccessorU16(pwmdutyreg) if pwm is not None else Accessor(None)
         self.pwm_duty = None
         self.pwm_duty_val = None
@@ -86,9 +77,7 @@ class DigitalOutput(WithPulse, IODevice):
         self.accessor = AccessorBit(reg, mask)
         self.value = None
 
-        self.forced_changes = False  # force_immediate_state_changes
-
-    def full(self, forced_value=None):
+    def full(self):
         ret = {'dev': 'do',
                'circuit': self.circuit,
                'value': self.value,
@@ -99,8 +88,6 @@ class DigitalOutput(WithPulse, IODevice):
                'pwm_duty': self.pwm_duty,
                }
         self._with_alias(ret)
-        if forced_value is not None:
-            ret['value'] = forced_value
         return ret
 
     async def check_new_data(self):
@@ -126,75 +113,69 @@ class DigitalOutput(WithPulse, IODevice):
             pulse_duration in seconds sets the opposite of value after the pulse, it requires value,
             timeout is its deprecated alias
         """
-        try:
-            if timeout is not None:
-                if pulse_duration is not None:
-                    raise ValueError(f'DO {self.circuit}: timeout is a deprecated alias of pulse_duration, '
-                                     f'do not set both')
-                pulse_duration = timeout
-
-            # parse before any write, the pulse inverts the parsed value
-            parsed_value = parse_value(value)
-            pulse_duration = self._check_pulse(parsed_value, pulse_duration)
-
-            if pwm_duty is not None:
-                pwm_duty = to_float(pwm_duty)
-                if not 0.0 <= pwm_duty <= 100.0:
-                    raise ValueError(f'DO {self.circuit}: pwm_duty {pwm_duty} is out of range <0..100>')
-
-            if pwm_freq is not None:
-                pwm_freq = to_float(pwm_freq)
-                if pwm_freq <= 0:
-                    raise ValueError(f'DO {self.circuit}: pwm_freq {pwm_freq} must be positive')
-
-            if parsed_value is not None and pwm_duty is not None:
-                # No conflict in this case
-                if not ((pwm_duty == 100 and parsed_value == 1) or (pwm_duty == 0 and parsed_value == 0)):
-                    raise ValueError('Set value conflict: Cannot set both value and pwm_duty at once.')
-
-            # a rejected request keeps the pending pulse
-            if parsed_value is not None or pwm_duty is not None:
-                self._cancel_pulse()
-
-            # if pwm_duty is not None and self.mode == 'PWM' and float(pwm_duty) <= 0.01:
-            #    mode = 'Simple'
-            # New system - mode field will no longer be used
-
-            if (pwm_freq is not None) and (pwm_freq > 0):
-                await self.set_pwm_freq(pwm_freq)
-
-            # Set Binary value
-            if parsed_value is not None:
-                self.mode = 'Simple'
-                await self.client.mb_client.write_single_coil(self.coil, parsed_value)
-                if self.pwm_duty:
-                    self.pwm_duty = 0
-                    # Turn off PWM
-                    await self.accessor_pwm_duty.write(self.client, 0)
-
-            # Set PWM Duty
-            elif pwm_duty is not None and 0.0 <= pwm_duty <= 100.0:
-                if self.value != 0:
-                    await self.client.mb_client.write_single_coil(self.coil, 0)
-                await self.accessor_pwm_duty.write(self.client, self.pwm.duty_raw(pwm_duty))
-                self.mode = 'PWM'
-
-            self.set_alias(alias)
-
+        if timeout is not None:
             if pulse_duration is not None:
-                self._start_pulse(parsed_value, pulse_duration)
+                raise ValueError(f'DO {self.circuit}: timeout is a deprecated alias of pulse_duration, '
+                                 f'do not set both')
+            pulse_duration = timeout
 
-        except Exception as E:
-            logger.error(f"Error in set DO: {E}")
-            raise E
+        # parse before any write, the pulse inverts the parsed value
+        parsed_value = None if value is None else int(to_bool(value))
+        pulse_duration = self._check_pulse(parsed_value, pulse_duration)
 
-    async def set_pwm_freq(self, freq: float):
-        """ Set the frequency shared by the group, keep the duty cycle of all its outputs """
+        if pwm_duty is not None:
+            pwm_duty = to_float(pwm_duty)
+            if not 0.0 <= pwm_duty <= 100.0:
+                raise ValueError(f'DO {self.circuit}: pwm_duty {pwm_duty} is out of range <0..100>')
+
+        if pwm_freq is not None:
+            pwm_freq = to_float(pwm_freq)
+            if pwm_freq <= 0:
+                raise ValueError(f'DO {self.circuit}: pwm_freq {pwm_freq} must be positive')
+
+        if parsed_value is not None and pwm_duty is not None:
+            # No conflict in this case
+            if not ((pwm_duty == 100 and parsed_value == 1) or (pwm_duty == 0 and parsed_value == 0)):
+                raise ValueError('Set value conflict: Cannot set both value and pwm_duty at once.')
+
+        # a rejected request keeps the pending pulse
+        if parsed_value is not None or pwm_duty is not None:
+            self._cancel_pulse()
+
+        if pwm_freq is not None:
+            # value or pwm_duty replaces the duty of this output
+            await self.set_pwm_freq(pwm_freq, keep_duty=parsed_value is None and pwm_duty is None)
+
+        # Set Binary value
+        if parsed_value is not None:
+            await self.client.mb_client.write_single_coil(self.coil, parsed_value)
+            if self.pwm_duty:
+                self.pwm_duty = 0
+                # Turn off PWM
+                await self.accessor_pwm_duty.write(self.client, 0)
+
+        # Set PWM Duty
+        elif pwm_duty is not None:
+            if self.value != 0:
+                await self.client.mb_client.write_single_coil(self.coil, 0)
+            await self.accessor_pwm_duty.write(self.client, self.pwm.duty_raw(pwm_duty))
+
+        self.set_alias(alias)
+
+        if pulse_duration is not None:
+            self._start_pulse(parsed_value, pulse_duration)
+
+    async def set_pwm_freq(self, freq: float, keep_duty=True):
+        """ Set the frequency shared by the group, keep the duty cycle of all its outputs,
+            of this output only with keep_duty
+        """
         await self.pwm.set(freq)
         for dev in Devices.by_name(DO, major_group=self.major_group):
             if dev.pwm is not self.pwm:
                 continue
             dev.pwm_freq = self.pwm.freq
+            if dev is self and not keep_duty:
+                continue
             if dev.pwm_duty:
                 raw = self.pwm.duty_raw(dev.pwm_duty)
                 if raw != dev.pwm_duty_val:
@@ -212,17 +193,13 @@ class Relay(WithPulse, IODevice):
         self.accessor = AccessorBit(reg, mask)
         self.value = None
 
-        self.forced_changes = False  # force_immediate_state_changes
-
-    def full(self, forced_value=None):
+    def full(self):
         ret = {'dev': 'ro',
                'circuit': self.circuit,
                'value': self.value,
                'pending': self.pending_task is not None,
                }
         self._with_alias(ret)
-        if forced_value is not None:
-            ret['value'] = forced_value
         return ret
 
     async def check_new_data(self):
@@ -235,7 +212,7 @@ class Relay(WithPulse, IODevice):
 
             pulse_duration in seconds sets the opposite of value after the pulse, it requires value
         """
-        parsed_value = parse_value(value)
+        parsed_value = None if value is None else int(to_bool(value))
         pulse_duration = self._check_pulse(parsed_value, pulse_duration)
         if parsed_value is not None:
             self._cancel_pulse()
@@ -271,9 +248,7 @@ class DigitalInput(WithDIMode, IODevice):
         self.counter_modes = counter_modes if counter_modes is not None else ['Enabled', 'Disabled']
         self.counter_mode = "Enabled"
         self.accessor = AccessorBit(reg, mask)
-        self.regcounter = regcounter
         self.accessor_counter = AccessorU32(regcounter) if regcounter is not None else Accessor(None)
-        self.regdebounce = regdebounce
         self.accessor_debounce = AccessorU16(regdebounce) if regdebounce is not None else Accessor(None)
         self.value = None
         self.counter = None
@@ -282,12 +257,11 @@ class DigitalInput(WithDIMode, IODevice):
     async def check_new_data(self):
         mode_changed = self.dimode.update()
 
-        old_value = self.value
-        old_counter = self.counter
+        old = (self.value, self.counter, self.debounce)
         self.value = self.accessor.read(self.client)
         self.counter = self.read_counter()
         self.debounce = self.accessor_debounce.read(self.client)
-        return mode_changed or old_counter != self.counter or old_value != self.value
+        return mode_changed or old != (self.value, self.counter, self.debounce)
 
     def read_counter(self):
         return self.accessor_counter.read(self.client) if self.counter_mode == "Enabled" else 0
@@ -321,8 +295,8 @@ class DigitalInput(WithDIMode, IODevice):
             self.counter = self.read_counter()
 
         if debounce is not None:
-            if self.regdebounce is not None:
+            if self.accessor_debounce.index is not None:
                 await self.accessor_debounce.write(self.client, int(float(debounce)))
         if counter is not None:
-            if self.regcounter is not None:
+            if self.accessor_counter.index is not None:
                 await self.accessor_counter.write(self.client, int(float(counter)))

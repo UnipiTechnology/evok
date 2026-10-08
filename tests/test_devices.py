@@ -6,7 +6,7 @@ import pytest
 from evok.devices import Devices, DI, DO, RO, AI, LED, WATCHDOG
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
 from evok.modbus.builder import IOParser
-from evok.modbus.digital import Relay
+from evok.modbus.digital import DigitalOutput, Relay
 from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
 from evok.modbus.special import NvSave
 
@@ -43,6 +43,14 @@ async def test_di_change_is_reported(unit):
     client = await unit()
     client.mb_client.holding[0] = 0b10
     assert await scan(client) == [dev(DI, '1_02')]
+
+
+async def test_di_debounce_change_is_reported(unit):
+    client = await unit({1010: 50})
+    client.mb_client.holding[1011] = 20
+    # the configuration registers are not read by every scan
+    assert await scan(client, initial=True) == [dev(DI, '1_02')]
+    assert dev(DI, '1_02').debounce == 20
 
 
 async def test_di_direct_switch_mode_from_registers(unit):
@@ -127,7 +135,24 @@ async def test_do_set_pwm_duty(unit):
     await do.set(pwm_duty=25)
     # PWM output is switched off as a coil first
     assert client.mb_client.writes == [('coil', 0, 0), ('reg', 21, 2500)]
+    # the mode is derived from pwm_duty by the scan
+    await do.check_new_data()
     assert do.mode == 'PWM'
+
+
+@pytest.mark.parametrize('kw, duty_writes', [
+    ({'pwm_duty': 10}, [('reg', 22, 1000)]),               # only the new duty
+    ({'value': 1}, [('reg', 22, 0)]),                       # PWM switched off
+])
+async def test_do_set_pwm_freq_with_new_duty(unit, kw, duty_writes):
+    client = await unit({1018: 47999, 1017: 9, 22: 24000})    # 1_02 at 50 %
+    await dev(DO, '1_02').set(pwm_freq=100, **kw)
+    assert [w for w in client.mb_client.writes if w[:2] == ('reg', 22)] == duty_writes
+
+
+def test_do_pwm_requires_duty_register():
+    with pytest.raises(ValueError):
+        DigitalOutput('x', None, 0, 0, 1, pwm=object())
 
 
 @pytest.mark.parametrize('name', ['pulse_duration', 'timeout'])
@@ -147,6 +172,36 @@ async def test_do_rejects_pulse_duration_with_timeout(unit):
     do = dev(DO, '1_01')
     with pytest.raises(ValueError):
         await do.set(value=1, pulse_duration=1, timeout=1)
+    assert client.mb_client.writes == []
+
+
+@pytest.mark.parametrize('value, expected', [
+    ('1', 1), ('0', 0), ('true', 1), ('Off', 0), (True, 1), (False, 0), (1, 1), (0, 0),
+])
+async def test_do_value_is_bool(unit, value, expected):
+    client = await unit()
+    await dev(DO, '1_01').set(value=value)
+    assert client.mb_client.writes == [('coil', 0, expected)]
+
+
+@pytest.mark.parametrize('mode', ['Simple', 'PWM', 'unknown'])
+async def test_do_mode_is_ignored(unit, mode):
+    # mode is accepted for compatibility, it is derived from pwm_duty
+    client = await unit()
+    do = dev(DO, '1_01')
+    await do.set(mode=mode)
+    assert client.mb_client.writes == []
+    await do.set(value=1, mode=mode)
+    assert client.mb_client.writes == [('coil', 0, 1)]
+    await do.check_new_data()
+    assert do.full()['mode'] == 'Simple'
+
+
+@pytest.mark.parametrize('value', ['2', 'x', '1.0'])
+async def test_do_rejects_invalid_value(unit, value):
+    client = await unit()
+    with pytest.raises(ValueError):
+        await dev(DO, '1_01').set(value=value)
     assert client.mb_client.writes == []
 
 

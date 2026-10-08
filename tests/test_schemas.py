@@ -126,6 +126,7 @@ def test_check_params_rejects(dev, kw):
     ('register', {'value': '65535'}), ('do', {'pwm_duty': '50', 'alias': 'nan'}),
     ('wd', {'value': True, 'reset': 'false', 'nv_save': 1}),
     ('do', {'value': 'on'}),                                                   # not a number, checked by the device
+    ('do', {'value': 1, 'mode': 'PWM'}),                                       # mode is accepted for compatibility
 ])
 def test_check_params_accepts(dev, kw):
     check_params(dev, kw)

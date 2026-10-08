@@ -29,7 +29,7 @@ of the table below or as an object with their names.
 | `sensor_get_value`    | `circuit`                            | value of a 1-Wire sensor                                              |
 | `sensor_set`          | `circuit`, `interval`                | state of the 1-Wire sensor                                            |
 
-A value of an output is converted to an integer, so `'0'` switches the output off. The `circuit` can be also an alias.
+A value of an output is a boolean, also `0`, `1` or a string `'true'`, `'on'`, `'1'`, `'false'`, `'off'`, `'0'`. The `circuit` can be also an alias.
 The param `timeout` of `output_set_for_time` is a deprecated alias of `pulse_duration`.
 
 ## Errors

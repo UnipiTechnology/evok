@@ -7,7 +7,7 @@ from tornado_jsonrpc2 import JSONRPCHandler
 from tornado_jsonrpc2.exceptions import MethodNotFound, InvalidParams
 
 from .devices import SENSOR, OWBUS, DI, DO, RO, AI, AO
-from .devices import Devices, DeviceNotFound
+from .devices import Devices, DeviceNotFound, to_bool
 
 
 async def create_response(request, backend):
@@ -117,8 +117,8 @@ class Handler(UserBasicHelper):
 
     async def relay_set(self, circuit, value):
         relay = Devices.by_name(RO, circuit)
-        # int() as in REST, the string "0" is off
-        value = 1 if int(value) else 0
+        # to_bool() as in REST, the string "0" is off
+        value = int(to_bool(value))
         await relay.set(value=value)
         return value
 
@@ -134,7 +134,7 @@ class Handler(UserBasicHelper):
 
     async def output_set(self, circuit, value):
         relay = Devices.by_name(DO, circuit)
-        value = 1 if int(value) else 0
+        value = int(to_bool(value))
         await relay.set(value=value)
         return value
 

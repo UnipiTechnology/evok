@@ -38,7 +38,8 @@ def call(method, params=None):
 
 
 @pytest.mark.parametrize('method', ['output_set', 'relay_set'])
-@pytest.mark.parametrize('value, expected', [('0', 0), ('1', 1), (0, 0), (1, 1), (True, 1), (False, 0)])
+@pytest.mark.parametrize('value, expected', [('0', 0), ('1', 1), (0, 0), (1, 1), (True, 1), (False, 0),
+                                             ('true', 1), ('off', 0)])
 async def test_set_value(outputs, method, value, expected):
     assert await call(method, ['1_01', value]) == expected
     device = outputs[0] if method == 'output_set' else outputs[1]
@@ -72,7 +73,8 @@ async def test_output_set_for_time_by_name(outputs, name):
     ('output_set', {'circuit': '1_01', 'val': 1}),     # unknown param
     ('output_set', ['1_01', 1, 2]),                    # too many params
     ('output_set', '1_01'),                            # params are neither an array nor an object
-    ('output_set', ['1_01', 'on']),                    # invalid value
+    ('output_set', ['1_01', 'x']),                     # invalid value
+    ('output_set', ['1_01', '2']),
     ('output_set', ['9_99', 1]),                       # unknown circuit
     ('output_set_for_time', ['1_01', 1, 0]),           # invalid pulse_duration
     ('output_set_for_time', ['1_01', 1, 'x']),
