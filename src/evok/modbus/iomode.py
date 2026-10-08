@@ -63,15 +63,18 @@ class IOMode:
             raise ValueError(f"{self.name}: this device cant switch mode!")
         return data
 
-    async def set(self, mode: str) -> dict:
+    async def set(self, mode: str, apply: bool = False) -> dict:
         """ Write the mode to the mode register, return its definition
 
-            The write updates the cache, the current mode is changed by the next update().
+            The write updates the cache, the current mode is changed by the next update(),
+            with apply at once, the next update() still reports the change.
             Without a mode register nothing is written and any defined mode is accepted.
         """
         data = self.check(mode)
         if self.accessor.index is not None:
             await self.accessor.write(self.client, int(data['value']))
+        if apply:
+            self.mode = mode
         return data
 
 

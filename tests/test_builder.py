@@ -111,6 +111,14 @@ def test_data_point_without_valid_mask_reg():
     assert not any(d.writable for d in Devices[DATA_POINT].values())
 
 
+def test_invalid_feature_is_skipped(caplog):
+    hw = data_point_hw(datatype='bogus')
+    hw['modbus_features'].append(dict(type='DATA_POINT', count=1, value_reg=5))
+    populate(hw)
+    assert circuits(DATA_POINT) == ['1_5']                 # the other features are created
+    assert 'Invalid feature DATA_POINT' in caplog.text
+
+
 def test_data_point_writable():
     populate(data_point_hw(writable=True))
     assert all(d.writable for d in Devices[DATA_POINT].values())

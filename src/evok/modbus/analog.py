@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Sep 29 09:46:51 2026
-
-@author: bokula
-"""
 from math import isfinite, isnan
 
 from ..devices import AI, AO, REGISTER, DATA_POINT, to_float
@@ -47,7 +42,7 @@ class AnalogInput(WithIOMode, IODevice):
         decimals = transformation.get("decimals", 3 if datatype == "float32" else None)
         logger.debug(f"Applying transformation on analog input {self.circuit}: {datatype} {decimals}")
         return self.accessor.refactor(datatype, ratio=transformation.get("ratio", 1),
-                                      decimals=decimals)
+                                      offset=transformation.get("offset", 0), decimals=decimals)
 
     async def check_new_data(self):
         has_changed = self.iomode.update()
@@ -130,7 +125,7 @@ class AnalogOutputBrain(AnalogInput):
 
     devtype = AO
 
-    modes = {
+    MODES = {
         'Voltage': {
             'value': 0,
             'unit': 'V',
@@ -148,11 +143,14 @@ class AnalogOutputBrain(AnalogInput):
         }
     }
 
-    def __init__(self, circuit, client: Client, reg, regmode=None, reg_res=0, major_group=0):
-        super().__init__(circuit, client, reg, regmode=regmode, major_group=major_group,
-                         modes=AnalogOutputBrain.modes)
+    def __init__(self, circuit, client: Client, reg, regmode=None, reg_res=None, major_group=0):
+        """ Without reg_res, the register of the measured resistance, the Resistance mode is not available """
+        modes = self.MODES if reg_res is not None else \
+            {mode: data for mode, data in self.MODES.items() if mode != 'Resistance'}
+        super().__init__(circuit, client, reg, regmode=regmode, major_group=major_group, modes=modes)
         self.ao_accessor = AccessorFactory.get(reg, 'float32', decimals=3)
-        self.res_accessor = AccessorFactory.get(reg_res, 'float32', decimals=3)
+        self.res_accessor = AccessorFactory.get(reg_res, 'float32', decimals=3) if reg_res is not None \
+            else Accessor(None)
 
     def _make_accessor(self) -> Accessor:
         return self.res_accessor if self.mode == "Resistance" else self.ao_accessor
@@ -168,10 +166,10 @@ class AnalogOutputBrain(AnalogInput):
         return value
 
     async def set_value(self, value: float):
-        """ Set the value in the current mode, it is used also by RPC """
+        """ Set the value in the current mode, return the value written, it is used also by RPC """
         value = self._check_value(value, self.iomode.mode)
         await self.ao_accessor.write(self.client, value)
-        return value
+        return self.ao_accessor.read(self.client)
 
     async def set(self, value=None, mode=None, alias=None):
         """ All params are validated before the first write, the value is checked
@@ -188,8 +186,7 @@ class AnalogOutputBrain(AnalogInput):
             value = self._check_value(value, new_mode)
 
         if mode is not None:
-            await self.iomode.set(mode)
-            self.iomode.mode = mode
+            await self.iomode.set(mode, apply=True)
         if value is not None:
             await self.ao_accessor.write(self.client, value)
         self.set_alias(alias)
@@ -212,7 +209,9 @@ class DataPoint(IODevice):
         """ 16-bit datatypes are signed by default, 32-bit ones are high word first """
         datatype = datatype or 'signed16'
         accessor_cls = AccessorFactory.accessor_classes.get(datatype)
-        word_order = 'big' if accessor_cls is not None and issubclass(accessor_cls, Accessor32) else None
+        if accessor_cls is None:
+            raise ValueError(f'Data point {self.circuit}: unknown datatype "{datatype}"')
+        word_order = 'big' if issubclass(accessor_cls, Accessor32) else None
         return AccessorFactory.get(reg, datatype, is_input=is_input, ratio=factor,
                                    offset=offset, word_order=word_order)
 
@@ -227,7 +226,7 @@ class DataPoint(IODevice):
         except ENoCacheRegister:
             return None
 
-    async def set(self, value=None, alias=None, **kwargs):
+    async def set(self, value=None, alias=None):
         """ Write the value with the inverse transformation of the datatype,
             only a writable data point in a holding register can be written
         """

@@ -229,5 +229,9 @@ class IOParser:
             logger.warning(f"Unknown feature: {m_feature['type']} at board: {self.circuit}")
 
     def populate(self):
+        """ An invalid feature is skipped, the other devices of the unit are created """
         for m_feature in self.hw_features:
-            self.parse_feature(m_feature)
+            try:
+                self.parse_feature(m_feature)
+            except Exception as E:
+                logger.error(f"Invalid feature {m_feature.get('type')} at board {self.circuit}: {E!r}")

@@ -419,6 +419,7 @@ async def test_ai_mode_without_transformation_uses_default():
     ({'datatype': 'int32', 'ratio': 3}, [0xfffe, 0xffff], -6),
     ({'datatype': 'uint32', 'ratio': 0.0001}, [12345, 0], pytest.approx(1.2345)),  # no rounding
     ({'datatype': 'uint32', 'ratio': 0.001, 'decimals': 1}, [12345, 0], 12.3),
+    ({'datatype': 'uint16', 'ratio': 0.1, 'offset': -5, 'decimals': 1}, [100, 0], 5.0),
     ({'datatype': 'bogus'}, [1, 0], None),
 ])
 async def test_ai_transformation_datatypes(transformation, regs, expected):
@@ -649,6 +650,35 @@ async def test_analog_output_brain_set_mode():
     assert ao.unit_name == 'Ohm'
 
 
+async def test_analog_output_brain_mode_is_applied_and_reported():
+    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 0})
+    ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
+    await client.cache.do_scan(initial=True)
+    await ao.check_new_data()
+    await ao.set(mode='Current')
+    assert ao.full()['mode'] == 'Current'                  # at once
+    assert await ao.check_new_data()                        # and sent as an event by the scan
+
+
+async def test_analog_output_brain_without_resistance_register():
+    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 3})
+    ao = AnalogOutputBrain('x', client, 0, regmode=4)
+    assert set(ao.modes) == {'Voltage', 'Current'}
+    await client.cache.do_scan(initial=True)
+    await ao.check_new_data()
+    assert ao.mode is None                                  # the Resistance mode is not defined
+    with pytest.raises(ValueError, match='unknown mode'):
+        await ao.set(mode='Resistance')
+
+
+async def test_analog_output_brain_set_value_returns_value_written():
+    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 0})
+    ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
+    await client.cache.do_scan(initial=True)
+    await ao.check_new_data()
+    assert await ao.set_value('1.23456') == 1.235           # read back, as AnalogOutput
+
+
 async def test_analog_output_brain_same_mode_keeps_value():
     client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 0})
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
@@ -800,15 +830,15 @@ async def test_data_point_input_register():
     assert dp.value == -1
 
 
-async def test_data_point_not_scanned_and_unknown_datatype(caplog):
+async def test_data_point_not_scanned():
     client, dp = make_dp([5])
     await dp.check_new_data()
     assert dp.value is None
-    client, dp = make_dp([5], datatype='bogus')
-    assert 'Unknown datatype "bogus"' in caplog.text
-    await client.cache.do_scan(initial=True)
-    await dp.check_new_data()
-    assert dp.value is None
+
+
+def test_data_point_unknown_datatype():
+    with pytest.raises(ValueError, match='unknown datatype "bogus"'):
+        make_dp([5], datatype='bogus')
 
 
 async def test_data_point_set_value():
