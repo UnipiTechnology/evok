@@ -21,6 +21,7 @@ from .devices import MODBUS_SLAVE, RUN, OWBUS, TCPBUS, SERIALBUS
 from .devices import Devices, devents, devtype_of
 from .handlers_base import EvokWebHandlerBase
 from .log import logger, read_log_tail
+from .modbus.digital import finish_pulses
 from .ws_handler import WsHandler, registered_ws
 
 logging.basicConfig(level=logging.WARNING)
@@ -383,6 +384,8 @@ async def main():
 
     await stop_event.wait()
     httpServerApi.stop()
+    # the pulses are timed by evok, do not leave the outputs in the state of a pulse
+    await finish_pulses()
 
 
 def run():

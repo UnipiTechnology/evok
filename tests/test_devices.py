@@ -6,7 +6,7 @@ import pytest
 from evok.devices import Devices, DI, DO, RO, AI, LED, WATCHDOG
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
 from evok.modbus.builder import IOParser
-from evok.modbus.digital import DigitalInput, DigitalOutput, Relay
+from evok.modbus.digital import DigitalInput, DigitalOutput, Relay, finish_pulses
 from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
 from evok.modbus.special import NvSave
 
@@ -297,6 +297,30 @@ async def test_ro_rejects_invalid_pulse(relay, kw):
     with pytest.raises(ValueError):
         await ro.set(**kw)
     assert client.mb_client.writes == []
+
+
+async def test_finish_pulses_ends_pending_pulses(unit):
+    client = await unit()
+    do, led = dev(DO, '1_01'), dev(LED, '1_02')
+    await do.set(value=1, pulse_duration=10)
+    await led.set(value='0', pulse_duration=10)
+    await finish_pulses()
+    assert client.mb_client.writes[-2:] == [('coil', 0, 0), ('coil', 3001, 1)]
+    assert do.pending_task is None and led.pending_task is None
+    await asyncio.sleep(0.01)
+    assert len(client.mb_client.writes) == 4               # the timers are cancelled
+
+
+async def test_finish_pulses_times_out(unit, caplog):
+    client = await unit()
+    do = dev(DO, '1_01')
+    await do.set(value=1, pulse_duration=10)
+
+    async def hang(address, value):
+        await asyncio.sleep(10)
+    client.mb_client.write_single_coil = hang
+    await finish_pulses(timeout=0.01)
+    assert 'timed out' in caplog.text
 
 
 async def test_do_pulse_end_error_is_logged(unit, caplog):

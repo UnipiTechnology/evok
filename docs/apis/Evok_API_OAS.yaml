@@ -3042,7 +3042,7 @@ components:
             - number
             - string
           examples: [0.5, 5]
-          description: Duration of a single pulse in seconds, the output is set to the opposite of *value* after it. Requires *value*, the output is *pending* during the pulse.
+          description: Duration of a single pulse in seconds, the output is set to the opposite of *value* after it. Requires *value*, the output is *pending* during the pulse. The pulse is timed by Evok, it is ended on shutdown, but not after a crash of Evok.
     Digital_output:
       title: Digital output
       allOf:
@@ -3117,7 +3117,7 @@ components:
             - number
             - string
           examples: [0.5, 5]
-          description: Duration of a single pulse in seconds, the output is set to the opposite of *value* after it. Requires *value*, the output is *pending* during the pulse.
+          description: Duration of a single pulse in seconds, the output is set to the opposite of *value* after it. Requires *value*, the output is *pending* during the pulse. The pulse is timed by Evok, it is ended on shutdown, but not after a crash of Evok.
         timeout:
           type:
             - number
@@ -3452,7 +3452,7 @@ components:
             - number
             - string
           examples: [0.5, 5]
-          description: Duration of a single pulse in seconds, the LED is set to the opposite of *value* after it. Requires *value*, the LED is *pending* during the pulse.
+          description: Duration of a single pulse in seconds, the LED is set to the opposite of *value* after it. Requires *value*, the LED is *pending* during the pulse. The pulse is timed by Evok, it is ended on shutdown, but not after a crash of Evok.
       examples:
         - dev: led
           circuit: 1_01

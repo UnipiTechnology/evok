@@ -14,7 +14,8 @@ class WithPulse:
     """ Mixin for the outputs with a coil, which set a value for a single pulse
 
         After pulse_duration seconds the opposite of the value is written,
-        the output is pending until then.
+        the output is pending until then. The pulse is timed by Evok,
+        finish_pulses() ends the pending pulses on shutdown.
     """
 
     devtype: str
@@ -22,6 +23,7 @@ class WithPulse:
     client: Client
     coil: int
     pending_task: asyncio.Task | None = None
+    pulse_end_value: int | None = None
 
     def _check_pulse(self, parsed_value, pulse_duration) -> float | None:
         """ Return pulse_duration as a float, raise ValueError if it is invalid """
@@ -44,14 +46,38 @@ class WithPulse:
         async def timercallback():
             await asyncio.sleep(pulse_duration)
             self.pending_task = None
-            try:
-                await self.client.mb_client.write_single_coil(self.coil, 1 - parsed_value)
-            except Exception:
-                logger.exception(f"{self.devtype.upper()} {self.circuit}: end of the pulse failed")
+            await self._end_pulse(end_value)
 
         # a concurrent set() could start a pulse while this one awaited the writes
         self._cancel_pulse()
+        end_value = self.pulse_end_value = 1 - parsed_value
         self.pending_task = asyncio.create_task(timercallback())
+
+    async def _end_pulse(self, end_value):
+        try:
+            await self.client.mb_client.write_single_coil(self.coil, end_value)
+        except Exception:
+            logger.exception(f"{self.devtype.upper()} {self.circuit}: end of the pulse failed")
+
+    async def finish_pulse(self):
+        """ End the pending pulse now, the output is not left in the state of the pulse """
+        if self.pending_task is None:
+            return
+        self._cancel_pulse()
+        await self._end_pulse(self.pulse_end_value)
+
+
+async def finish_pulses(timeout: float = 5.0):
+    """ End the pending pulses of all outputs, used on shutdown """
+    outputs = [dev for devtype in (DO, RO, LED) for dev in Devices.by_name(devtype)
+               if isinstance(dev, WithPulse) and dev.pending_task is not None]
+    if not outputs:
+        return
+    logger.info(f"Ending {len(outputs)} pending pulses")
+    try:
+        await asyncio.wait_for(asyncio.gather(*(dev.finish_pulse() for dev in outputs)), timeout)
+    except TimeoutError:
+        logger.error("Ending of the pending pulses timed out, some outputs may stay in the state of the pulse")
 
 
 class DigitalOutput(WithPulse, IODevice):
