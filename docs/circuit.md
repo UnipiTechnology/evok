@@ -13,7 +13,7 @@ The circuit is created automatically during initialization of Evok according to 
 | Analog Output       | *ao*           | <device_name\>_<number\>                          | `1_01`, `xS51_02`          |
 | Analog Input        | *ai*           | <device_name\>_<number\>                          | `1_01`, `xS51_02`          |
 | User LED            | *led*          | <device_name\>_<number\>                          | `1_01`, `2_02`             |
-| Master Watchdog     | *wd*           | <device_name\>_<number\>                          | `1_01`, `1_02`             |
+| Master Watchdog     | *wd*           | <device_name\>                                    | `1`, `2`, `xS51`           |
 | 1-Wire bus          | *owbus*        | <device_name\>                                    | `1`                        |
 | 1-Wire power        | *owpower*      | <device_name\>                                    | `1`                        |
 | Temp sensor         | *temp*         | <1-Wire_address\>                                 | `2895DCD509000035`         | 

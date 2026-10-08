@@ -25,7 +25,7 @@ def test_l0306_creates_all_devices(l0306):
     assert circuits(DI) == ['1_01', '1_02', '1_03', '1_04']
     assert circuits(DO) == ['1_01', '1_02']
     assert circuits(AI) == ['1_01', '1_02', '1_03', '1_04', '1_05']
-    assert circuits(WATCHDOG) == ['1_01']
+    assert circuits(WATCHDOG) == ['1']                     # one per unit, as NV_SAVE
     assert circuits(NV_SAVE) == ['1']
     assert circuits(LED) == ['1_01', '1_02', '1_03']
 

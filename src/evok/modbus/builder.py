@@ -93,21 +93,22 @@ class IOParser:
         _nv_save = NvSave(f"{self.circuit}", self.client, m_feature['val_coil'], major_group=self.circuit)
         self._register(NV_SAVE, _nv_save)
 
-    def parse_feature_wd(self, max_count, m_feature):
-        for i in range(max_count):
-            board_val_reg = m_feature['val_reg']
-            board_timeout_reg = m_feature['timeout_reg']
-            _wd = Watchdog("%s_%02d" % (self.circuit, i + 1), self.client, i, board_val_reg + i,
-                           board_timeout_reg + i, major_group=self.circuit,
-                           nv_save_coil=m_feature['nv_sav_coil'], reset_coil=m_feature['reset_coil'])
-            self._register(WATCHDOG, _wd)
+    def parse_feature_wd(self, m_feature):
+        _wd = Watchdog(self.circuit, self.client,
+                       m_feature['val_reg'],
+                       m_feature['timeout_reg'],
+                       m_feature['nv_sav_coil'],
+                       m_feature['reset_coil'],
+                       major_group=self.circuit)
+        self._register(WATCHDOG, _wd)
 
     def parse_feature_ao(self, max_count, m_feature):
         for i in range(max_count):
+            circuit = "%s_%02d" % (self.circuit, i + 1)
             board_val_reg = m_feature['val_reg']
             modes = m_feature['modes']
             reg_mode = m_feature.get('mode_reg', None)
-            _ao = AnalogOutput("%s_%02d" % (self.circuit, i + 1), self.client, board_val_reg + i,
+            _ao = AnalogOutput(circuit, self.client, board_val_reg + i,
                                major_group=self.circuit, modes=modes, regmode=reg_mode)
             self._register(AO, _ao)
 
@@ -117,7 +118,8 @@ class IOParser:
             raise ValueError(f"BAO can have only one output, count is {max_count}")
         if max_count < 1:
             return
-        _ao = AnalogOutputBrain("%s_01" % self.circuit, self.client, m_feature['val_reg'],
+        circuit = "%s_%02d" % (self.circuit, 1)
+        _ao = AnalogOutputBrain(circuit, self.client, m_feature['val_reg'],
                                 regmode=m_feature.get('mode_reg'), reg_res=m_feature.get('res_val_reg'),
                                 major_group=self.circuit)
         self._register(AO, _ao)
@@ -174,8 +176,6 @@ class IOParser:
             self.parse_feature_do(max_count, m_feature)
         elif m_feature['type'] == 'LED':
             self.parse_feature_led(max_count, m_feature)
-        elif m_feature['type'] == 'WD':
-            self.parse_feature_wd(max_count, m_feature)
         elif m_feature['type'] == 'AO':
             self.parse_feature_ao(max_count, m_feature)
         elif m_feature['type'] == 'BAO':
@@ -186,6 +186,8 @@ class IOParser:
             self.parse_feature_register(max_count, m_feature)
         elif m_feature['type'] == 'DATA_POINT':
             self.parse_feature_data_point(max_count, m_feature)
+        elif m_feature['type'] == 'WD':
+            self.parse_feature_wd(m_feature)
         elif m_feature['type'] == 'OWPOWER':
             self.parse_feature_owpower(m_feature)
         elif m_feature['type'] == 'NV_SAVE':

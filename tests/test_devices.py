@@ -509,7 +509,7 @@ async def test_nv_save_failed_write_releases_timer(nv_save):
 
 async def test_watchdog(unit):
     client = await unit({12: 0b111, 1008: 500})
-    wd = dev(WATCHDOG, '1_01')
+    wd = dev(WATCHDOG, '1')
     assert (wd.value, wd.timeout, wd.was_wd_boot_value) == (3, 500, 1)
     await wd.set(value=0, timeout=70000)
     assert client.mb_client.holding[12] == 0

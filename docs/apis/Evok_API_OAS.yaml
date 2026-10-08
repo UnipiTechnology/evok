@@ -219,7 +219,7 @@ paths:
                       circuit: '1_04'
                       value: 0
                     - dev: wd
-                      circuit: '1_01'
+                      circuit: '1'
                       value: 0
                       timeout: 5000
                       was_wd_reset: 0
@@ -1639,18 +1639,18 @@ paths:
                     items:
                       $ref: '#/components/schemas/Watchdog'
               examples:
-                1_01:
+                '1':
                   value:
                     dev: wd
-                    circuit: '1_01'
+                    circuit: '1'
                     value: 0
                     timeout: 2500
                     was_wd_reset: 0
                     nv_save: 0
-                1_02:
+                '2':
                   value:
                     dev: wd
-                    circuit: '1_02'
+                    circuit: '2'
                     value: 0
                     timeout: 5000
                     was_wd_reset: 0
@@ -1658,19 +1658,19 @@ paths:
                 all:
                   value:
                     - dev: wd
-                      circuit: '1_01'
+                      circuit: '1'
                       value: 0
                       timeout: 2500
                       was_wd_reset: 0
                       nv_save: 0
                     - dev: wd
-                      circuit: '1_02'
+                      circuit: '2'
                       value: 0
                       timeout: 5000
                       was_wd_reset: 0
                       nv_save: 0
                     - dev: wd
-                      circuit: '1_03'
+                      circuit: '3'
                       value: 0
                       timeout: 2500
                       was_wd_reset: 0
@@ -1683,18 +1683,18 @@ paths:
                     items:
                       $ref: '#/components/schemas/Watchdog'
               examples:
-                1_01:
+                '1':
                   value:
                     dev: wd
-                    circuit: '1_01'
+                    circuit: '1'
                     value: 0
                     timeout: 2500
                     was_wd_reset: 0
                     nv_save: 0
-                1_02:
+                '2':
                   value:
                     dev: wd
-                    circuit: '1_02'
+                    circuit: '2'
                     value: 0
                     timeout: 5000
                     was_wd_reset: 0
@@ -1702,19 +1702,19 @@ paths:
                 all:
                   value:
                     - dev: wd
-                      circuit: '1_01'
+                      circuit: '1'
                       value: 0
                       timeout: 2500
                       was_wd_reset: 0
                       nv_save: 0
                     - dev: wd
-                      circuit: '1_02'
+                      circuit: '2'
                       value: 0
                       timeout: 5000
                       was_wd_reset: 0
                       nv_save: 0
                     - dev: wd
-                      circuit: '1_03'
+                      circuit: '3'
                       value: 0
                       timeout: 2500
                       was_wd_reset: 0
@@ -1731,7 +1731,7 @@ paths:
     parameters:
       - schema:
           type: string
-          examples: ['1_01', '1_02', '1_03']
+          examples: ['1', '2', '3']
         name: circuit
         in: path
         required: true
@@ -3552,7 +3552,7 @@ components:
       x-examples:
         Example 1:
           dev: wd
-          circuit: 1_01
+          circuit: '1'
           value: 0
           timeout: 5000
           was_wd_reset: 0
@@ -3578,7 +3578,7 @@ components:
           writeOnly: true
       examples:
         - dev: wd
-          circuit: 1_01
+          circuit: '1'
           value: 0
           timeout: 5000
           was_wd_reset: 0

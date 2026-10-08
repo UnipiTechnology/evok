@@ -89,14 +89,13 @@ class Watchdog(IODevice):
 
     devtype = WATCHDOG
 
-    def __init__(self, circuit, client: Client, post, reg, timeout_reg, nv_save_coil=-1, reset_coil=-1,
-                 wd_reset_ro_coil=-1, major_group=0):
+    def __init__(self, circuit, client: Client, reg, timeout_reg, nv_save_coil, reset_coil,
+                 major_group=0):
         super().__init__(circuit, client, major_group)
         self.nvsavvalue = 0
         self.resetvalue = 0
         self.nv_save_coil = nv_save_coil
         self.reset_coil = reset_coil
-        self.wd_reset_ro_coil = wd_reset_ro_coil
         self.wdwasresetvalue = 0
         self.accessor = AccessorU16(reg)
         self.accessor_timeout = AccessorU16(timeout_reg)

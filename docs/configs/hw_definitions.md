@@ -188,16 +188,16 @@ Allows you to add an analog input for the Modbus device.
 
 ### WD (watchdog)
 
-Allows you to add a watchdog for the Modbus device.
+Allows you to add a watchdog for the Modbus device. A device has one watchdog, `count` is not used,
+its circuit is the name of the device.
 
 - `val_reg` - value register address
 - `timeout_reg` - timeout register address
-- `nv_save_coil` - NV save coil address
+- `nv_sav_coil` - NV save coil address
 - `reset_coil` - reset coil address
 
 ```yaml title="Example"
   - type        : WD
-    count       : 1
     val_reg     : 6
     timeout_reg : 1008
     nv_sav_coil : 1003
