@@ -73,6 +73,7 @@ class Handler(UserBasicHelper):
         'input_set',
         'relay_get',
         'relay_set',
+        'relay_set_for_time',
         'output_get',
         'output_set',
         'output_set_for_time',
@@ -121,6 +122,11 @@ class Handler(UserBasicHelper):
         await relay.set(value=value)
         return value
 
+    async def relay_set_for_time(self, circuit, value, pulse_duration):
+        relay = Devices.by_name(RO, circuit)
+        await relay.set(value=value, pulse_duration=self._pulse_duration(pulse_duration))
+        return relay.full()
+
     def output_get(self, circuit):
         relay = Devices.by_name(DO, circuit)
         state = relay.get()
@@ -132,13 +138,22 @@ class Handler(UserBasicHelper):
         await relay.set(value=value)
         return value
 
-    async def output_set_for_time(self, circuit, value, timeout):
+    async def output_set_for_time(self, circuit, value, pulse_duration=None, timeout=None):
+        """ timeout is a deprecated alias of pulse_duration """
+        if (pulse_duration is None) == (timeout is None):
+            raise ValueError('Exactly one of pulse_duration and its deprecated alias timeout is required')
+        if pulse_duration is None:
+            pulse_duration = timeout
         relay = Devices.by_name(DO, circuit)
-        timeout = float(timeout)
-        if timeout <= 0:
-            raise ValueError('Invalid timeout %s' % str(timeout))
-        await relay.set(value, timeout)
+        await relay.set(value, self._pulse_duration(pulse_duration))
         return relay.full()
+
+    @staticmethod
+    def _pulse_duration(pulse_duration) -> float:
+        pulse_duration = float(pulse_duration)
+        if pulse_duration <= 0:
+            raise ValueError('Invalid pulse_duration %s' % str(pulse_duration))
+        return pulse_duration
 
     # ---- Analog Input ----
     def ai_get(self, circuit):

@@ -3,9 +3,10 @@ import math
 
 import pytest
 
-from evok.devices import Devices, DI, DO, AI, LED, WATCHDOG
+from evok.devices import Devices, DI, DO, RO, AI, LED, WATCHDOG
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
 from evok.modbus.builder import IOParser
+from evok.modbus.digital import Relay
 from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
 from evok.modbus.special import NvSave
 
@@ -129,13 +130,130 @@ async def test_do_set_pwm_duty(unit):
     assert do.mode == 'PWM'
 
 
-async def test_do_timeout_reverts_value(unit):
+@pytest.mark.parametrize('name', ['pulse_duration', 'timeout'])
+async def test_do_pulse_reverts_value(unit, name):
+    # timeout is a deprecated alias of pulse_duration
     client = await unit()
     do = dev(DO, '1_01')
-    await do.set(value=1, timeout=0.01)
+    await do.set(value=1, **{name: 0.01})
     assert do.full()['pending'] is True
     await asyncio.sleep(0.05)
     assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0)]
+    assert do.pending_task is None
+
+
+async def test_do_rejects_pulse_duration_with_timeout(unit):
+    client = await unit()
+    do = dev(DO, '1_01')
+    with pytest.raises(ValueError):
+        await do.set(value=1, pulse_duration=1, timeout=1)
+    assert client.mb_client.writes == []
+
+
+async def test_do_pulse_inverts_string_value(unit):
+    client = await unit()
+    do = dev(DO, '1_01')
+    await do.set(value='0', pulse_duration=0.01)
+    await asyncio.sleep(0.05)
+    assert client.mb_client.writes == [('coil', 0, 0), ('coil', 0, 1)]
+
+
+@pytest.mark.parametrize('kw', [
+    {'pulse_duration': 1},                                  # without value
+    {'pwm_duty': 50, 'pulse_duration': 1},
+    {'value': 1, 'pulse_duration': 0}, {'value': 1, 'pulse_duration': -1},
+    {'value': 1, 'pulse_duration': 'nan'}, {'value': 1, 'pulse_duration': float('inf')},
+])
+async def test_do_rejects_invalid_pulse(unit, kw):
+    client = await unit()
+    with pytest.raises(ValueError):
+        await dev(DO, '1_01').set(**kw)
+    assert client.mb_client.writes == []
+
+
+@pytest.mark.parametrize('kw', [
+    {'alias': 'pulsed'}, {'pwm_freq': 100},                 # do not change the output
+    {'value': 1, 'pwm_duty': 50},                           # rejected
+])
+async def test_do_pulse_is_kept(unit, kw):
+    client = await unit()
+    do = dev(DO, '1_01')
+    await do.set(value=1, pulse_duration=0.01)
+    try:
+        await do.set(**kw)
+    except ValueError:
+        pass
+    assert do.pending_task is not None
+    await asyncio.sleep(0.05)
+    assert client.mb_client.writes[-1] == ('coil', 0, 0)
+
+
+async def test_do_new_value_cancels_pulse(unit):
+    client = await unit()
+    do = dev(DO, '1_01')
+    await do.set(value=1, pulse_duration=0.01)
+    await do.set(value=1)
+    await asyncio.sleep(0.05)
+    assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 1)]
+
+
+async def test_do_concurrent_pulses_keep_the_last(unit):
+    client = await unit()
+    do = dev(DO, '1_01')
+    await asyncio.gather(do.set(value=1, pulse_duration=0.01), do.set(value=0, pulse_duration=0.01))
+    await asyncio.sleep(0.05)
+    assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0), ('coil', 0, 1)]
+    assert do.pending_task is None
+
+
+@pytest.fixture
+def relay(unit):
+    """ Relay on the coil 10 of the L0306 unit, which has no relays """
+    async def factory():
+        client = await unit()
+        Devices[RO]['9_01'] = Relay('9_01', client, 10, 0, 1)
+        return client, Devices[RO]['9_01']
+    return factory
+
+
+async def test_ro_pulse(relay):
+    client, ro = await relay()
+    await ro.set(value='1', pulse_duration=0.01)
+    assert ro.full()['pending'] is True
+    await ro.set(alias='pulsed_ro')                         # does not change the output
+    await asyncio.sleep(0.05)
+    assert client.mb_client.writes == [('coil', ro.coil, 1), ('coil', ro.coil, 0)]
+    assert ro.full()['pending'] is False
+
+
+async def test_ro_new_value_cancels_pulse(relay):
+    client, ro = await relay()
+    await ro.set(value=1, pulse_duration=0.01)
+    await ro.set(value=0)
+    await asyncio.sleep(0.05)
+    assert client.mb_client.writes == [('coil', ro.coil, 1), ('coil', ro.coil, 0)]
+
+
+@pytest.mark.parametrize('kw', [
+    {'pulse_duration': 1}, {'value': 1, 'pulse_duration': 0}, {'value': 1, 'pulse_duration': 'nan'},
+])
+async def test_ro_rejects_invalid_pulse(relay, kw):
+    client, ro = await relay()
+    with pytest.raises(ValueError):
+        await ro.set(**kw)
+    assert client.mb_client.writes == []
+
+
+async def test_do_pulse_end_error_is_logged(unit, caplog):
+    client = await unit()
+    do = dev(DO, '1_01')
+    await do.set(value=1, pulse_duration=0.01)
+
+    async def fail(address, value):
+        raise ConnectionError('lost')
+    client.mb_client.write_single_coil = fail
+    await asyncio.sleep(0.05)
+    assert 'end of the pulse failed' in caplog.text
     assert do.pending_task is None
 
 
@@ -280,6 +398,18 @@ async def test_led(unit):
     assert [dev(LED, c).value for c in ('1_01', '1_02', '1_03')] == [1, 0, 1]
     await dev(LED, '1_02').set(value=1)
     assert client.mb_client.writes == [('coil', 3001, 1)]
+
+
+async def test_led_pulse(unit):
+    client = await unit()
+    led = dev(LED, '1_02')
+    await led.set(value=1, pulse_duration=0.01)
+    assert led.full()['pending'] is True
+    await asyncio.sleep(0.05)
+    assert client.mb_client.writes == [('coil', 3001, 1), ('coil', 3001, 0)]
+    assert led.full()['pending'] is False
+    with pytest.raises(ValueError):
+        await led.set(pulse_duration=1)                     # without value
 
 
 # --- AnalogOutput -----------------------------------------------------------

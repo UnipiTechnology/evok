@@ -70,6 +70,8 @@ async def send(client, message):
     ({'value': '0'}, {'value': '0'}),
     ({'value': {'value': 1, 'timeout': 5}}, {'value': 1, 'timeout': 5}),
     ({'value': 1, 'timeout': '2'}, {'value': 1, 'timeout': '2'}),
+    ({'value': {'value': 1, 'pulse_duration': 5}}, {'value': 1, 'pulse_duration': 5}),
+    ({'value': 1, 'pulse_duration': '2'}, {'value': 1, 'pulse_duration': '2'}),
     ({'pwm_duty': 50}, {'pwm_duty': 50}),
 ])
 async def test_set(ws, message, expected):

@@ -17,10 +17,58 @@ from .iomode import DIMode, WithDIMode
 from .pwm import PwmFrequency
 
 
-class DigitalOutput(IODevice):
+def parse_value(value) -> Union[None, int]:
+    """ The on/off value of an output, 1 or 0 """
+    return None if value is None else 1 if int(value) else 0
+
+
+class WithPulse:
+    """ Mixin for the outputs with a coil, which set a value for a single pulse
+
+        After pulse_duration seconds the opposite of the value is written,
+        the output is pending until then.
+    """
+
+    devtype: str
+    circuit: str
+    client: Client
+    coil: int
+    pending_task: Union[None, asyncio.Task] = None
+
+    def _check_pulse(self, parsed_value, pulse_duration) -> Union[None, float]:
+        """ Return pulse_duration as a float, raise ValueError if it is invalid """
+        if pulse_duration is None:
+            return None
+        if parsed_value is None:
+            raise ValueError(f'{self.devtype.upper()} {self.circuit}: pulse_duration requires value')
+        pulse_duration = to_float(pulse_duration)
+        if pulse_duration <= 0:
+            raise ValueError(f'{self.devtype.upper()} {self.circuit}: pulse_duration {pulse_duration} must be positive')
+        return pulse_duration
+
+    def _cancel_pulse(self):
+        if self.pending_task is not None:
+            self.pending_task.cancel()
+            self.pending_task = None
+
+    def _start_pulse(self, parsed_value, pulse_duration):
+        """ Call after the value has been written """
+        async def timercallback():
+            await asyncio.sleep(pulse_duration)
+            self.pending_task = None
+            try:
+                await self.client.mb_client.write_single_coil(self.coil, 1 - parsed_value)
+            except Exception:
+                logger.exception(f"{self.devtype.upper()} {self.circuit}: end of the pulse failed")
+
+        # a concurrent set() could start a pulse while this one awaited the writes
+        self._cancel_pulse()
+        self.pending_task = asyncio.create_task(timercallback())
+
+
+class DigitalOutput(WithPulse, IODevice):
 
     devtype = DO
-    pending_task: Union[None, asyncio.Task] = None
 
     def __init__(self, circuit, client: Client, coil, reg, mask, major_group=0,
                  pwm: Union[None, PwmFrequency] = None, pwmdutyreg=-1, modes=None):
@@ -71,12 +119,23 @@ class DigitalOutput(IODevice):
         self.value = self.accessor.read(self.client)
         return is_change or old_value != self.value
 
-    async def set(self, value=None, timeout=None, mode=None, pwm_freq=None, pwm_duty=None, alias=None):
-        """ Sets new on/off status. Disable pending timeouts """
+    async def set(self, value=None, pulse_duration=None, mode=None, pwm_freq=None, pwm_duty=None, alias=None,
+                  timeout=None):
+        """ Sets new on/off status. A new value or pwm_duty disables the pending pulse
+
+            pulse_duration in seconds sets the opposite of value after the pulse, it requires value,
+            timeout is its deprecated alias
+        """
         try:
-            if self.pending_task is not None:
-                self.pending_task.cancel()
-                self.pending_task = None
+            if timeout is not None:
+                if pulse_duration is not None:
+                    raise ValueError(f'DO {self.circuit}: timeout is a deprecated alias of pulse_duration, '
+                                     f'do not set both')
+                pulse_duration = timeout
+
+            # parse before any write, the pulse inverts the parsed value
+            parsed_value = parse_value(value)
+            pulse_duration = self._check_pulse(parsed_value, pulse_duration)
 
             if pwm_duty is not None:
                 pwm_duty = to_float(pwm_duty)
@@ -88,6 +147,15 @@ class DigitalOutput(IODevice):
                 if pwm_freq <= 0:
                     raise ValueError(f'DO {self.circuit}: pwm_freq {pwm_freq} must be positive')
 
+            if parsed_value is not None and pwm_duty is not None:
+                # No conflict in this case
+                if not ((pwm_duty == 100 and parsed_value == 1) or (pwm_duty == 0 and parsed_value == 0)):
+                    raise ValueError('Set value conflict: Cannot set both value and pwm_duty at once.')
+
+            # a rejected request keeps the pending pulse
+            if parsed_value is not None or pwm_duty is not None:
+                self._cancel_pulse()
+
             # if pwm_duty is not None and self.mode == 'PWM' and float(pwm_duty) <= 0.01:
             #    mode = 'Simple'
             # New system - mode field will no longer be used
@@ -96,20 +164,7 @@ class DigitalOutput(IODevice):
                 await self.set_pwm_freq(pwm_freq)
 
             # Set Binary value
-            if value is not None:
-
-                parsed_value = 1 if int(value) else 0
-
-                if pwm_duty is not None:
-                    # No conflict in this case
-                    if (pwm_duty == 100 and parsed_value == 1) or (pwm_duty == 0 and parsed_value == 0):
-                        pass
-                    else:
-                        raise ValueError('Set value conflict: Cannot set both value and pwm_duty at once.')
-
-                if timeout is not None:
-                    timeout = float(timeout)
-
+            if parsed_value is not None:
                 self.mode = 'Simple'
                 await self.client.mb_client.write_single_coil(self.coil, parsed_value)
                 if self.pwm_duty:
@@ -126,15 +181,8 @@ class DigitalOutput(IODevice):
 
             self.set_alias(alias)
 
-            if timeout is None:
-                return
-
-            async def timercallback():
-                await asyncio.sleep(float(timeout))
-                self.pending_task = None
-                await self.client.mb_client.write_single_coil(self.coil, 0 if value else 1)
-
-            self.pending_task = asyncio.create_task(timercallback())
+            if pulse_duration is not None:
+                self._start_pulse(parsed_value, pulse_duration)
 
         except Exception as E:
             logger.error(f"Error in set DO: {E}")
@@ -154,7 +202,7 @@ class DigitalOutput(IODevice):
                     dev.pwm_duty_val = raw
 
 
-class Relay(IODevice):
+class Relay(WithPulse, IODevice):
 
     devtype = RO
 
@@ -170,6 +218,7 @@ class Relay(IODevice):
         ret = {'dev': 'ro',
                'circuit': self.circuit,
                'value': self.value,
+               'pending': self.pending_task is not None,
                }
         self._with_alias(ret)
         if forced_value is not None:
@@ -181,13 +230,21 @@ class Relay(IODevice):
         self.value = self.accessor.read(self.client)
         return old_value != self.value
 
-    async def set(self, value=None, alias=None):
-        """ Sets new on/off status """
-        if value is not None:
-            parsed_value = 1 if int(value) else 0
+    async def set(self, value=None, pulse_duration=None, alias=None):
+        """ Sets new on/off status. A new value disables the pending pulse
+
+            pulse_duration in seconds sets the opposite of value after the pulse, it requires value
+        """
+        parsed_value = parse_value(value)
+        pulse_duration = self._check_pulse(parsed_value, pulse_duration)
+        if parsed_value is not None:
+            self._cancel_pulse()
             await self.client.mb_client.write_single_coil(self.coil, parsed_value)
 
         self.set_alias(alias)
+
+        if pulse_duration is not None:
+            self._start_pulse(parsed_value, pulse_duration)
 
 
 class ULED(Relay):
@@ -195,7 +252,8 @@ class ULED(Relay):
     devtype = LED
 
     def full(self):
-        ret = {'dev': 'led', 'circuit': self.circuit, 'value': self.value}
+        ret = {'dev': 'led', 'circuit': self.circuit, 'value': self.value,
+               'pending': self.pending_task is not None}
         self._with_alias(ret)
         return ret
 

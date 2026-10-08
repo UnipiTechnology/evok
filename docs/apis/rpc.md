@@ -7,28 +7,30 @@ of the table below or as an object with their names.
 
 ## Methods
 
-| Method                | Params                        | Result                                                         |
-|-----------------------|-------------------------------|----------------------------------------------------------------|
-| `input_get`           | `circuit`                     | `[value, debounce]` of a DI                                    |
-| `input_get_value`     | `circuit`                     | value of a DI                                                  |
-| `input_set`           | `circuit`, `debounce`         | state of the DI                                                |
-| `relay_get`           | `circuit`                     | value of a relay output (RO)                                   |
-| `relay_set`           | `circuit`, `value`            | the value set, `0` or `1`                                      |
-| `output_get`          | `circuit`                     | `[value, pending]` of a DO, `pending` is true during a timeout |
-| `output_set`          | `circuit`, `value`            | the value set, `0` or `1`                                      |
-| `output_set_for_time` | `circuit`, `value`, `timeout` | state of the DO, the value is inverted after `timeout` seconds |
-| `ai_get`              | `circuit`                     | state of an AI                                                 |
-| `ao_set_value`        | `circuit`, `value`            | the value written to an AO                                     |
-| `ao_set`              | `circuit`, `value`, `mode`    | state of the AO                                                |
-| `owbus_get`           | `circuit`                     | scan interval of a 1-Wire bus                                  |
-| `owbus_set`           | `circuit`, `scan_interval`    | state of the 1-Wire bus                                        |
-| `owbus_scan`          | `circuit`                     | state of the 1-Wire bus, the scan is started                   |
-| `owbus_list`          | `circuit`                     | addresses of the sensors on the 1-Wire bus by their type       |
-| `sensor_get`          | `circuit`                     | `[value, lost, readtime, interval]` of a 1-Wire sensor         |
-| `sensor_get_value`    | `circuit`                     | value of a 1-Wire sensor                                       |
-| `sensor_set`          | `circuit`, `interval`         | state of the 1-Wire sensor                                     |
+| Method                | Params                               | Result                                                                |
+|-----------------------|--------------------------------------|-----------------------------------------------------------------------|
+| `input_get`           | `circuit`                            | `[value, debounce]` of a DI                                           |
+| `input_get_value`     | `circuit`                            | value of a DI                                                         |
+| `input_set`           | `circuit`, `debounce`                | state of the DI                                                       |
+| `relay_get`           | `circuit`                            | value of a relay output (RO)                                          |
+| `relay_set`           | `circuit`, `value`                   | the value set, `0` or `1`                                             |
+| `relay_set_for_time`  | `circuit`, `value`, `pulse_duration` | state of the RO, the value is inverted after `pulse_duration` seconds |
+| `output_get`          | `circuit`                            | `[value, pending]` of a DO, `pending` is true during a pulse          |
+| `output_set`          | `circuit`, `value`                   | the value set, `0` or `1`                                             |
+| `output_set_for_time` | `circuit`, `value`, `pulse_duration` | state of the DO, the value is inverted after `pulse_duration` seconds |
+| `ai_get`              | `circuit`                            | state of an AI                                                        |
+| `ao_set_value`        | `circuit`, `value`                   | the value written to an AO                                            |
+| `ao_set`              | `circuit`, `value`, `mode`           | state of the AO                                                       |
+| `owbus_get`           | `circuit`                            | scan interval of a 1-Wire bus                                         |
+| `owbus_set`           | `circuit`, `scan_interval`           | state of the 1-Wire bus                                               |
+| `owbus_scan`          | `circuit`                            | state of the 1-Wire bus, the scan is started                          |
+| `owbus_list`          | `circuit`                            | addresses of the sensors on the 1-Wire bus by their type              |
+| `sensor_get`          | `circuit`                            | `[value, lost, readtime, interval]` of a 1-Wire sensor                |
+| `sensor_get_value`    | `circuit`                            | value of a 1-Wire sensor                                              |
+| `sensor_set`          | `circuit`, `interval`                | state of the 1-Wire sensor                                            |
 
 A value of an output is converted to an integer, so `'0'` switches the output off. The `circuit` can be also an alias.
+The param `timeout` of `output_set_for_time` is a deprecated alias of `pulse_duration`.
 
 ## Errors
 

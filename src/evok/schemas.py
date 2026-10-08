@@ -25,6 +25,7 @@ led_post_inp_schema = {
     "additionalProperties": False,
     "properties": {
         "value": {"type": ["boolean", "string", "number"]},
+        "pulse_duration": {"type": ["number", "string"], "minimum": 0},   # 0 is rejected by the device
         "alias": ALIAS
     },
 }
@@ -38,6 +39,7 @@ relay_post_inp_schema = {
     "additionalProperties": False,
     "properties": {
         "value": {"type": ["boolean", "string", 'number']},
+        "pulse_duration": {"type": ["number", "string"], "minimum": 0},   # 0 is rejected by the device
         "alias": ALIAS
     },
 }
@@ -52,7 +54,8 @@ do_post_inp_schema = {
     "properties": {
         "value": {"type": ["boolean", "string", 'number']},
         "mode": {"type": "string"},
-        "timeout": {"type": ["number", "string"]},
+        "pulse_duration": {"type": ["number", "string"], "minimum": 0},   # 0 is rejected by the device
+        "timeout": {"type": ["number", "string"], "minimum": 0},          # deprecated alias of pulse_duration
         "pwm_freq": {"type": ["number", "string"], "minimum": 0},     # 0 is rejected by the device
         "pwm_duty": {"type": ["number", "string"], "minimum": 0, "maximum": 100},
         "alias": ALIAS

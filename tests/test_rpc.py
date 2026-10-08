@@ -17,10 +17,10 @@ class FakeOutput:
     def full(self):
         return {'dev': self.devtype, 'circuit': self.circuit}
 
-    async def set(self, value=None, timeout=None):
+    async def set(self, value=None, pulse_duration=None):
         if value is not None and int(value) > 1:
             raise ValueError('Value out of range')
-        self.values.append((value, timeout))
+        self.values.append((value, pulse_duration))
 
 
 @pytest.fixture
@@ -49,8 +49,21 @@ async def test_set_by_name(outputs):
     assert await call('output_set', {'circuit': '1_01', 'value': '1'}) == 1
 
 
-async def test_output_set_for_time_string_timeout(outputs):
+async def test_output_set_for_time_string_pulse_duration(outputs):
     await call('output_set_for_time', ['1_01', 1, '5'])
+    assert outputs[0].values == [(1, 5.0)]
+
+
+async def test_relay_set_for_time(outputs):
+    assert await call('relay_set_for_time', ['1_01', '1', '5']) == {'dev': 'ro', 'circuit': '1_01'}
+    assert await call('relay_set_for_time', {'circuit': '1_01', 'value': 0, 'pulse_duration': 0.5})
+    assert outputs[1].values == [('1', 5.0), (0, 0.5)]
+
+
+@pytest.mark.parametrize('name', ['pulse_duration', 'timeout'])
+async def test_output_set_for_time_by_name(outputs, name):
+    # timeout is a deprecated alias of pulse_duration
+    await call('output_set_for_time', {'circuit': '1_01', 'value': 1, name: 5})
     assert outputs[0].values == [(1, 5.0)]
 
 
@@ -61,13 +74,19 @@ async def test_output_set_for_time_string_timeout(outputs):
     ('output_set', '1_01'),                            # params are neither an array nor an object
     ('output_set', ['1_01', 'on']),                    # invalid value
     ('output_set', ['9_99', 1]),                       # unknown circuit
-    ('output_set_for_time', ['1_01', 1, 0]),           # invalid timeout
+    ('output_set_for_time', ['1_01', 1, 0]),           # invalid pulse_duration
     ('output_set_for_time', ['1_01', 1, 'x']),
+    ('output_set_for_time', ['1_01', 1]),              # missing pulse_duration
+    ('output_set_for_time', {'circuit': '1_01', 'value': 1, 'pulse_duration': 5, 'timeout': 5}),  # both
+    ('relay_set_for_time', ['1_01', 1, 0]),            # invalid pulse_duration
+    ('relay_set_for_time', ['1_01', 1, 'x']),
+    ('relay_set_for_time', ['1_01', 1]),               # missing pulse_duration
+    ('relay_set_for_time', {'circuit': '1_01', 'value': 1, 'timeout': 5}),  # no deprecated alias
 ])
 async def test_invalid_params(outputs, method, params):
     with pytest.raises(InvalidParams):
         await call(method, params)
-    assert outputs[0].values == []
+    assert outputs[0].values == [] and outputs[1].values == []
 
 
 async def test_unknown_method():

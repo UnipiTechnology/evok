@@ -3008,6 +3008,11 @@ components:
               examples: ['2_01', '2_02', '2_03', '2_04']
               description: Device circuit (or "all"). You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
               readOnly: true
+            pending:
+              type: boolean
+              examples: [false]
+              description: True during a pulse set by *pulse_duration*.
+              readOnly: true
         - $ref: '#/components/schemas/Relay_output_params'
           x-stoplight:
             id: 2b4dkqf8rzvj3
@@ -3032,6 +3037,12 @@ components:
             - string
             - boolean
           description: Parameter for relay switch.
+        pulse_duration:
+          type:
+            - number
+            - string
+          examples: [0.5, 5]
+          description: Duration of a single pulse in seconds, the output is set to the opposite of *value* after it. Requires *value*, the output is *pending* during the pulse.
     Digital_output:
       title: Digital output
       allOf:
@@ -3055,6 +3066,11 @@ components:
                 - ["Simple", "PWM"]
               items:
                 type: string
+            pending:
+              type: boolean
+              examples: [false]
+              description: True during a pulse set by *pulse_duration*.
+              readOnly: true
         - $ref: '#/components/schemas/Digital_output_params'
           x-stoplight:
             id: 2b4dkqf321vj3
@@ -3096,6 +3112,18 @@ components:
             - string
             - boolean
           description: Parameter is mutually exclusive with *pwm_duty*
+        pulse_duration:
+          type:
+            - number
+            - string
+          examples: [0.5, 5]
+          description: Duration of a single pulse in seconds, the output is set to the opposite of *value* after it. Requires *value*, the output is *pending* during the pulse.
+        timeout:
+          type:
+            - number
+            - string
+          deprecated: true
+          description: Deprecated alias of *pulse_duration*, cannot be used together with it.
         mode:
           readOnly: true
           enum:
@@ -3419,6 +3447,12 @@ components:
           x-stoplight:
             id: 5qx17mlwxozy2
           description: Actual value of single user LED.
+        pulse_duration:
+          type:
+            - number
+            - string
+          examples: [0.5, 5]
+          description: Duration of a single pulse in seconds, the LED is set to the opposite of *value* after it. Requires *value*, the LED is *pending* during the pulse.
       examples:
         - dev: led
           circuit: 1_01
@@ -3444,6 +3478,11 @@ components:
               type: string
               examples: ['1_01', '1_02', '1_03']
               description: Device circuit (or "all"). You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
+              readOnly: true
+            pending:
+              type: boolean
+              examples: [false]
+              description: True during a pulse set by *pulse_duration*.
               readOnly: true
         - $ref: '#/components/schemas/Led_params'
           x-stoplight:

@@ -28,7 +28,7 @@ only the devices passing the filter are returned, the default filter returns DI,
 Sets the params of a device, the same params as in [REST](rest.md) are accepted and validated. The params can be passed
 
 - in `value` as the value of the device: `{"cmd": "set", "dev": "do", "circuit": "1_01", "value": 1}`
-- in `value` as an object: `{"cmd": "set", "dev": "do", "circuit": "1_01", "value": {"value": 1, "timeout": 5}}`
+- in `value` as an object: `{"cmd": "set", "dev": "do", "circuit": "1_01", "value": {"value": 1, "pulse_duration": 5}}`
 - as other keys of the message: `{"cmd": "set", "dev": "di", "circuit": "1_01", "debounce": 50}`
 
 The `value` is always the param `value` of the device, e.g. the debounce of a DI must be set by `debounce`.
