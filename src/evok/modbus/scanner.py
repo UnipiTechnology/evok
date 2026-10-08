@@ -109,10 +109,15 @@ class ModbusScanner:
         if not self.scan_enabled:
             return
 
+        loop = asyncio.get_running_loop()
         interval = self.scan_interval
         err = False
+        next_scan = loop.time()
         while True:
-            await asyncio.sleep(interval)
+            # the interval is the period of the scans, not the pause after a scan;
+            # a scan longer than the interval is followed by the next one, the missed ones are not caught up
+            next_scan = max(next_scan + interval, loop.time())
+            await asyncio.sleep(next_scan - loop.time())
             if await self._scan_unit():
                 if err:
                     err = False

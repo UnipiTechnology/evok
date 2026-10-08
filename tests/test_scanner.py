@@ -107,3 +107,37 @@ async def test_repeated_unexpected_error_of_scan_is_logged_once(l0306, caplog):
     scanner.client.do_scan = broken
     assert not await scanner._scan_unit()
     assert caplog.text.count('RuntimeError: bug') == 2
+
+
+async def test_scan_interval_is_period_of_scans(l0306):
+    """ The pause after a scan was the interval, a scan of 30 ms at 20 Hz was repeated every 80 ms """
+    scanner, mb = make_scanner(l0306, scan_freq=20)
+    scanner.populated = True
+    scans = []
+
+    async def slow_scan():
+        scans.append(asyncio.get_running_loop().time())
+        await asyncio.sleep(0.03)
+        return True
+    scanner.client.do_scan = slow_scan
+    scanner.start_scanning()
+    await asyncio.sleep(1)
+    scanner.stop_scanning()
+    assert len(scans) >= 17                                     # 20 per second, 12 with the pause after a scan
+
+
+async def test_long_scan_is_not_caught_up(l0306):
+    """ A scan longer than the interval is followed by the next one, without a burst of the missed ones """
+    scanner, mb = make_scanner(l0306, scan_freq=20)
+    scanner.populated = True
+    scans = []
+
+    async def scan():
+        scans.append(asyncio.get_running_loop().time())
+        await asyncio.sleep(0.3 if len(scans) == 1 else 0)
+        return True
+    scanner.client.do_scan = scan
+    scanner.start_scanning()
+    await asyncio.sleep(0.5)
+    scanner.stop_scanning()
+    assert scans[2] - scans[1] > 0.04                           # not the 5 missed scans at once
