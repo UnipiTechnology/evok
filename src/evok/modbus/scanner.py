@@ -75,12 +75,18 @@ class ModbusScanner:
 
     async def _scan_loop(self):
         '''
-            Wait for connected device.
-            Stop loop in case of error except ModbusConnectionError
+            Wait for connected device, a communication error is retried, it is logged once.
             Create IO devices.
         '''
+        logged_error = None
         while not await self.cache.do_scan(initial=True):
+            error = self.cache.scan_error
+            if repr(error) != repr(logged_error):
+                logger.warning(f"Waiting for device '{self.circuit}': {error!r}")
+                logged_error = error
             await asyncio.sleep(self.INITIAL_SCAN_INTERVAL)
+        if logged_error is not None:
+            logger.info(f"Device '{self.circuit}' is connected")
 
         self.parser.populate()
 
@@ -96,7 +102,9 @@ class ModbusScanner:
             else:
                 if not err:
                     err = True
-                    logger.warning(f"Slowing down device: '{self.circuit}'")
+                    # other errors are logged by _scan_unit()
+                    cause = f": {self.cache.scan_error!r}" if self.cache.scan_error is not None else ""
+                    logger.warning(f"Slowing down device: '{self.circuit}'{cause}")
                 # exponential growth interval with limitation [s]
                 interval = min(interval * 2, max(120, self.scan_interval))
 

@@ -10,7 +10,7 @@ import time
 
 from dataclasses import dataclass, field
 from tmodbus import AsyncModbusClient
-from tmodbus.exceptions import ModbusConnectionError
+from tmodbus.exceptions import TModbusError
 
 
 class ENoCacheRegister(Exception):
@@ -46,21 +46,33 @@ class RegisterGroup:
             self.f_counter - 1
 
 
+def _make_group(block: dict) -> RegisterGroup:
+    """ A register block of a hardware definition, raise ValueError if it is invalid """
+    def positive_int(name, minimum):
+        value = block.get(name)
+        if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+            raise ValueError(f"Register block {block}: '{name}' must be an integer >= {minimum}")
+        return value
+
+    if block.get("type", "holding") not in ("holding", "input"):
+        raise ValueError(f"Register block {block}: unknown type '{block['type']}', use 'holding' or 'input'")
+    return RegisterGroup(address=positive_int("start_reg", 0),
+                         count=positive_int("count", 1),
+                         f_divider=positive_int("frequency", 1))
+
+
 class ModbusCacheMap(object):
 
     def __init__(self, modbus_reg_map, modbus_client):
         self.modbus_client: AsyncModbusClient = modbus_client
         self.last_comm_time = 0
-        self.groups = [RegisterGroup(address=mg["start_reg"],
-                                     count=mg["count"],
-                                     f_divider=mg["frequency"])
-                       for mg in modbus_reg_map
-                       if mg.get("type", "holding") == "holding"]
-        self.igroups = [RegisterGroup(address=mg["start_reg"],
-                                      count=mg["count"],
-                                      f_divider=mg["frequency"])
-                        for mg in modbus_reg_map
-                        if mg.get("type", "holding") == "input"]
+        # the error of the last scan, None after a successful one
+        self.scan_error: Exception | None = None
+        self.groups = []
+        self.igroups = []
+        for block in modbus_reg_map:
+            group = _make_group(block)
+            (self.igroups if block.get("type") == "input" else self.groups).append(group)
 
     async def do_scan(self, initial: bool = False) -> bool:
         if initial:
@@ -71,6 +83,7 @@ class ModbusCacheMap(object):
             await self._do_scan_groups(self.igroups, self.modbus_client.read_input_registers)
         if res:
             self.last_comm_time = time.time()
+            self.scan_error = None
         return res
 
     def _find_group(self, address: int, is_input: bool) -> RegisterGroup:
@@ -82,7 +95,11 @@ class ModbusCacheMap(object):
     def get_register(self, count, index, is_input=False):
         group = self._find_group(index, is_input)
         offset = index - group.address
-        return [raise_if_null(group.values, offset + i) for i in range(count)]
+        values = group.values[offset:offset + count]
+        for i in range(count):
+            if i >= len(values) or values[i] is None:
+                raise ENoCacheRegister(f"No cached value of register {index + i}")
+        return values
 
     def set_register(self, index, values, is_input=False):
         """ Update cached registers after a successful write """
@@ -106,13 +123,10 @@ class ModbusCacheMap(object):
                     group.update(vals)
                 group.tick_counter()
 
-        except (ModbusConnectionError, TimeoutError):
+        except (TModbusError, TimeoutError) as E:
+            # also the retries of the transport (RequestRetryFailedError), a noise on RS485 (CRCError)
+            # and the exception responses of the unit, e.g. an address out of its registers
+            self.scan_error = E
             return False
 
         return True
-
-
-def raise_if_null(data, index):
-    if index >= len(data) or data[index] is None:
-        raise ENoCacheRegister(f"No cached value of register '{index}'")
-    return data[index]
