@@ -35,6 +35,9 @@ Contains a list that defines devices and their required parameters. Each element
 - `type` - device type, supported devices are listed below.
 - `count` - number of devices of the type, register addresses increment based on this number
 - `reg_type`- Modbus register type, set to `holding` (default) or `input`
+- `start_index` - an optional parameter of DI, DO, RO and LED, the number of the IOs of the previous features of the type,
+  e.g. `16` for the second feature of the relays 17-28 (Default value is `0`). The circuits of the devices must be unique,
+  a device with a duplicate circuit and the next devices of its feature are not created.
 
 Other parameters depend on the specific type of device.
 
@@ -207,10 +210,12 @@ If no other type is viable, data point may be used.
 
 - `name` - value name
 - `unit` - value unit
-- `value_reg` - value register address
+- `value_reg` - value register address, with `count` greater than 1 the data points follow each other,
+  a 32-bit one takes two registers
 - `datatype` - value data type
-    - null
-    - float32
+    - null (`signed16`)
+    - `uint16`, `int16`, `signed16`
+    - `uint32`, `int32`, `float32` (high word first)
 - `writable` - the value can be written through the API, `false` (default) or `true`,
   the register must be `holding`
 

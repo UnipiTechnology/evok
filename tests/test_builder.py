@@ -85,6 +85,50 @@ async def test_bit_ios_over_16_use_next_register(devtype):
     assert [i + 1 for i, io in enumerate(ios) if io.value] == [1, 18, 32]
 
 
+async def test_di_over_16_use_next_register():
+    """ The inputs 17-32 read the bits of the inputs 1-16 """
+    hw = {'modbus_register_blocks': [{'start_reg': 0, 'count': 400, 'frequency': 1}],
+          'modbus_features': [{'type': 'DI', 'count': 32, 'val_reg': 1, 'counter_reg': 100, 'deboun_reg': 200,
+                               'modes': ['Simple', 'DirectSwitch'], 'ds_modes': ['Simple', 'Inverted', 'Toggle'],
+                               'direct_reg': 300, 'polar_reg': 310, 'toggle_reg': 320}]}
+    client = populate(hw)
+    ins = [Devices.by_name(DI, f'1_{i:02d}') for i in range(1, 33)]
+    assert [(i.accessor.index, i.accessor.mask) for i in ins[15:17]] == [(1, 1 << 15), (2, 1)]
+    dimode = ins[16].dimode
+    assert (dimode.accessor_mode.index, dimode.accessor_polarity.index, dimode.accessor_toggle.index) == \
+        (301, 311, 321)
+    assert (ins[16].accessor_debounce.index, ins[16].accessor_counter.index) == (216, 132)
+    client.mb_client.holding.update({1: 0x0001, 2: 0x8002})
+    await scan(client, initial=True)
+    assert [n + 1 for n, i in enumerate(ins) if i.value] == [1, 18, 32]
+
+
+@pytest.mark.parametrize('devtype', BIT_IO_FEATURES)
+async def test_bit_ios_of_second_feature_use_start_index(devtype):
+    """ The relays 17-28 of M403 replaced the relays 1-12, ro 1_01 switched the relay 17 """
+    first = dict(BIT_IO_FEATURES[devtype], count=16, start_index=0)
+    second = dict(BIT_IO_FEATURES[devtype], count=12, val_reg=2, val_coil=16, start_index=16)
+    if devtype == DO:
+        second['pwm_reg'] = 116
+    client = populate({'modbus_register_blocks': [{'start_reg': 0, 'count': 400, 'frequency': 1}],
+                       'modbus_features': [first, second]})
+    assert circuits(devtype) == [f'1_{i:02d}' for i in range(1, 29)]
+    io = Devices.by_name(devtype, '1_17')
+    assert (io.coil, io.accessor.index, io.accessor.mask) == (16, 2, 1)
+    assert Devices.by_name(devtype, '1_01').coil == 0
+    assert len(client.eventable_devices) == 28
+
+
+def test_duplicate_circuit_is_an_error(caplog):
+    """ The device with the same circuit replaced the registered one without an error """
+    feature = dict(BIT_IO_FEATURES[RO], count=2)
+    client = populate({'modbus_register_blocks': [{'start_reg': 0, 'count': 4, 'frequency': 1}],
+                       'modbus_features': [feature, dict(feature, val_coil=16)]})
+    assert [Devices.by_name(RO, c).coil for c in ('1_01', '1_02')] == [0, 1]     # the first feature is kept
+    assert len(client.eventable_devices) == 2
+    assert 'Duplicate circuit ro 1_01' in caplog.text
+
+
 def test_unknown_feature_is_skipped(l0306):
     features = [{'type': 'FOO'}] + l0306['modbus_features']
     client = make_client(l0306['modbus_register_blocks'])
@@ -109,6 +153,21 @@ def test_data_point_without_valid_mask_reg():
     assert circuits(DATA_POINT) == ['1_1', '1_2', '1_3']
     assert all(type(d) is DataPoint for d in Devices[DATA_POINT].values())
     assert not any(d.writable for d in Devices[DATA_POINT].values())
+
+
+@pytest.mark.parametrize('datatype, regs', [
+    ('float32', [1, 3, 5]),         # were 1, 2, 3 overlapping
+    ('uint32', [1, 3, 5]),
+    ('uint16', [1, 2, 3]),
+])
+async def test_data_points_follow_each_other(datatype, regs):
+    client = populate(data_point_hw(datatype=datatype))
+    assert circuits(DATA_POINT) == [f'1_{reg}' for reg in regs]
+    assert [Devices[DATA_POINT][f'1_{reg}'].accessor.index for reg in regs] == regs
+    client.mb_client.holding.update({1: 0, 2: 1, 3: 0, 4: 2, 5: 0, 6: 3})
+    await scan(client, initial=True)
+    if datatype == 'uint32':                                # high word first
+        assert [Devices[DATA_POINT][f'1_{reg}'].value for reg in regs] == [1, 2, 3]
 
 
 def bao_hw(**feature):
