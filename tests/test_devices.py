@@ -6,7 +6,7 @@ import pytest
 from evok.devices import Devices, DI, DO, RO, AI, LED, WATCHDOG
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
 from evok.modbus.builder import IOParser
-from evok.modbus.digital import DigitalOutput, Relay
+from evok.modbus.digital import DigitalInput, DigitalOutput, Relay
 from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
 from evok.modbus.special import NvSave
 
@@ -709,6 +709,59 @@ async def test_di_unknown_mode(unit, params):
     client = await unit()
     with pytest.raises(ValueError, match='unknown'):
         await dev(DI, '1_01').set(**params)
+
+
+@pytest.mark.parametrize('params', [
+    {'counter_mode': 'Unknown'}, {'ds_mode': 'Unknown'}, {'debounce': 'inf'}, {'counter': 'x'},
+])
+async def test_di_rejected_request_writes_nothing(unit, params):
+    client = await unit()
+    di = dev(DI, '1_01')
+    with pytest.raises(ValueError):
+        await di.set(**{'alias': 'rejected', 'mode': 'DirectSwitch', 'counter': 10, **params})
+    assert client.mb_client.writes == []
+    assert di.alias == ''
+
+
+@pytest.mark.parametrize('params', [
+    {'debounce': 'inf'}, {'debounce': '1.5'}, {'debounce': -1}, {'debounce': 65536},
+    {'counter': float('nan')}, {'counter': 2.5}, {'counter': 2 ** 32},
+])
+async def test_di_rejects_invalid_register_value(unit, params):
+    client = await unit()
+    with pytest.raises(ValueError):
+        await dev(DI, '1_01').set(**params)
+    assert client.mb_client.writes == []
+
+
+async def test_di_without_registers_rejects_debounce_and_counter(unit):
+    client = await unit()
+    di = DigitalInput('x', client, 0, 1)
+    for params in ({'debounce': 10}, {'counter': 0}):
+        with pytest.raises(ValueError, match='not supported'):
+            await di.set(**params)
+    assert client.mb_client.writes == []
+
+
+async def test_di_disabled_counter_is_not_written(unit):
+    client = await unit()
+    di = dev(DI, '1_01')
+    await di.set(counter_mode='Disabled')
+    with pytest.raises(ValueError, match='disabled'):
+        await di.set(counter=0)
+    assert client.mb_client.writes == []
+    # enabled in the same request
+    await di.set(counter_mode='Enabled', counter=0)
+    assert client.mb_client.writes == [('regs', 13, [0, 0])]
+
+
+@pytest.mark.parametrize('params', [{'pwm_duty': 50}, {'pwm_freq': 100}, {'value': 1, 'pwm_duty': 100}])
+async def test_do_without_pwm_rejects_pwm(unit, params):
+    client = await unit()
+    do = DigitalOutput('x', client, 0, 0, 1)
+    with pytest.raises(ValueError, match='PWM is not supported'):
+        await do.set(**params)
+    assert client.mb_client.writes == []
 
 
 @pytest.mark.parametrize('value', [float('nan'), 'nan', 'inf', float('-inf')])

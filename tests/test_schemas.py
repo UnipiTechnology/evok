@@ -114,7 +114,7 @@ from evok.handlers_base import check_params
     ('do', {'pwm_duty': '150'}), ('do', {'pwm_freq': '-5'}),
     ('di', {'counter': '4294967296'}), ('wd', {'timeout': '-1'}),
     ('do', {'value': 1, 'pulse_duration': '-1'}), ('do', {'value': 1, 'timeout': 'inf'}),
-    ('ro', {'value': 1, 'pulse_duration': '-1'}), ('led', {'value': 1, 'pulse_duration': '-1'}),
+    ('di', {'debounce': '65536'}), ('ro', {'value': 1, 'pulse_duration': '-1'}), ('led', {'value': 1, 'pulse_duration': '-1'}),
 ])
 def test_check_params_rejects(dev, kw):
     with pytest.raises(ValueError):

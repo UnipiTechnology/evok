@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
 
-from typing import Union
-
 from ..devices import DI, DO, RO, LED, Devices, to_bool, to_float
 from ..log import logger
 from .base import IODevice
@@ -23,9 +21,9 @@ class WithPulse:
     circuit: str
     client: Client
     coil: int
-    pending_task: Union[None, asyncio.Task] = None
+    pending_task: asyncio.Task | None = None
 
-    def _check_pulse(self, parsed_value, pulse_duration) -> Union[None, float]:
+    def _check_pulse(self, parsed_value, pulse_duration) -> float | None:
         """ Return pulse_duration as a float, raise ValueError if it is invalid """
         if pulse_duration is None:
             return None
@@ -61,7 +59,7 @@ class DigitalOutput(WithPulse, IODevice):
     devtype = DO
 
     def __init__(self, circuit, client: Client, coil, reg, mask, major_group=0,
-                 pwm: Union[None, PwmFrequency] = None, pwmdutyreg=None, modes=None):
+                 pwm: PwmFrequency | None = None, pwmdutyreg=None, modes=None):
         """ pwm is the frequency shared by the outputs of the group, pwmdutyreg the duty register of this output """
         super().__init__(circuit, client, major_group)
         if pwm is not None and pwmdutyreg is None:
@@ -132,6 +130,9 @@ class DigitalOutput(WithPulse, IODevice):
             pwm_freq = to_float(pwm_freq)
             if pwm_freq <= 0:
                 raise ValueError(f'DO {self.circuit}: pwm_freq {pwm_freq} must be positive')
+
+        if self.pwm is None and (pwm_duty is not None or pwm_freq is not None):
+            raise ValueError(f'DO {self.circuit}: PWM is not supported')
 
         if parsed_value is not None and pwm_duty is not None:
             # No conflict in this case
@@ -284,19 +285,38 @@ class DigitalInput(WithDIMode, IODevice):
         return ret
 
     async def set(self, debounce=None, mode=None, counter=None, counter_mode=None, ds_mode=None, alias=None):
-        self.set_alias(alias)
+        """ All params are validated before the first write, a disabled counter cannot be written """
+        self.dimode.check(mode, ds_mode)
+        if counter_mode is not None and counter_mode not in self.counter_modes:
+            raise ValueError(f'DI {self.circuit}: unknown counter_mode "{counter_mode}"')
+        if debounce is not None:
+            debounce = self._register_value('debounce', debounce, self.accessor_debounce)
+        if counter is not None:
+            if (counter_mode or self.counter_mode) != 'Enabled':
+                raise ValueError(f'DI {self.circuit}: the counter is disabled')
+            counter = self._register_value('counter', counter, self.accessor_counter)
 
         await self.dimode.set(mode, ds_mode)
 
-        if counter_mode is not None and counter_mode not in self.counter_modes:
-            raise ValueError(f'DI {self.circuit}: unknown counter_mode "{counter_mode}"')
         if counter_mode is not None and counter_mode != self.counter_mode:
             self.counter_mode = counter_mode
             self.counter = self.read_counter()
 
         if debounce is not None:
-            if self.accessor_debounce.index is not None:
-                await self.accessor_debounce.write(self.client, int(float(debounce)))
+            await self.accessor_debounce.write(self.client, debounce)
         if counter is not None:
-            if self.accessor_counter.index is not None:
-                await self.accessor_counter.write(self.client, int(float(counter)))
+            await self.accessor_counter.write(self.client, counter)
+
+        self.set_alias(alias)
+
+    def _register_value(self, name, value, accessor: Accessor) -> int:
+        """ An integer in the range of the register, raise ValueError if the DI has no such register """
+        if accessor.index is None:
+            raise ValueError(f'DI {self.circuit}: {name} is not supported')
+        number = to_float(value)
+        if not number.is_integer():
+            raise ValueError(f'DI {self.circuit}: {name} {value} must be an integer')
+        low, high = accessor.raw_range
+        if not low <= number <= high:
+            raise ValueError(f'DI {self.circuit}: {name} {value} is out of range <{low}..{high}>')
+        return int(number)

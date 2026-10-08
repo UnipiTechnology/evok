@@ -112,7 +112,7 @@ di_post_inp_schema = {
             "maximum": 4294967295
         },
         "counter_mode": {"type": "string"},
-        "debounce": {"type": ["number", "string"]},
+        "debounce": {"type": ["number", "string"], "minimum": 0, "maximum": 65535},
         "mode": {"type": "string"},
         "ds_mode": {"type": "string"},
         "alias": ALIAS

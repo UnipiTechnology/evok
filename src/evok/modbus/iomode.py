@@ -149,6 +149,13 @@ class DIMode:
             self.mode = 'Simple'
         return old != (self.mode, self.ds_mode)
 
+    def check(self, mode=None, ds_mode=None):
+        """ Raise ValueError for an unknown mode or ds_mode """
+        if mode is not None and mode not in self.modes:
+            raise ValueError(f'{self.name}: unknown mode "{mode}"')
+        if ds_mode is not None and ds_mode not in self.ds_modes:
+            raise ValueError(f'{self.name}: unknown ds_mode "{ds_mode}"')
+
     async def set(self, mode=None, ds_mode=None):
         """ Write the mode and the DirectSwitch mode, unknown values are rejected,
             ds_mode is written only in the DirectSwitch mode
@@ -157,10 +164,7 @@ class DIMode:
             self.mode and self.ds_mode can be stale or rewritten by update()
             in the scan task while this coroutine awaits.
         """
-        if mode is not None and mode not in self.modes:
-            raise ValueError(f'{self.name}: unknown mode "{mode}"')
-        if ds_mode is not None and ds_mode not in self.ds_modes:
-            raise ValueError(f'{self.name}: unknown ds_mode "{ds_mode}"')
+        self.check(mode, ds_mode)
         if mode is not None:
             self.mode = mode
             if self.accessor_mode.index is not None:
