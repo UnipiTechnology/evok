@@ -72,7 +72,6 @@ class EvokWebHandlerBase(TokenAuth, tornado.web.RequestHandler):
     def _get_kw(self) -> dict:
         raise NotImplementedError("'_get_kw' not implemented!")
 
-    @tornado.web.authenticated
     def get(self, dev, circuit, prop):
         """ GET /rest/DEVICE/CIRCUIT             the state of the device
             GET /rest/DEVICE/CIRCUIT/PROPERTY    a property of the state

@@ -1,4 +1,3 @@
-import base64
 import functools
 import inspect
 from typing import Awaitable, Optional
@@ -48,35 +47,9 @@ async def create_response(request, backend):
         raise UnitUnavailableError(str(e))
 
 
-class UserBasicHelper(JSONRPCHandler):
-    _passwords = []
+class Handler(TokenAuth, JSONRPCHandler):
+    """ JSON-RPC, the requests are authenticated by TokenAuth """
 
-    def initialize(self, response_creator: Awaitable = None, version: Optional[str] = None):
-        if response_creator is None:
-            response_creator = functools.partial(create_response,
-                                                 backend=self)
-        super().initialize(response_creator=response_creator, version=version)
-
-    def _request_auth(self):
-        self.set_header('WWW-Authenticate', 'Basic realm=tmr')
-        self.set_status(401)
-        self.finish()
-
-    def get_current_user(self):
-        if len(self._passwords) == 0:
-            return True
-        auth_header = self.request.headers.get('Authorization')
-        if auth_header is None or not auth_header.startswith('Basic '):
-            return False
-        try:
-            username, password = base64.b64decode(auth_header[6:]).decode().split(':', 1)
-        except ValueError:
-            # invalid base64, invalid utf-8 or missing ':'
-            return False
-        return username == 'rpc' and password in self._passwords
-
-
-class Handler(TokenAuth, UserBasicHelper):
     # methods callable via JSON-RPC, other attributes of the handler are not exposed
     RPC_METHODS = frozenset((
         'input_get',
@@ -100,11 +73,10 @@ class Handler(TokenAuth, UserBasicHelper):
         'sensor_get_value',
     ))
 
-    async def post(self):
-        if not self.current_user:
-            self._request_auth()
-            return
-        await JSONRPCHandler.post(self)
+    def initialize(self, response_creator: Awaitable = None, version: Optional[str] = None):
+        if response_creator is None:
+            response_creator = functools.partial(create_response, backend=self)
+        super().initialize(response_creator=response_creator, version=version)
 
     # ---- Input ----
     def input_get(self, circuit):

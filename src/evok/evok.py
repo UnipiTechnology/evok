@@ -12,7 +12,6 @@ from importlib.metadata import version, PackageNotFoundError
 import tornado.httpclient
 import tornado.httpserver
 import tornado.web
-from tornado import escape
 
 from . import auth
 from . import config
@@ -37,15 +36,6 @@ try:
 except PackageNotFoundError:
     logger.error("Cannot detect evok version.")
     evok_version = 'unknown'
-
-
-class UserCookieHelper:
-    _passwords = []
-
-    def get_current_user(self):
-        if len(self._passwords) == 0:
-            return True
-        return self.get_secure_cookie("user")
 
 
 class WhHandler:
@@ -115,44 +105,17 @@ class WhHandler:
             self.send_task = None
 
 
-class LogoutHandler(tornado.web.RequestHandler):
-    def get(self):
-        self.clear_cookie("user")
-        self.redirect(self.get_argument("next", "/"))
-
-
-class LoginHandler(tornado.web.RequestHandler):
-    def post(self):
-        username = 'admin'
-        password = self.get_argument("password", "")
-        auth = self.check_permission(password, username)
-        if auth:
-            self.set_secure_cookie("user", escape.json_encode(username))
-            self.redirect(self.get_argument("next", u"/"))
-        else:
-            error_msg = u"?error=" + tornado.escape.url_escape("Login incorrect")
-            self.redirect(u"/auth/login/" + error_msg)
-
-    def get(self):
-        self.redirect(self.get_argument("next", u"/"))
-
-    def check_permission(self, password, username=''):
-        if username == "admin" and password in self._passwords:
-            return True
-        return False
-
-
-class LegacyRestHandler(UserCookieHelper, EvokWebHandlerBase):
+class LegacyRestHandler(EvokWebHandlerBase):
     def _get_kw(self) -> dict:
         return dict([(k, v[0].decode()) for (k, v) in self.request.body_arguments.items()])
 
 
-class LegacyJsonHandler(UserCookieHelper, EvokWebHandlerBase):
+class LegacyJsonHandler(EvokWebHandlerBase):
     def _get_kw(self) -> dict:
         return json.loads(self.request.body)
 
 
-class LoadAllHandler(UserCookieHelper, EvokWebHandlerBase):
+class LoadAllHandler(EvokWebHandlerBase):
     # tornado returns 405 Method Not Allowed for POST
     SUPPORTED_METHODS = ("GET", "OPTIONS")
 
@@ -164,7 +127,7 @@ class LoadAllHandler(UserCookieHelper, EvokWebHandlerBase):
         await self.finish()
 
 
-class VersionHandler(TokenAuth, UserCookieHelper, tornado.web.RequestHandler):
+class VersionHandler(TokenAuth, tornado.web.RequestHandler):
 
     auth_exempt = True      # for monitoring, it tells only the version
 
@@ -178,7 +141,7 @@ class VersionHandler(TokenAuth, UserCookieHelper, tornado.web.RequestHandler):
         self.finish()
 
 
-class LogHandler(TokenAuth, UserCookieHelper, tornado.web.RequestHandler):
+class LogHandler(TokenAuth, tornado.web.RequestHandler):
     """ GET /log?lines=N returns the last N lines of the log file as plain text """
 
     DEFAULT_LINES = 255
@@ -187,7 +150,6 @@ class LogHandler(TokenAuth, UserCookieHelper, tornado.web.RequestHandler):
     def initialize(self, log_file):
         self.log_file = log_file
 
-    @tornado.web.authenticated
     async def get(self):
         if self.log_file is None:
             raise tornado.web.HTTPError(404, 'Logging to a file is not configured')
