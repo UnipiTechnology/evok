@@ -61,7 +61,9 @@ class ModbusScanner:
         self.cache = ModbusCacheMap(hw_definition.get('modbus_register_blocks', []),
                                     mb_client)
 
-        self.client = Client(self.name, mb_client, self.cache)
+        # the unit is known by its name in the configuration, the transport and the address tell where it is
+        self.client = Client(f"'{circuit}' ({self.name})", mb_client, self.cache)
+        self.client.periodic_scan = scan_enabled
         self.parser = IOParser(self.client, hw_definition.get('modbus_features', []), circuit)
 
     def start_scanning(self):
@@ -90,7 +92,7 @@ class ModbusScanner:
         if alias is not None:
             Devices.set_alias(alias, self)
         if scan_enabled is not None:
-            self.scan_enabled = scan_enabled
+            self.scan_enabled = self.client.periodic_scan = scan_enabled
             if scan_enabled:
                 self.start_scanning()
             elif self.populated:

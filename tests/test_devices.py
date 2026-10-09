@@ -425,7 +425,6 @@ async def test_ai_mode_without_transformation_uses_default():
     ({'datatype': 'uint32', 'ratio': 0.0001}, [12345, 0], pytest.approx(1.2345)),  # no rounding
     ({'datatype': 'uint32', 'ratio': 0.001, 'decimals': 1}, [12345, 0], 12.3),
     ({'datatype': 'uint16', 'ratio': 0.1, 'offset': -5, 'decimals': 1}, [100, 0], 5.0),
-    ({'datatype': 'bogus'}, [1, 0], None),
 ])
 async def test_ai_transformation_datatypes(transformation, regs, expected):
     client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}],
@@ -434,6 +433,13 @@ async def test_ai_transformation_datatypes(transformation, regs, expected):
     await client.cache.do_scan(initial=True)
     await ai.check_new_data()
     assert (ai.mode, ai.value) == ('M', expected)
+
+
+def test_ai_unknown_transformation_datatype_is_an_error():
+    """ The value was null with a warning when the mode was known, it is an error of the feature """
+    client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}])
+    with pytest.raises(ValueError, match='unknown datatype "bogus" of mode "M"'):
+        AnalogInput('x', client, 0, regmode=2, modes={'M': {'value': 1, 'transformation': {'datatype': 'bogus'}}})
 
 
 async def test_ai_unknown_mode_reads_none():

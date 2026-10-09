@@ -23,6 +23,11 @@ class AnalogInput(WithIOMode, IODevice):
 
     def __init__(self, circuit, client: Client, reg, regmode=None, major_group=0, modes=None):
         super().__init__(circuit, client, major_group)
+        # an unknown datatype was found by the first read in the mode, the value was null with a warning
+        for mode, data in (modes or {}).items():
+            datatype = data.get('transformation', {}).get('datatype', 'float32')
+            if datatype not in AccessorFactory.accessor_classes:
+                raise ValueError(f'{self.devtype.upper()} {circuit}: unknown datatype "{datatype}" of mode "{mode}"')
         self.iomode = IOMode(client, regmode, modes, f"{self.devtype.upper()} {circuit}")
         self.value = None
         self.accessor = self._default_accessor(reg)

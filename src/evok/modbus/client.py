@@ -52,8 +52,11 @@ class Client:
     def __init__(self, name: str,
                  mb_client: AsyncModbusClient,
                  cache: ModbusCacheMap):
+        """ name of the unit for the errors, e.g. its name in the configuration, the transport and the address """
         self.name = name
         self.cache = cache
+        # set by ModbusScanner by scan_enabled; without a periodic scan a change reads a failed unit again
+        self.periodic_scan = True
         self.mb_client = mb_client
         self.eventable_devices = []
         self.failing_devices = set()    # logged once, until they check new data again
@@ -81,12 +84,14 @@ class Client:
             and check the devices, also after a failed operation, its writes before the error are seen
 
             A unit which failed its last scan raises UnitUnavailable without a write, check_available=False
-            writes anyway, e.g. the end of a pulse.
+            writes anyway, e.g. the end of a pulse. A unit without a periodic scan is read first, nothing else
+            would read it again, its failed scan after a change refused all next changes.
         """
         async with self.lock:
             if check_available and self.cache.scan_error is not None:
-                raise UnitUnavailable(f"Unit {self.name} is not available: "
-                                      f"{type(self.cache.scan_error).__name__}: {self.cache.scan_error}")
+                if self.periodic_scan or not await self.cache.do_scan(all_groups=True):
+                    raise UnitUnavailable(f"Unit {self.name} is not available: "
+                                          f"{type(self.cache.scan_error).__name__}: {self.cache.scan_error}")
             try:
                 await operation()
             finally:

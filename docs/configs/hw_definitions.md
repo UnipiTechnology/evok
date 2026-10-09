@@ -149,12 +149,19 @@ Allows you to add an analog output for the Modbus device.
 
 Allows you to add an analog input for the Modbus device.
 
-- `val_reg` - value register address
+- `val_reg` - value register address, the inputs follow each other by two registers
 - `mode_reg` - mode register address
 - `modes` - list of available modes (names will be available in API), each has to have specified all parameters
     - `value` - value for mode_reg
     - `unit` - value unit
     - `range` - min and max values defined in an array
+    - `transformation` - an optional conversion of the value in the mode:
+        - `datatype` - `float32` (default), `uint32`, `int32`, `uint16`, `int16`, `signed16`, the 32-bit ones low word first;
+          an unknown datatype is an error of the feature
+        - `ratio`, `offset` - the value is `raw * ratio + offset` (Default values are `1` and `0`)
+        - `decimals` - rounding of the value (Default value is `3` for `float32`, no rounding for the others)
+
+The API reports only `unit` and `range` of the modes.
 
 ```yaml title="Example"
 - type        : AI

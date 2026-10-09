@@ -3,6 +3,7 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
+from tmodbus import AsyncSmartTransport, AsyncTcpTransport
 
 from evok import devents
 from evok.devices import Devices, DI, DO, NV_SAVE
@@ -10,6 +11,7 @@ from evok.errors import UnitUnavailable
 from evok.handlers_base import client_error
 from evok.modbus import set_devices
 from evok.modbus.builder import IOParser
+from evok.modbus.scanner import ModbusScanner
 from evok.rpc_handler import Handler, UnitUnavailableError, create_response
 
 from conftest import make_client, scan
@@ -82,6 +84,31 @@ async def test_unavailable_unit_is_not_changed(units):
     # the alias does not write the unit
     state, = await set_devices([(do, {'alias': 'lamp'})])
     assert state['alias'] == 'lamp'
+
+
+async def test_unit_without_periodic_scan_is_read_before_it_is_refused(units):
+    """ A failed scan after a change refused all next changes of a unit without scan_enabled, nothing read it again """
+    client, = await units('1')
+    client.periodic_scan = False
+    do = Devices.by_name(DO, '1_01')
+    client.cache.scan_error = TimeoutError('no response')
+    state, = await set_devices([(do, {'value': 1})])        # the unit responds again
+    assert client.cache.scan_error is None and client.mb_client.writes == [('coil', 0, 1)]
+    client.mb_client.connected = False
+    client.cache.scan_error = TimeoutError('no response')
+    with pytest.raises(UnitUnavailable):
+        await set_devices([(do, {'value': 0})])
+    assert client.mb_client.writes == [('coil', 0, 1)]
+
+
+async def test_unavailable_unit_has_its_name(l0306):
+    """ The unit was named by its transport, not by its name in the configuration """
+    scanner = ModbusScanner(AsyncSmartTransport(AsyncTcpTransport('127.0.0.1', 502)), 'IAQ', 50, True, l0306,
+                            unit_id=1)
+    scanner.cache.scan_error = TimeoutError('no response')
+    with pytest.raises(UnitUnavailable, match=r"Unit 'IAQ' \(TCP:127.0.0.1:1\) is not available: "
+                                              r"TimeoutError: no response"):
+        await scanner.client.change(lambda: asyncio.sleep(0))
 
 
 async def test_scan_waits_for_the_change(units):
