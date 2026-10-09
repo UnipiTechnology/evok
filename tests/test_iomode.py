@@ -63,6 +63,31 @@ async def test_set_invalid_mode():
     assert client.mb_client.writes == []
 
 
+@pytest.mark.parametrize('modes, error', [
+    ({'A': {'value': '1'}}, "must be an integer, not '1'"),         # never found by update()
+    ({'A': {'value': True}}, 'must be an integer'),
+    ({'A': {'value': 1}, 'B': {'value': 1}}, 'modes "A" and "B" have the same value 1'),
+])
+def test_invalid_mode_values_are_rejected(modes, error):
+    with pytest.raises(ValueError, match=error):
+        IOMode(None, 0, modes, 'AI x')
+
+
+def test_mode_values_without_register_are_not_checked():
+    IOMode(None, None, {'A': {'value': '1'}}, 'AI x')
+
+
+async def test_fixed_mode_cannot_be_switched():
+    """ Another mode was accepted without a mode register, the mode did not change """
+    client = make_client([])
+    fixed = IOMode(client, None, {'Voltage': {'unit': 'V'}}, 'AO x')
+    assert (await fixed.set('Voltage')) == {'unit': 'V'}
+    unknown = IOMode(client, None, {'Voltage': {}, 'Current': {}}, 'AI x')
+    with pytest.raises(ValueError, match='without a mode register'):
+        await unknown.set('Current')
+    assert client.mb_client.writes == []
+
+
 async def make_dimode(holding, bitmask=0b10, modes=('Simple', 'DirectSwitch')):
     client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}], holding)
     await client.cache.do_scan(initial=True)

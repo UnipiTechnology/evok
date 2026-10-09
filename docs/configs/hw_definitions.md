@@ -130,7 +130,7 @@ Allows you to add an analog output for the Modbus device.
 - `val_reg` - value register address
 - `mode_reg` - mode register address
 - `modes` - list of available modes (names will be available in API), each has to have specified all parameters
-    - `value` - value for mode_reg
+    - `value` - value for mode_reg, a unique integer; without `mode_reg` define one mode, it is fixed and cannot be switched
     - `unit` - value unit
     - `range` - min and max values defined in an array
 
@@ -153,7 +153,7 @@ Allows you to add an analog input for the Modbus device.
 - `val_reg` - value register address, the inputs follow each other by two registers
 - `mode_reg` - mode register address
 - `modes` - list of available modes (names will be available in API), each has to have specified all parameters
-    - `value` - value for mode_reg
+    - `value` - value for mode_reg, a unique integer; without `mode_reg` define one mode, it is fixed and cannot be switched
     - `unit` - value unit
     - `range` - min and max values defined in an array
     - `transformation` - an optional conversion of the value in the mode:

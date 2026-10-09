@@ -16,10 +16,23 @@ class IOMode:
     """
 
     def __init__(self, client: Client, regmode=None, modes=None, name=''):
+        """ An invalid value of a mode for the mode register raises ValueError, an error of the feature """
         self.client = client
         self.accessor = AccessorU16(regmode) if regmode is not None else Accessor(regmode)
         self.modes = modes or {}
         self.name = name
+        if regmode is not None:
+            # a string was never found by update(), a duplicate value was found as the first mode
+            values = {}
+            for mode, data in self.modes.items():
+                value = data.get('value')
+                if value is None:
+                    continue
+                if not isinstance(value, int) or isinstance(value, bool):
+                    raise ValueError(f'{name}: the value of mode "{mode}" must be an integer, not {value!r}')
+                if value in values:
+                    raise ValueError(f'{name}: modes "{values[value]}" and "{mode}" have the same value {value}')
+                values[value] = mode
         self.mode_value = None
         if regmode is None and len(self.modes) == 1:
             self.mode = next(iter(self.modes))
@@ -59,16 +72,20 @@ class IOMode:
         if mode not in self.modes:
             raise ValueError(f'{self.name}: unknown mode "{mode}"!')
         data = self.modes[mode]
-        if self.accessor.index is not None and data.get('value') is None:
-            raise ValueError(f"{self.name}: this device cant switch mode!")
+        if self.accessor.index is None:
+            # the fixed mode, another one was accepted without a change
+            if mode != self.mode:
+                raise ValueError(f'{self.name}: cannot switch to mode "{mode}" without a mode register')
+        elif data.get('value') is None:
+            raise ValueError(f'{self.name}: mode "{mode}" has no value of the mode register, it cannot be set')
         return data
 
     async def set(self, mode: str) -> dict:
         """ Write the mode to the mode register, return its definition
 
             The write updates the cache, the current mode is changed by update() of the scan,
-            which follows every change of the unit. Without a mode register nothing is written
-            and any defined mode is accepted.
+            which follows every change of the unit. Without a mode register only the fixed mode
+            is accepted and nothing is written.
         """
         data = self.check(mode)
         if self.accessor.index is not None:
@@ -93,10 +110,6 @@ class WithIOMode:
         """ The modes for the API with their unit and range, without the definition of the register """
         return {mode: {key: data[key] for key in ('unit', 'range') if key in data}
                 for mode, data in self.iomode.modes.items()}
-
-    @property
-    def mode_value(self):
-        return self.iomode.mode_value
 
     @property
     def unit_name(self):
@@ -174,8 +187,9 @@ class DIMode:
             by the old one for a moment. Of the polarity and the toggle bits the cleared one is written
             first, the input never has both.
 
-            Always read-modify-write the registers: self.mode and self.ds_mode can be stale
-            or rewritten by update() in the scan task while this coroutine awaits.
+            The registers are shared by the inputs of a group, the bits are written by read-modify-write
+            of the register, the other bits are kept. The change runs under the lock of the unit,
+            update() of the scan after it reads the written bits.
         """
         self.check(mode, ds_mode)
         if ds_mode is not None:
