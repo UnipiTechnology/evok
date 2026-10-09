@@ -3,17 +3,22 @@ import inspect
 from typing import Awaitable, Optional
 
 from tornado_jsonrpc2 import JSONRPCHandler
-from tornado_jsonrpc2.exceptions import JSONRPCError, MethodNotFound, InvalidParams
+from tornado_jsonrpc2.exceptions import InternalError, InvalidParams, MethodNotFound
 
 from .auth import TokenAuth
 from .devices import SENSOR, OWBUS, DI, DO, RO, AI, AO
 from .devices import Devices, DeviceNotFound, to_bool
 from .errors import UnitUnavailable
+from .log import logger
 from .modbus import set_devices
 
 
-class UnitUnavailableError(JSONRPCError):
-    """ The Modbus unit failed its last scan, its devices are not changed """
+class UnitUnavailableError(InvalidParams):
+    """ The Modbus unit failed its last scan or a request of the change failed
+
+        A subclass of InvalidParams only for tornado_jsonrpc2, it returns any other error as InternalError,
+        the error was -32603; the code and the message are its own.
+    """
     error_code = -32000         # a server error defined by the implementation
     short_message = "Unit unavailable"
 
@@ -45,6 +50,10 @@ async def create_response(request, backend):
         raise InvalidParams(str(e))
     except UnitUnavailable as e:
         raise UnitUnavailableError(str(e))
+    except Exception as e:
+        # tornado_jsonrpc2 returned the message of the error to the client and did not log it
+        logger.exception(f"RPC {request.method}: {e}")
+        raise InternalError("internal") from None
 
 
 class Handler(TokenAuth, JSONRPCHandler):
@@ -107,7 +116,7 @@ class Handler(TokenAuth, JSONRPCHandler):
 
     async def relay_set_for_time(self, circuit, value, pulse_duration):
         relay = Devices.by_name(RO, circuit)
-        state, = await set_devices([(relay, dict(value=value, pulse_duration=self._pulse_duration(pulse_duration)))])
+        state, = await set_devices([(relay, dict(value=value, pulse_duration=pulse_duration))])
         return state
 
     def output_get(self, circuit):
@@ -128,15 +137,9 @@ class Handler(TokenAuth, JSONRPCHandler):
         if pulse_duration is None:
             pulse_duration = timeout
         relay = Devices.by_name(DO, circuit)
-        state, = await set_devices([(relay, dict(value=value, pulse_duration=self._pulse_duration(pulse_duration)))])
+        # pulse_duration is checked by the output, a positive finite number
+        state, = await set_devices([(relay, dict(value=value, pulse_duration=pulse_duration))])
         return state
-
-    @staticmethod
-    def _pulse_duration(pulse_duration) -> float:
-        pulse_duration = float(pulse_duration)
-        if pulse_duration <= 0:
-            raise ValueError('Invalid pulse_duration %s' % str(pulse_duration))
-        return pulse_duration
 
     # ---- Analog Input ----
     def ai_get(self, circuit):

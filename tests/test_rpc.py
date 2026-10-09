@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 from tornado_jsonrpc2.exceptions import InvalidParams, MethodNotFound
 
-from evok.devices import Devices, DO, RO
+from evok.devices import Devices, DO, RO, to_float
 from evok.rpc_handler import Handler, create_response
 
 
@@ -20,6 +20,11 @@ class FakeOutput:
     async def set(self, value=None, pulse_duration=None):
         if value is not None and int(value) > 1:
             raise ValueError('Value out of range')
+        if pulse_duration is not None:
+            # as WithPulse._check_pulse() of an output, RPC passes pulse_duration to it
+            pulse_duration = to_float(pulse_duration)
+            if pulse_duration <= 0:
+                raise ValueError('pulse_duration must be positive')
         self.values.append((value, pulse_duration))
 
 
@@ -94,3 +99,54 @@ async def test_invalid_params(outputs, method, params):
 async def test_unknown_method():
     with pytest.raises(MethodNotFound):
         await call('di_get', ['1_01'])
+
+
+@pytest.fixture
+async def rpc():
+    """ JSON-RPC over HTTP, the errors are converted also by tornado_jsonrpc2 """
+    import json
+    import tornado.httpclient
+    import tornado.httpserver
+    import tornado.testing
+    import tornado.web
+    sock, port = tornado.testing.bind_unused_port()
+    server = tornado.httpserver.HTTPServer(tornado.web.Application([(r"/rpc", Handler)]))
+    server.add_sockets([sock])
+
+    async def request(method, params):
+        body = json.dumps({'jsonrpc': '2.0', 'method': method, 'params': params, 'id': 1})
+        response = await tornado.httpclient.AsyncHTTPClient().fetch(
+            f"http://127.0.0.1:{port}/rpc", method='POST', body=body)
+        return json.loads(response.body)
+    yield request
+    server.stop()
+
+
+class FailingOutput(FakeOutput):
+    def __init__(self, error):
+        super().__init__(DO)
+        self.error = error
+
+    async def set(self, **kw):
+        raise self.error
+
+
+async def test_unavailable_unit_over_http(rpc):
+    """ tornado_jsonrpc2 returned it as -32603 Internal error """
+    from evok.errors import UnitCommunicationError
+    Devices[DO]['1_01'] = FailingOutput(UnitCommunicationError("Unit '1': TimeoutError: no response"))
+    reply = await rpc('output_set', ['1_01', 1])
+    assert reply['error'] == {'code': -32000, 'message': "Unit unavailable: Unit '1': TimeoutError: no response"}
+
+
+async def test_internal_error_over_http_is_logged_not_sent(rpc, caplog):
+    """ The message of the error was sent to the client, it was not logged """
+    Devices[DO]['1_01'] = FailingOutput(KeyError('internal detail'))
+    reply = await rpc('output_set', ['1_01', 1])
+    assert reply['error'] == {'code': -32603, 'message': 'Internal error: internal'}
+    assert "RPC output_set: 'internal detail'" in caplog.text and 'Traceback' in caplog.text
+
+
+async def test_invalid_params_over_http(rpc, outputs):
+    reply = await rpc('output_set_for_time', ['1_01', 1, 0])
+    assert reply['error']['code'] == -32602
