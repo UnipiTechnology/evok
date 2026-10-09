@@ -8,7 +8,7 @@ from tmodbus import AsyncModbusClient, AsyncSmartTransport
 from tmodbus.exceptions import CRCError, ModbusConnectionError, RequestRetryFailedError, ServerDeviceBusyError
 
 from evok import config
-from evok.devices import Devices, OWBUS, SENSOR, SERIALBUS, TCPBUS
+from evok.devices import Devices, DEVICE_INFO, MODBUS_SLAVE, OWBUS, SENSOR, SERIALBUS, TCPBUS
 from evok.owdevice import DS18B20, OwBusDriver
 
 
@@ -156,6 +156,46 @@ async def test_modbus_tcp_is_opened_by_the_first_request():
         assert await client.read_holding_registers(0, quantity=1) == [42]
     finally:
         server.close()
+
+
+def modbus_bus(port, devices):
+    return {'type': 'MODBUSRTU', 'port': port, 'devices': devices}
+
+
+@pytest.mark.parametrize('name1, name2', [(1, 1), (1, '1'), ('xS51', 'xS51')])
+def test_modbus_device_name_collision_over_buses(l0306, caplog, name1, name2):
+    """ The second device replaced the first one in Devices and its IOs were not created """
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {name1: {'slave-id': 1, 'model': 'L0306'}}),
+        'RTU2': modbus_bus('/dev/zero', {name2: {'slave-id': 2, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    slave = Devices[MODBUS_SLAVE][str(name1)]
+    assert (slave.modbus_spec, slave.modbus_address) == ('/dev/null', 1)
+    assert list(Devices[MODBUS_SLAVE]) == [str(name1)]
+    assert len(Devices[DEVICE_INFO]) == 1
+    assert (f"Modbus device '{name2}' of bus 'RTU2' has the same name as the device of bus 'RTU1'"
+            in caplog.text)
+
+
+def test_modbus_device_name_collision_in_one_bus(l0306, caplog):
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {1: {'slave-id': 1, 'model': 'L0306'}, '1': {'slave-id': 2, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert Devices[MODBUS_SLAVE]['1'].modbus_address == 1
+    assert "Modbus device '1' of bus 'RTU1' has the same name as the device of bus 'RTU1'" in caplog.text
+
+
+def test_modbus_device_name_is_reserved_only_by_a_created_device(l0306, caplog):
+    """ A failed or disabled device does not block the name """
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {1: {'slave-id': 1, 'model': 'unknown'},
+                                         2: {'slave-id': 2, 'model': 'L0306', 'enabled': False}}),
+        'RTU2': modbus_bus('/dev/zero', {1: {'slave-id': 1, 'model': 'L0306'},
+                                         2: {'slave-id': 2, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert {name: slave.modbus_spec for name, slave in Devices[MODBUS_SLAVE].items()} == \
+        {'1': '/dev/zero', '2': '/dev/zero'}
+    assert 'has the same name' not in caplog.text
 
 
 def test_modbus_invalid_retries_skips_the_bus(caplog):
