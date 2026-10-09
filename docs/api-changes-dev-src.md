@@ -106,6 +106,8 @@ the HW definitions. The incompatible changes come first. Every change names its 
   — `a5d8065`
 - `timeout` of a DO is an alias of `pulse_duration`. — `e16a3bf`
 - `nv_sav_coil` of the WD feature is not used, the settings are saved by the NV_SAVE feature. — `f298e87`
+- `frequency` of a register block is a deprecated alias of `scan_divider`, a warning is logged, both in one block
+  are an error. The value is a divider of the scans, not a frequency. — #224
 
 ## Configuration and HW definitions
 

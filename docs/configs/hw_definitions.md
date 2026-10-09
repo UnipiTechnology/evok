@@ -9,23 +9,25 @@ Contains a list that defines the Modbus register groups. These registers must be
 - `start_reg` - first Modbus register address of the block
 - `count` - number of Modbus registers to read, at most `125` (one Modbus request), the registers must be at most `65535`;
   the blocks of one type must not overlap
-- `frequency` - denominator of the scanning frequency. The block will be read each [scan_frequency](./evok_configuration.md#modbustcp-modbusrtu)÷`frequency` seconds (division).
+- `scan_divider` - the block is read in every `scan_divider`-th scan of the unit, i.e. with the frequency
+  [scan_frequency](./evok_configuration.md#modbustcp-modbusrtu)÷`scan_divider` Hz, each
+  `scan_divider`÷`scan_frequency` seconds; `1` reads it in every scan. The old name `frequency` is a deprecated alias.
 - `type` - Modbus register type, set to `holding` (default) or `input`
 
 ```yaml title="Example"
-# This key defines which Modbus registers will be periodically read. Each block (also sometimes referred to as "group") is read once every ["frequency"] read cycles.
+# This key defines which Modbus registers will be periodically read. Each block (also sometimes referred to as "group") is read once every ["scan_divider"] read cycles.
 modbus_register_blocks:
     - start_reg   : 0
       count       : 10
-      frequency   : 1
+      scan_divider: 1
 
     - start_reg   : 500
       count       : 8
-      frequency   : 10
+      scan_divider: 10
 
     - start_reg   : 508
       count       : 8
-      frequency   : 50
+      scan_divider: 50
       type        : input
 ```
 

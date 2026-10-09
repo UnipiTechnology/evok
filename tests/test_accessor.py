@@ -11,8 +11,8 @@ from evok.modbus.client import (
 import conftest
 
 BLOCKS = [
-    {'start_reg': 0, 'count': 4, 'frequency': 1},
-    {'start_reg': 0, 'count': 4, 'frequency': 1, 'type': 'input'},
+    {'start_reg': 0, 'count': 4, 'scan_divider': 1},
+    {'start_reg': 0, 'count': 4, 'scan_divider': 1, 'type': 'input'},
 ]
 
 

@@ -6,7 +6,7 @@ from conftest import make_client
 
 
 async def make_pwm(cls, holding):
-    client = make_client([{'start_reg': 0, 'count': 2, 'frequency': 1}], holding)
+    client = make_client([{'start_reg': 0, 'count': 2, 'scan_divider': 1}], holding)
     await client.cache.do_scan(initial=True)
     return client, cls(client, 0, 1)
 
@@ -61,7 +61,7 @@ async def test_hard_frequency_is_rounded():
 
 
 async def test_write_of_registers_not_adjacent():
-    client = make_client([{'start_reg': 0, 'count': 4, 'frequency': 1}], {})
+    client = make_client([{'start_reg': 0, 'count': 4, 'scan_divider': 1}], {})
     await client.cache.do_scan(initial=True)
     pwm = HardPwmFrequency(client, 0, 2)
     await pwm.set(100)

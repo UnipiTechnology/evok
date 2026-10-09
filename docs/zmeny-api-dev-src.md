@@ -101,6 +101,8 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - `counter_mode` a `counter_modes` u DI. `Disabled` jen hlásí čítač 0, režim se neukládá. — `a5d8065`
 - `timeout` u DO je alias `pulse_duration`. — `e16a3bf`
 - `nv_sav_coil` ve WD feature se nepoužívá, ukládání řeší feature NV_SAVE. — `f298e87`
+- `frequency` u registrového bloku je alias `scan_divider`, zaloguje se varování, obojí v jednom bloku je chyba.
+  Hodnota je dělitel skenů, ne frekvence. — #224
 
 ## Konfigurace a HW definice
 

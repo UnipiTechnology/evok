@@ -11,9 +11,9 @@ from evok.modbus.scanner import ModbusScanner
 from conftest import FakeModbus
 
 BLOCKS = [
-    {'start_reg': 0, 'count': 2, 'frequency': 1},
-    {'start_reg': 10, 'count': 4, 'frequency': 3},
-    {'start_reg': 100, 'count': 2, 'frequency': 1, 'type': 'input'},
+    {'start_reg': 0, 'count': 2, 'scan_divider': 1},
+    {'start_reg': 10, 'count': 4, 'scan_divider': 3},
+    {'start_reg': 100, 'count': 2, 'scan_divider': 1, 'type': 'input'},
 ]
 
 
@@ -65,8 +65,8 @@ def test_unknown_register_is_not_client_error():
 
 
 @pytest.mark.parametrize('block, error', [
-    ({'start_reg': 0, 'count': 126, 'frequency': 1}, 'at most 125'),
-    ({'start_reg': 65500, 'count': 100, 'frequency': 1}, 'at most 65535'),
+    ({'start_reg': 0, 'count': 126, 'scan_divider': 1}, 'at most 125'),
+    ({'start_reg': 65500, 'count': 100, 'scan_divider': 1}, 'at most 65535'),
 ])
 def test_block_out_of_one_request_is_rejected(block, error):
     """ The read of the block failed by ValueError of the request and stopped the scan of the unit """
@@ -75,8 +75,8 @@ def test_block_out_of_one_request_is_rejected(block, error):
 
 
 def test_largest_blocks_are_accepted():
-    ModbusCacheMap([{'start_reg': 0, 'count': 125, 'frequency': 1},
-                    {'start_reg': 65411, 'count': 125, 'frequency': 1}], FakeModbus())
+    ModbusCacheMap([{'start_reg': 0, 'count': 125, 'scan_divider': 1},
+                    {'start_reg': 65411, 'count': 125, 'scan_divider': 1}], FakeModbus())
 
 
 async def test_initial_scan_reads_all_groups():
@@ -98,8 +98,8 @@ async def test_read_past_group_end_raises():
 
 
 async def test_read_over_two_adjacent_groups_raises():
-    cache = ModbusCacheMap([{'start_reg': 0, 'count': 2, 'frequency': 1},
-                            {'start_reg': 2, 'count': 2, 'frequency': 1}], FakeModbus())
+    cache = ModbusCacheMap([{'start_reg': 0, 'count': 2, 'scan_divider': 1},
+                            {'start_reg': 2, 'count': 2, 'scan_divider': 1}], FakeModbus())
     await cache.do_scan(initial=True)
     with pytest.raises(EUnknownRegister):
         cache.get_register(1, 2)
@@ -129,7 +129,7 @@ async def test_slow_group_is_scanned_by_divider():
 
 async def test_failed_scan_keeps_phase_of_slow_groups():
     """ The groups read before an error were ticked, the other ones not, their phases drifted apart """
-    blocks = [{'start_reg': 0, 'count': 1, 'frequency': 2}, {'start_reg': 10, 'count': 1, 'frequency': 2}]
+    blocks = [{'start_reg': 0, 'count': 1, 'scan_divider': 2}, {'start_reg': 10, 'count': 1, 'scan_divider': 2}]
     mb = FakeModbus()
     cache = ModbusCacheMap(blocks, mb)
     read = mb.read_holding_registers
@@ -163,7 +163,7 @@ async def test_scan_without_read_is_not_communication():
     assert cache.last_comm_time is None
 
     # the scans between the reads of a slow group
-    cache = ModbusCacheMap([{'start_reg': 0, 'count': 1, 'frequency': 3}], FakeModbus())
+    cache = ModbusCacheMap([{'start_reg': 0, 'count': 1, 'scan_divider': 3}], FakeModbus())
     assert await cache.do_scan(initial=True)
     last_comm_time = cache.last_comm_time
     assert await cache.do_scan()
@@ -219,25 +219,42 @@ async def test_scan_error_returns_false(error):
 
 
 def test_overlapping_blocks_are_rejected():
-    blocks = [{'start_reg': 0, 'count': 4, 'frequency': 1}, {'start_reg': 3, 'count': 2, 'frequency': 5}]
+    blocks = [{'start_reg': 0, 'count': 4, 'scan_divider': 1}, {'start_reg': 3, 'count': 2, 'scan_divider': 5}]
     with pytest.raises(ValueError, match='overlaps the block of registers 0..3'):
         ModbusCacheMap(blocks, FakeModbus())
     # the holding and input registers are separate, adjacent blocks do not overlap
-    ModbusCacheMap([blocks[0], {**blocks[1], 'type': 'input'}, {'start_reg': 4, 'count': 1, 'frequency': 1}],
+    ModbusCacheMap([blocks[0], {**blocks[1], 'type': 'input'}, {'start_reg': 4, 'count': 1, 'scan_divider': 1}],
                    FakeModbus())
 
 
 @pytest.mark.parametrize('block', [
-    {'start_reg': 0, 'count': 2, 'frequency': 0},           # never scanned again
+    {'start_reg': 0, 'count': 2, 'scan_divider': 0},           # never scanned again
     {'start_reg': 0, 'count': 2},
-    {'start_reg': 0, 'count': 0, 'frequency': 1},
-    {'start_reg': -1, 'count': 2, 'frequency': 1},
-    {'start_reg': '0', 'count': 2, 'frequency': 1},
-    {'start_reg': 0, 'count': 2, 'frequency': 1, 'type': 'inputs'},
+    {'start_reg': 0, 'count': 0, 'scan_divider': 1},
+    {'start_reg': -1, 'count': 2, 'scan_divider': 1},
+    {'start_reg': '0', 'count': 2, 'scan_divider': 1},
+    {'start_reg': 0, 'count': 2, 'scan_divider': 1, 'type': 'inputs'},
 ])
 def test_invalid_block_is_rejected(block):
     with pytest.raises(ValueError, match='Register block'):
         ModbusCacheMap([block], FakeModbus())
+
+
+def test_frequency_is_deprecated_alias_of_scan_divider(caplog):
+    """ The HW definitions of users have the old name 'frequency' """
+    cache = ModbusCacheMap([{'start_reg': 0, 'count': 2, 'frequency': 3}], FakeModbus())
+    assert cache.groups[0].f_divider == 3
+    assert "'frequency' is deprecated" in caplog.text
+
+
+def test_frequency_and_scan_divider_are_rejected():
+    with pytest.raises(ValueError, match='do not set both'):
+        ModbusCacheMap([{'start_reg': 0, 'count': 2, 'frequency': 1, 'scan_divider': 1}], FakeModbus())
+
+
+def test_invalid_frequency_is_rejected():
+    with pytest.raises(ValueError, match="'scan_divider' must be an integer"):
+        ModbusCacheMap([{'start_reg': 0, 'count': 2, 'frequency': 0}], FakeModbus())
 
 
 async def test_initial_scan_is_retried_after_an_error(caplog):

@@ -62,8 +62,8 @@ async def test_state_and_event_follow_the_change(units, events):
 
 
 async def test_change_reads_all_groups_and_keeps_their_phase():
-    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1},
-                          {'start_reg': 10, 'count': 1, 'frequency': 3}])
+    client = make_client([{'start_reg': 0, 'count': 1, 'scan_divider': 1},
+                          {'start_reg': 10, 'count': 1, 'scan_divider': 3}])
     await client.cache.do_scan(initial=True)
     await client.cache.do_scan()
     counters = [group.f_counter for group in client.cache.groups]

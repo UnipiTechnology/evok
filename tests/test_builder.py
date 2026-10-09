@@ -11,7 +11,7 @@ from conftest import make_client, scan
 
 
 # registers 0..399, a block is read by one request of at most 125 registers
-BLOCKS_0_399 = [{'start_reg': start, 'count': 100, 'frequency': 1} for start in range(0, 400, 100)]
+BLOCKS_0_399 = [{'start_reg': start, 'count': 100, 'scan_divider': 1} for start in range(0, 400, 100)]
 
 
 def populate(hw, circuit='1'):
@@ -126,7 +126,7 @@ async def test_bit_ios_of_second_feature_use_start_index(devtype):
 def test_duplicate_circuit_is_an_error(caplog):
     """ The device with the same circuit replaced the registered one without an error """
     feature = dict(BIT_IO_FEATURES[RO], count=2)
-    client = populate({'modbus_register_blocks': [{'start_reg': 0, 'count': 4, 'frequency': 1}],
+    client = populate({'modbus_register_blocks': [{'start_reg': 0, 'count': 4, 'scan_divider': 1}],
                        'modbus_features': [feature, dict(feature, val_coil=16)]})
     assert [Devices.by_name(RO, c).coil for c in ('1_01', '1_02')] == [0, 1]     # the first feature is kept
     assert len(client.eventable_devices) == 2
@@ -148,7 +148,7 @@ async def test_all_device_registers_are_covered_by_blocks(l0306):
 
 
 def data_point_hw(**feature):
-    return {'modbus_register_blocks': [{'start_reg': 1, 'count': 9, 'frequency': 1}],
+    return {'modbus_register_blocks': [{'start_reg': 1, 'count': 9, 'scan_divider': 1}],
             'modbus_features': [dict(type='DATA_POINT', count=3, value_reg=1, **feature)]}
 
 
@@ -175,7 +175,7 @@ async def test_data_points_follow_each_other(datatype, regs):
 
 
 def bao_hw(**feature):
-    return {'modbus_register_blocks': [{'start_reg': 0, 'count': 8, 'frequency': 1}],
+    return {'modbus_register_blocks': [{'start_reg': 0, 'count': 8, 'scan_divider': 1}],
             'modbus_features': [dict(type='BAO', val_reg=0, res_val_reg=4, mode_reg=6, **feature)]}
 
 

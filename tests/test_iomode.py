@@ -10,7 +10,7 @@ MODES = {'Voltage': {'value': 0, 'unit': 'V', 'range': [0, 10]},
 
 
 async def make_iomode(mode_value, regmode=0, modes=MODES):
-    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1}], {0: mode_value})
+    client = make_client([{'start_reg': 0, 'count': 1, 'scan_divider': 1}], {0: mode_value})
     await client.cache.do_scan(initial=True)
     return client, IOMode(client, regmode, modes, 'AI x')
 
@@ -89,7 +89,7 @@ async def test_fixed_mode_cannot_be_switched():
 
 
 async def make_dimode(holding, bitmask=0b10, modes=('Simple', 'DirectSwitch')):
-    client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}], holding)
+    client = make_client([{'start_reg': 0, 'count': 3, 'scan_divider': 1}], holding)
     await client.cache.do_scan(initial=True)
     return client, DIMode(client, bitmask, 0, 1, 2, list(modes), ['Simple', 'Inverted', 'Toggle'], 'DI x')
 
