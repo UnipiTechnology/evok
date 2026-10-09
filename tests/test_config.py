@@ -8,7 +8,7 @@ from tmodbus import AsyncModbusClient, AsyncSmartTransport
 from tmodbus.exceptions import CRCError, ModbusConnectionError, RequestRetryFailedError, ServerDeviceBusyError
 
 from evok import config
-from evok.devices import Devices, OWBUS, SENSOR, SERIALBUS, TCPBUS
+from evok.devices import Devices, DEVICE_INFO, MODBUS_SLAVE, OWBUS, SENSOR, SERIALBUS, TCPBUS
 from evok.owdevice import DS18B20, OwBusDriver
 
 
@@ -36,6 +36,64 @@ def test_load_aliases_unknown_version(tmp_path, caplog):
 
 def create(comm_channels):
     config.create_devices(SimpleNamespace(get_comm_channels=lambda: comm_channels), SimpleNamespace(definitions={}))
+
+
+def create_modbus(comm_channels):
+    hw_dict = SimpleNamespace(definitions={'xS51': {'modbus_features': [], 'modbus_register_blocks': []}})
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: comm_channels), hw_dict)
+
+
+def rtu_bus(port, devices, **options):
+    return {'type': 'MODBUSRTU', 'port': port, 'devices': devices, **options}
+
+
+def test_same_device_name_on_two_buses_is_a_duplicate(caplog):
+    create_modbus({
+        'RTU1': rtu_bus('/dev/null', {1: {'model': 'xS51'}}),
+        'RTU2': rtu_bus('/dev/zero', {1: {'model': 'xS51'}}),
+    })
+    assert list(Devices[MODBUS_SLAVE]) == ['1']
+    assert Devices[MODBUS_SLAVE]['1'].modbus_spec == '/dev/null'
+    assert list(Devices[DEVICE_INFO]) == ['1']
+    assert "Duplicate circuit '1' of a Modbus device" in caplog.text
+
+
+def test_prefix_of_device_and_bus():
+    create_modbus({
+        'RTU1': rtu_bus('/dev/null', {1: {'model': 'xS51'}, 2: {'model': 'xS51', 'prefix': 'a_'}}),
+        'RTU2': rtu_bus('/dev/zero', {1: {'model': 'xS51'}, 2: {'model': 'xS51', 'prefix': ''}}, prefix='rtu2_'),
+    })
+    assert sorted(Devices[MODBUS_SLAVE]) == ['1', '2', 'a_2', 'rtu2_1']
+    assert sorted(Devices[DEVICE_INFO]) == ['1', '2', 'a_2', 'rtu2_1']
+    slave = Devices[MODBUS_SLAVE]['rtu2_1']
+    assert slave.modbus_spec == '/dev/zero'
+    # the IOs of the device are numbered from the prefixed circuit
+    assert slave.parser.circuit == 'rtu2_1'
+    assert slave.parser.io_circuit(0, {}) == 'rtu2_1_01'
+
+
+def test_duplicate_device_info_skips_the_device(caplog):
+    # device_info of the bus is the model, the device with its own device_info is registered by its circuit
+    create_modbus({
+        'TCP': {'type': 'MODBUSTCP', 'device_info': {'model': 'L533'},
+                'devices': {'L533': {'model': 'xS51', 'device_info': {'family': 'Neuron'}}}},
+    })
+    assert list(Devices[MODBUS_SLAVE]) == []
+    assert "Duplicate circuit 'L533' of device_info" in caplog.text
+
+
+@pytest.mark.parametrize('prefix', [1, 'a/', 'a b', ['a']])
+def test_invalid_prefix_of_device(caplog, prefix):
+    create_modbus({'RTU1': rtu_bus('/dev/null', {1: {'model': 'xS51', 'prefix': prefix}, 2: {'model': 'xS51'}})})
+    assert list(Devices[MODBUS_SLAVE]) == ['2']
+    assert "prefix must be a string" in caplog.text
+
+
+def test_invalid_prefix_of_bus_skips_the_bus(caplog):
+    create_modbus({'RTU1': rtu_bus('/dev/null', {1: {'model': 'xS51'}}, prefix='a/')})
+    assert list(Devices[SERIALBUS]) == []
+    assert list(Devices[MODBUS_SLAVE]) == []
+    assert "Error in config of bus 'RTU1'" in caplog.text
 
 
 def test_owfs_bus_with_sensors(caplog):

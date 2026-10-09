@@ -112,6 +112,9 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
   — `d1add77`, `96ba320`
 - **Registrové bloky:** nejvýš 125 registrů, adresy do 65535, bez překryvů. — `2f323f0`, `9f9482c`
 - **Okruhy:** duplicitní okruh je chyba feature, `start_index` platí i pro RO, DO a LED. — `50da3b3`
+- **Modbus zařízení:** volitelný `prefix` zařízení nebo sběrnice, okruh zařízení je `<prefix><device_name>`.
+  Duplicitní okruh `modbus_slave` nebo `device_info` (stejný název zařízení na dvou sběrnicích) je chyba zařízení,
+  dříve se první zařízení tiše nahradilo. — #222
 - **Režimy:** `value` režimu musí být jedinečné celé číslo, datový typ v `transformation` AI musí být známý.
   — `e005aa4`, `a053e80`
 - **Datové body:** zapisovatelný datový bod v input registru je chyba. — `e792e17`

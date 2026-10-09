@@ -119,6 +119,9 @@ An invalid value is an error: the unit or the feature is not created and the err
 - **Register blocks:** at most 125 registers, addresses up to 65535, no overlaps. — `2f323f0`, `9f9482c`
 - **Circuits:** a duplicate circuit is an error of the feature, `start_index` applies also to RO, DO and LED.
   — `50da3b3`
+- **Modbus device:** the optional `prefix` of a device or of a bus, the circuit of the device is
+  `<prefix><device_name>`. A duplicate circuit of `modbus_slave` or `device_info` (the same device name on two buses)
+  is an error of the device, the first device was replaced silently. — #222
 - **Modes:** the `value` of a mode must be a unique integer, the datatype of an AI `transformation` must be known.
   — `e005aa4`, `a053e80`
 - **Data points:** a writable data point in an input register is an error. — `e792e17`

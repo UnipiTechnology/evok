@@ -23,9 +23,11 @@ The circuit is created automatically during initialization of Evok according to 
 | Data point          | *data_point*   | <device_name\>_<register_address\>                | `IAQ_0`, `IAQ_6`, `IAQ_10` |
 | Modbus register     | *register*     | <device_name\>_<register_address\>                | `1_0`, `1_1`, `1_1000`     |
 
-- *<device_name\>*: Name defined in [Evok configuration].
+- *<device_name\>*: Name defined in [Evok configuration], with the optional `prefix` of a Modbus device.
     - examples: `1`, `2`, `3`, `IAQ`, `xS51`, `xS18`.
     - note: [autogen](./configs/evok_configuration.md#autogen) generates device_name as a section number.
+    - note: the same device_name on different buses gives the same circuits, use the `prefix`, e.g. `rtu2_` gives
+      `rtu2_1`, `rtu2_1_01`.
 - *<model_name\>*: Name defined in device_info configuration section.
   - examples: `L523`, `S103`, `S167`.
 - *<number\>*: Sequence number (is based on the 'count' parameter in the [HW definition]).

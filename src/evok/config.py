@@ -1,4 +1,5 @@
 import os
+import re
 from typing import List, Dict, Union
 
 from .modbus import ModbusScanner
@@ -195,6 +196,16 @@ def bus_retries(bus_data: dict) -> int:
     return retries
 
 
+def circuit_prefix(data: dict, default: str = "") -> str:
+    """ The option prefix of a Modbus bus or device, the circuit of the device is <prefix><device_name> """
+    prefix = data.get("prefix", default)
+    if prefix is None:
+        return ""
+    if not isinstance(prefix, str) or not re.fullmatch(r"[A-Za-z0-9._-]*", prefix):
+        raise ValueError(f"prefix must be a string of the characters A-Z a-z 0-9 . _ -, not '{prefix}'")
+    return prefix
+
+
 def retry_strategies(timeout: float, connect_timeout: float, retries: int = 1) -> dict:
     """ Retries of AsyncSmartTransport, which fail fast
 
@@ -222,6 +233,8 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
         logger.info(f"Skipping disabled bus '{bus_name}'")
         return
     bus_type = bus_data.get('type')
+    # the prefix of the bus is the default of its Modbus devices, an invalid one skips the bus
+    bus_prefix = circuit_prefix(bus_data) if bus_type in ['MODBUSTCP', 'MODBUSRTU'] else ""
 
     bus = None
     bus_device_info: Union[None, DeviceInfo] = None
@@ -324,18 +337,27 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
                 scanfreq = device_data.get("scan_frequency", 50)
                 scan_enabled = device_data.get("scan_enabled", True)
                 device_model = device_data["model"]
-                circuit = str(device_name)
+                # the device names of different buses may be the same, the prefix makes the circuits unique
+                circuit = circuit_prefix(device_data, bus_prefix) + str(device_name)
+                if circuit in Devices[MODBUS_SLAVE]:
+                    raise EvokConfigError(f"Duplicate circuit '{circuit}' of a Modbus device, use the prefix "
+                                          f"of the device or of the bus")
                 if device_model not in hw_dict.definitions:
                     logger.error("Unsupported device model %s. Check HW definitions",
                                  device_model)
                     raise EvokConfigError("")
                 hw_model_dict = hw_dict.definitions[device_model]
 
+                has_device_info = bus_device_info is None or "device_info" in device_data
+                if has_device_info and circuit in Devices[DEVICE_INFO]:
+                    raise EvokConfigError(f"Duplicate circuit '{circuit}' of device_info, use the prefix "
+                                          f"of the device or of the bus")
+
                 slave = ModbusScanner(bus.bus_driver, circuit, scanfreq, scan_enabled,
                                       hw_model_dict, unit_id=slave_id)
                 Devices.register_device(MODBUS_SLAVE, slave)
 
-                if bus_device_info is None or "device_info" in device_data:
+                if has_device_info:
                     device_info = {'model': device_data.get("model", device_name)}
                     device_info.update(device_data.get("device_info", {}))
                     family = device_info.get("family", 'unknown')
@@ -345,7 +367,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
                     if model[:2].lower() in ['xs', 'xm', 'xl', 'xg'] and family == 'unknown':
                         family = 'Extension'
                     Devices.register_device(DEVICE_INFO,
-                                            DeviceInfo(name=device_name, family=family, model=model, sn=sn,
+                                            DeviceInfo(name=circuit, family=family, model=model, sn=sn,
                                                        board_count=board_count))
 
         except Exception as E:

@@ -57,6 +57,7 @@ comm_channels:
                 slave-id: <slave_id>
                 model: <model>
                 scan_frequency: <scan_frequency>
+                prefix: <prefix>
 ```
 
 ### Bus configuration
@@ -73,6 +74,7 @@ comm_channels:
         - `retries` - count of retries of a request after a lost connection or a busy unit, an integer `>= 0`
           (Default value is `1`). The bus waits for the retries, a unit which does not respond
           is scanned less often by Evok.
+        - `prefix` - the default `prefix` of the devices of the bus, see the device configuration (Default value is empty)
     - `MODBUSRTU`
         - `port` - path to the Modbus device, required
         - `baudrate` - baudrate of the Modbus device (Default value is `19200`)
@@ -81,6 +83,7 @@ comm_channels:
         - `timeout` - timeout of a response in seconds (Default value is `0.5`)
         - `retries` - count of retries of a request after a failure of the port or a busy unit, an integer `>= 0`
           (Default value is `1`)
+        - `prefix` - the default `prefix` of the devices of the bus, see the device configuration (Default value is empty)
     - `OWFS` (1-Wire bus, the former name `OWBUS` is not supported)
         - `interval` - interval of values updating in seconds, a positive number (Default value is `60`)
         - `scan_interval` - interval of the search for new devices in seconds, `0` searches only on request
@@ -89,7 +92,8 @@ comm_channels:
 
 ### Device configuration
 
-- *<device_name\>*: the device will be available in the API under this name. Has to be unique.
+- *<device_name\>*: the device will be available in the API under this name (with the `prefix` of a Modbus device).
+  Has to be unique.
 - `enabled` - an optional parameter, the device is skipped if it is `false` (Default value is `true`)
 
 #### MODBUSTCP & MODBUSRTU
@@ -102,6 +106,10 @@ comm_channels:
   Its devices are created after the first read, their values are then changed only by the writes of Evok.
   The scan can be enabled or disabled at runtime by `POST /json/modbus_slave/<device_name>` with `scan_enabled`.
 - `device_info` - an optional parameter, describes the device: `family`, `model`, `sn`, `board_count`.
+- `prefix` - an optional parameter, the circuit of the device and of all its IOs is `<prefix><device_name>`,
+  e.g. `rtu2_1`, `rtu2_1_01`. It distinguishes the devices with the same name on different buses, the same circuit
+  of two devices is an error and the later device is not created. Characters `A-Z a-z 0-9 . _ -`
+  (Default value is the `prefix` of the bus, or empty).
 
 #### OWFS
 
