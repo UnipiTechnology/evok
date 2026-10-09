@@ -179,10 +179,12 @@ class EvokConfig:
 
 
 def create_devices(evok_config: EvokConfig, hw_dict):
+    # the circuits of the created Modbus devices -> their bus, the circuit is only the name of the device
+    modbus_names: Dict[str, str] = {}
     for bus_name, bus_data in evok_config.get_comm_channels().items():
         # an error in the config of a bus does not stop creating the other buses
         try:
-            _create_bus(bus_name, bus_data or {}, hw_dict)
+            _create_bus(bus_name, bus_data or {}, hw_dict, modbus_names)
         except Exception as E:
             logger.exception(f"Error in config of bus '{bus_name}' - {str(E)}")
 
@@ -217,7 +219,7 @@ def retry_strategies(timeout: float, connect_timeout: float, retries: int = 1) -
     )
 
 
-def _create_bus(bus_name, bus_data: dict, hw_dict):
+def _create_bus(bus_name, bus_data: dict, hw_dict, modbus_names: Dict[str, str]):
     if not bus_data.get("enabled", True):
         logger.info(f"Skipping disabled bus '{bus_name}'")
         return
@@ -325,6 +327,10 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
                 scan_enabled = device_data.get("scan_enabled", True)
                 device_model = device_data["model"]
                 circuit = str(device_name)
+                # the second device replaced the first one in Devices and its IOs were not created
+                if circuit in modbus_names:
+                    raise EvokConfigError(f"Modbus device '{circuit}' of bus '{bus_name}' has the same name "
+                                          f"as the device of bus '{modbus_names[circuit]}', rename one of them")
                 if device_model not in hw_dict.definitions:
                     logger.error("Unsupported device model %s. Check HW definitions",
                                  device_model)
@@ -334,6 +340,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict):
                 slave = ModbusScanner(bus.bus_driver, circuit, scanfreq, scan_enabled,
                                       hw_model_dict, unit_id=slave_id)
                 Devices.register_device(MODBUS_SLAVE, slave)
+                modbus_names[circuit] = bus_name
 
                 if bus_device_info is None or "device_info" in device_data:
                     device_info = {'model': device_data.get("model", device_name)}
