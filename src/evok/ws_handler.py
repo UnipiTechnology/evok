@@ -1,11 +1,10 @@
 import json
 import logging
 import traceback
-from urllib.parse import urlparse
 
 from tornado import websocket
 
-from .auth import TokenAuth
+from .auth import TokenAuth, is_allowed_origin, is_same_origin
 from .devices import DI, RO, AI, AO, SENSOR
 from .devices import Devices, devtype_of, num_to_devtype_name
 from .handlers_base import CLIENT_ERRORS, check_params, client_error
@@ -24,12 +23,13 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
         self.all_filtered = all_filtered
 
     def check_origin(self, origin):
-        # fix issue when Node-RED removes the 'prefix://'
-        parsed_origin = urlparse(origin)
-        origin = parsed_origin.netloc
-        origin = origin.lower()
-        # return origin == host or origin_origin == host
-        return True
+        """ A web page of the same host or of allowed_origins, every web page in a browser could control the IOs;
+            a client without the header Origin, e.g. Node-RED or Python, is not checked by Tornado
+        """
+        allowed = is_same_origin(origin, self.request) or is_allowed_origin(origin)
+        if not allowed:
+            logger.warning(f"WebSocket from the origin {origin} refused, add it to 'allowed_origins' of 'apis'")
+        return allowed
 
     def open(self):
         self.filter = ["default"]

@@ -147,3 +147,57 @@ def test_invalid_token_is_rejected(token):
     with pytest.raises(ValueError, match="'token' must be a non-empty string"):
         auth.set_token(token)
     assert not auth.is_enabled()
+
+
+ALLOWED = 'http://192.168.1.10:1880'
+
+
+@pytest.fixture
+def allowed_origins():
+    auth.set_allowed_origins([ALLOWED + '/'])
+    yield ALLOWED
+    auth.set_allowed_origins(None)
+
+
+async def test_cors_only_for_allowed_origins(server, allowed_origins):
+    """ Access-Control-Allow-Origin: * let every web page in a browser read and control the IOs """
+    for path, method in (('/rest/all', 'GET'), ('/bulk', 'OPTIONS'), ('/version', 'GET')):
+        response = await fetch(server, path, method, headers={'Origin': 'http://evil.example'})
+        assert 'Access-Control-Allow-Origin' not in response.headers
+        response = await fetch(server, path, method, headers={'Origin': ALLOWED})
+        assert response.headers['Access-Control-Allow-Origin'] == ALLOWED
+        assert 'Authorization' in response.headers['Access-Control-Allow-Headers']
+        assert response.headers['Vary'] == 'Origin'
+
+
+async def test_no_cors_without_allowed_origins(server):
+    response = await fetch(server, '/rest/all', headers={'Origin': ALLOWED})
+    assert 'Access-Control-Allow-Origin' not in response.headers
+
+
+@pytest.mark.parametrize('origin', ['http://evil.example', 'http://192.168.1.10:1881'])
+async def test_websocket_refuses_other_origin(server, allowed_origins, origin):
+    """ Every web page in a browser could connect to the WebSocket and control the IOs """
+    with pytest.raises(tornado.httpclient.HTTPClientError) as error:
+        await ws_connect(server, headers={'Origin': origin})
+    assert error.value.code == 403
+
+
+@pytest.mark.parametrize('origin, headers', [
+    (ALLOWED, {}),
+    ('http://127.0.0.1:{port}', {}),                                    # the same host
+    ('127.0.0.1:{port}', {}),                                           # Node-RED sends no scheme
+    ('http://plc.local', {'X-Forwarded-Host': 'plc.local'}),            # behind nginx
+    (None, {}),                                                         # not a browser
+])
+async def test_websocket_accepts_origin(server, allowed_origins, origin, headers):
+    if origin is not None:
+        headers = dict(headers, Origin=origin.format(port=server))
+    connection = await ws_connect(server, headers=headers)
+    connection.close()
+
+
+@pytest.mark.parametrize('origins', ['http://a', [1], ['ftp://a'], ['http://'], ['http://a/path'], ['a:80']])
+def test_invalid_allowed_origins_are_rejected(origins):
+    with pytest.raises(ValueError, match='allowed_origins'):
+        auth.set_allowed_origins(origins)

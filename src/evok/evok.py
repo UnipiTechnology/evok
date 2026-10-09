@@ -132,9 +132,7 @@ class VersionHandler(TokenAuth, tornado.web.RequestHandler):
     auth_exempt = True      # for monitoring, it tells only the version
 
     def initialize(self):
-        self.set_header("Access-Control-Allow-Origin", "*")
-        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
-        self.set_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+        self.set_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
 
     def get(self):
         self.write(evok_version)
@@ -275,6 +273,7 @@ async def main():
     address_api = evok_config.apis.get("address", "127.0.0.1") or None
     try:
         auth.set_token(evok_config.apis.get("token"))
+        auth.set_allowed_origins(evok_config.apis.get("allowed_origins"))
     except ValueError as E:
         sys.exit(f"evok: {E}")
     if auth.is_enabled():

@@ -65,8 +65,6 @@ def client_error(error) -> tuple[dict, int]:
 
 class EvokWebHandlerBase(TokenAuth, tornado.web.RequestHandler):
     def initialize(self):
-        self.set_header("Access-Control-Allow-Origin", "*")
-        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
         self.set_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
 
     def _get_kw(self) -> dict:

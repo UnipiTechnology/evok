@@ -14,8 +14,6 @@ from .schemas import bulk_post_inp_schema
 class JSONBulkHandler(TokenAuth, tornado.web.RequestHandler):
     def initialize(self):
         self.set_header("Content-Type", "application/json")
-        self.set_header("Access-Control-Allow-Origin", "*")
-        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
         # GET is not supported, the request is in the body of POST
         self.set_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
 
