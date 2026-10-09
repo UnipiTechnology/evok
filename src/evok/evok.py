@@ -223,7 +223,8 @@ def status_cb(device, *args):
 
 async def main():
     arg_parser = argparse.ArgumentParser(prog='evok', description='')
-    arg_parser.add_argument('-d', '--debug', action='store_true', default=False, help='Debug logging')
+    arg_parser.add_argument('-d', '--debug', action='count', default=0,
+                            help='Debug logging, -dd also the debug messages of tmodbus and the raw Modbus traffic')
     arg_parser.add_argument('-v', '--version', action='store_true', default=False, help='Print evok version')
     arg_parser.add_argument('-c', '--config-dir',
                             default=os.environ.get('EVOK_CONFIG_DIR', DEFAULT_CONFIG_DIR),
@@ -259,6 +260,12 @@ async def main():
     if log_level != 'DEBUG':
         # a line for every request only in the debug level
         logging.getLogger('tornado.access').setLevel(logging.WARNING)
+        # every attempt to connect a unit, the connection is reported by the scanner of the unit
+        logging.getLogger('tmodbus').setLevel(logging.WARNING)
+        logging.getLogger('tmodbus.transport.async_smart').setLevel(logging.ERROR)
+    elif args.debug < 2:
+        # the traceback of every failed attempt to connect and every Modbus frame only with -dd
+        logging.getLogger('tmodbus').setLevel(logging.INFO)
     log_file = evok_config.logging.get("file", None)
     if log_file is not None:
         # rotating file handler

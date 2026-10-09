@@ -17,6 +17,13 @@ Now, you can manually run Evok in debug mode, the output will be printed to the 
 /opt/evok/bin/evok -d
 ```
 
+The debug messages of the Modbus library `tmodbus` are logged only with `-dd`: the raw Modbus traffic (every sent
+and received frame) and the traceback of every failed attempt to connect a unit. They add many lines to every scan:
+
+```bash title="Running Evok manually with the debug messages of tmodbus"
+/opt/evok/bin/evok -dd
+```
+
 ## Setting permanent debug mode
 
 If you need to debug an issue that occurs rarely, you can set Evok to run in debug mode permanently.
@@ -50,6 +57,8 @@ logging:
   # ^ Minimum severity of messages to be logged, where minimum is CRITICAL.
   # ^ Options: [CRITICAL, ERROR, WARNING, INFO, DEBUG]
 ```
+
+The debug messages of `tmodbus` are not logged with the `DEBUG` level of the configuration, only with `-dd`.
 
 Now, save via `CTRL+X`, then press `ENTER` and exit by `CTRL+X`.
 The Evok service has to be restarted now.
