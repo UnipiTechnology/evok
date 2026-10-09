@@ -104,7 +104,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - `frequency` u registrového bloku je alias `scan_divider`, zaloguje se varování, obojí v jednom bloku je chyba.
   Hodnota je dělitel skenů, ne frekvence. — `d95f57a`
 - Feature REGISTER v HW definicích, zaloguje se varování. Nahrazuje ho DATA_POINT s `datatype: uint16`, jeho
-  zařízení jsou `data_point` místo `register`, okruh input registru je bez `_inp`. — #228
+  zařízení jsou `data_point` místo `register`, okruh input registru je bez `_inp`. — `fec507a`, `97ca903`
 
 ## Konfigurace a HW definice
 

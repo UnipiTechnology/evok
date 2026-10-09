@@ -109,7 +109,7 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - `frequency` of a register block is a deprecated alias of `scan_divider`, a warning is logged, both in one block
   are an error. The value is a divider of the scans, not a frequency. — `d95f57a`
 - The REGISTER feature of the HW definitions, a warning is logged. A DATA_POINT with `datatype: uint16` replaces it,
-  its devices are `data_point` instead of `register`, without `_inp` in the circuit of an input register. — #228
+  its devices are `data_point` instead of `register`, without `_inp` in the circuit of an input register. — `fec507a`, `97ca903`
 
 ## Configuration and HW definitions
 
