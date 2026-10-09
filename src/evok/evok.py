@@ -29,6 +29,7 @@ logging.basicConfig(level=logging.WARNING)
 logger.setLevel(logging.INFO)
 
 DEFAULT_CONFIG_DIR = '/etc/evok'
+MAX_BODY_SIZE = 1024 * 1024     # a body of a request of the API, a bulk of hundreds of assignments has tens of kB
 DEFAULT_ALIAS_FILE = '/var/lib/evok/alias.yaml'
 
 try:
@@ -309,7 +310,8 @@ async def main():
     )
 
     # ---- prepare http server ----
-    httpServerApi = tornado.httpserver.HTTPServer(app)
+    # the body is read into the memory before its check, the default of Tornado is 100 MB
+    httpServerApi = tornado.httpserver.HTTPServer(app, max_body_size=MAX_BODY_SIZE)
     httpServerApi.listen(port_api, address=address_api)
     logger.info(f"HTTP server API listening on {address_api or 'all interfaces'}:{port_api}")
 

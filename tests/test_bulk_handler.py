@@ -121,3 +121,28 @@ async def test_device_circuits_with_alias(bulk, devices):
     assert code == 200
     assert [state['circuit'] for state in reply['group_queries'][0]] == ['2_01']
     assert (devices[DO]['1_01'].calls, devices[DO]['2_01'].calls) == ([{'value': 1}], [{'value': 1}])
+
+
+async def test_success_is_reported(bulk, devices):
+    """ The reply of a success had no success, the error and the other APIs have it """
+    code, reply = await bulk({'individual_assignments': [
+        {'device_type': 'do', 'device_circuit': '1_01', 'assigned_values': {'value': 1}}]})
+    assert code == 200 and reply['success'] is True
+    assert reply['individual_assignments'] == [{'dev': 'do', 'circuit': '1_01'}]
+
+
+async def test_large_body_is_refused():
+    """ A body up to 100 MB was read into the memory before its check """
+    from evok.evok import MAX_BODY_SIZE
+    sock, port = tornado.testing.bind_unused_port()
+    server = tornado.httpserver.HTTPServer(tornado.web.Application([(r"/bulk", JSONBulkHandler)]),
+                                           max_body_size=MAX_BODY_SIZE)
+    server.add_sockets([sock])
+    try:
+        body = json.dumps({'group_queries': [{'device_types': ['do']}] * 100000})
+        assert len(body) > MAX_BODY_SIZE
+        response = await tornado.httpclient.AsyncHTTPClient().fetch(
+            f"http://127.0.0.1:{port}/bulk", method='POST', body=body, raise_error=False)
+        assert response.code == 400                             # refused by the server before the handler
+    finally:
+        server.stop()

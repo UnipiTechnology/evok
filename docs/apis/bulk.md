@@ -35,8 +35,9 @@ Altnames of the device types such as `input` or `relay` can be used.
 
 ## Response
 
-The response contains a list of results for every part of the request, in the order of the commands:
-a list of states for every group query and group assignment and a state for every individual assignment.
+The response contains `"success": true` and a list of results for every part of the request, in the order
+of the commands: a list of states for every group query and group assignment and a state for every individual
+assignment. The body of a request can have at most 1 MB.
 
 The queries are processed first, so they return the states before the assignments.
 The assignments (`group_assignments` and `individual_assignments` together) are done by the Modbus units:

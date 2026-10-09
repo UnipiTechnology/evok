@@ -73,6 +73,11 @@ location /ws {
 }
 ```
 
+## Limits
+
+The body of a request can have at most 1 MB, a message of a WebSocket client at most 64 kB, a larger one
+is refused before it is processed.
+
 ## Encryption
 
 Evok does not encrypt the communication, the token is sent as plain text. Outside of a trusted network use

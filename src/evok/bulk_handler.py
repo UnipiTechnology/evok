@@ -93,7 +93,8 @@ class JSONBulkHandler(TokenAuth, tornado.web.RequestHandler):
                     else:
                         result[section][command].append(states[index])
 
-            self.write(json.dumps(result))
+            # as the other APIs and the error of bulk
+            self.write(json.dumps({'success': True, **result}))
         except CLIENT_ERRORS as E:
             errors, status = client_error(E)
             logger.error(f"BULK: {errors}")
