@@ -257,6 +257,37 @@ A device has one NV save, `count` is not used, its circuit is the name of the de
     val_coil    : 1003
 ```
 
+### REGISTER (Modbus register)
+
+!!! warning "Deprecated"
+    REGISTER is deprecated, use [DATA_POINT](#data_point-data-point) with `datatype: uint16` instead,
+    with `writable: true` for a writable holding register. The data point has the circuit
+    `<device_name>_<register_address>` also for an input register (without `_inp`) and it is available
+    in the API as `data_point` instead of `register`, the clients have to be changed.
+
+Allows you to add raw 16-bit Modbus registers of the device, one device for each register.
+The [circuit](../circuit.md) is `<device_name>_<register_address>`, of an input register `<device_name>_<register_address>_inp`.
+A holding register is writable through the API, an input one is read-only.
+
+- `start_reg` - address of the first register, the next registers follow
+- `reg_type` - `holding` (default) or `input`
+
+```yaml title="Example"
+  - type        : REGISTER
+    count       : 10
+    start_reg   : 0
+```
+
+The same registers as data points:
+
+```yaml title="Example"
+  - type        : DATA_POINT
+    count       : 10
+    value_reg   : 0
+    datatype    : uint16
+    writable    : true
+```
+
 ### DATA_POINT (data point)
 
 If no other type is viable, data point may be used.
