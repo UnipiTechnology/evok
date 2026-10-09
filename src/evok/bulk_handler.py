@@ -47,6 +47,9 @@ class JSONBulkHandler(TokenAuth, tornado.web.RequestHandler):
             js_dict = json.loads(self.request.body)
             # the structure of the request, the assigned values are checked by the device schemas
             jsonschema.validate(instance=js_dict, schema=bulk_post_inp_schema)
+            # the whole request with an assignment, also its queries, needs the token for changes
+            if 'group_assignments' in js_dict or 'individual_assignments' in js_dict:
+                self.require_write()
 
             # find the devices and check the values of all assignments before setting any device
             group_assignments = []

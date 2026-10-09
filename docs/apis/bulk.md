@@ -48,6 +48,7 @@ is set as a unit of its own. The results are in the order of the request.
 
 ## Errors
 
+With the `read_token` a request with an assignment is refused with the status 403, also its queries.
 All assignments are checked before any device is set. An unknown device type, circuit or alias is reported
 with the status 404, invalid params with the status 400, and no device is set.
 

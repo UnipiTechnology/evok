@@ -5,7 +5,7 @@ from typing import Awaitable, Optional
 from tornado_jsonrpc2 import JSONRPCHandler
 from tornado_jsonrpc2.exceptions import InternalError, InvalidParams, MethodNotFound
 
-from .auth import TokenAuth
+from .auth import WRITE, TokenAuth
 from .devices import SENSOR, OWBUS, DI, DO, RO, AI, AO
 from .devices import Devices, DeviceNotFound, to_bool
 from .errors import UnitUnavailable
@@ -23,9 +23,18 @@ class UnitUnavailableError(InvalidParams):
     short_message = "Unit unavailable"
 
 
+class ReadOnlyAccessError(InvalidParams):
+    """ The read_token of the configuration allows only the methods which read, a subclass as UnitUnavailableError """
+    error_code = -32001         # a server error defined by the implementation
+    short_message = "Forbidden"
+
+
 async def create_response(request, backend):
     if request.method not in backend.RPC_METHODS:
         raise MethodNotFound(f"Method '{request.method}' not found!")
+    # the access of the request is set by TokenAuth.prepare()
+    if getattr(backend, 'access', WRITE) != WRITE and request.method not in backend.RPC_READ_METHODS:
+        raise ReadOnlyAccessError("The token allows only reading")
     method = getattr(backend, request.method)
 
     params = getattr(request, 'params', [])
@@ -78,6 +87,18 @@ class Handler(TokenAuth, JSONRPCHandler):
         'owbus_scan',
         'owbus_list',
         'sensor_set',
+        'sensor_get',
+        'sensor_get_value',
+    ))
+    # the methods allowed with the read_token of the configuration
+    RPC_READ_METHODS = frozenset((
+        'input_get',
+        'input_get_value',
+        'relay_get',
+        'output_get',
+        'ai_get',
+        'owbus_get',
+        'owbus_list',
         'sensor_get',
         'sensor_get_value',
     ))

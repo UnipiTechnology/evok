@@ -6,6 +6,9 @@
     user name, or to the WebSocket also as the query argument `token`, a browser cannot set a header
     of a WebSocket. The token is not accepted in the URL of the other APIs, it would be kept
     in the logs of proxies and in the history of browsers.
+
+    The optional read_token gives the access only for reading: the requests which change a device
+    raise ReadOnlyAccess, reported as 403.
 """
 import base64
 import binascii
@@ -13,18 +16,29 @@ import hmac
 import json
 from urllib.parse import urlparse
 
+from .errors import ReadOnlyAccess
 from .log import logger
 
+WRITE, READ = 'write', 'read'       # the access of a request
+
 _token: str | None = None
+_read_token: str | None = None
 _allowed_origins: frozenset[str] = frozenset()     # scheme://host[:port] in lower case
 
 
-def set_token(token) -> None:
-    """ Set the token of the configuration, None disables the authentication; raise ValueError if it is invalid """
-    global _token
-    if token is not None and (not isinstance(token, str) or not token.strip()):
-        raise ValueError("apis: 'token' must be a non-empty string")
-    _token = token
+def set_token(token, read_token=None) -> None:
+    """ Set the tokens of the configuration, None disables the authentication; raise ValueError if they are invalid """
+    global _token, _read_token
+    for name, value in (('token', token), ('read_token', read_token)):
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            raise ValueError(f"apis: '{name}' must be a non-empty string")
+    if read_token is not None:
+        # without the token the API would be open for changes and closed for reading
+        if token is None:
+            raise ValueError("apis: 'read_token' requires 'token'")
+        if read_token == token:
+            raise ValueError("apis: 'read_token' must differ from 'token'")
+    _token, _read_token = token, read_token
 
 
 def is_enabled() -> bool:
@@ -83,13 +97,26 @@ def _request_token(request, query_token: bool) -> str | None:
     return None
 
 
-def is_authorized(request, query_token: bool = False) -> bool:
-    """ The request has the token of the configuration, any request without the token configured """
-    if _token is None:
-        return True
-    token = _request_token(request, query_token)
+def _equal(token: str, configured: str | None) -> bool:
     # in constant time, the time of the comparison does not tell a part of the token
-    return token is not None and hmac.compare_digest(token.encode(), _token.encode())
+    return configured is not None and hmac.compare_digest(token.encode(), configured.encode())
+
+
+def access(request, query_token: bool = False) -> str | None:
+    """ WRITE for the token or without the token configured, READ for the read_token, None without a valid one """
+    if _token is None:
+        return WRITE
+    token = _request_token(request, query_token)
+    if token is None:
+        return None
+    # both are compared, the time does not tell which one matched
+    write, read = _equal(token, _token), _equal(token, _read_token)
+    return WRITE if write else READ if read else None
+
+
+def is_authorized(request, query_token: bool = False) -> bool:
+    """ The request has a token of the configuration, any request without the token configured """
+    return access(request, query_token) is not None
 
 
 class TokenAuth:
@@ -101,6 +128,7 @@ class TokenAuth:
 
     auth_exempt = False     # e.g. /version for monitoring
     query_token = False     # the token also in the query argument token, only the WebSocket
+    access = WRITE          # of the request, set by prepare()
 
     def set_default_headers(self):
         """ CORS only for the allowed origins of the configuration, it was * for every web page;
@@ -112,9 +140,17 @@ class TokenAuth:
             self.set_header('Access-Control-Allow-Origin', origin)
             self.set_header('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Requested-With')
 
+    def require_write(self):
+        """ Raise ReadOnlyAccess for a request with the read_token, call it before a change """
+        if self.access != WRITE:
+            raise ReadOnlyAccess("The token allows only reading")
+
     def prepare(self):
-        if self.auth_exempt or self.request.method == 'OPTIONS' or \
-                is_authorized(self.request, self.query_token):
+        if self.auth_exempt or self.request.method == 'OPTIONS':
+            return
+        request_access = access(self.request, self.query_token)
+        if request_access is not None:
+            self.access = request_access
             return
         logger.warning(f"Unauthorized {self.request.method} {self.request.path} from {self.request.remote_ip}")
         self.set_status(401)

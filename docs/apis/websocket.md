@@ -7,6 +7,7 @@ The WebSocket API allows for two-way communication between the client and the se
 The WebSocket is at `ws://<host>:8080/ws`. With a `token` in the configuration it is required in the header
 `Authorization: Bearer <token>`, a browser sends it as `ws://<host>:8080/ws?token=<token>`. A web page
 in a browser can connect only from the address of Evok or from `allowed_origins`, see [Security](../security.md).
+With the `read_token` the command `set` gets the error `ReadOnlyAccess`.
 
 Evok sends a ping every 10 s and closes a connection without a pong for 30 s, e.g. after a lost network.
 A message of a client can have at most 64 kB.

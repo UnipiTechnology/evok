@@ -630,6 +630,8 @@ paths:
                     $ref: '#/components/schemas/Digital_input'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -742,6 +744,8 @@ paths:
                       id: 38n1ghv9tgxjx
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -869,6 +873,8 @@ paths:
                     $ref: '#/components/schemas/Owbus'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -997,6 +1003,8 @@ paths:
                       id: u38ddede1rpq5
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -1198,6 +1206,8 @@ paths:
                     $ref: '#/components/schemas/Modbus_slave'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -1421,6 +1431,8 @@ paths:
                       id: vl5wpaas93pas
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -1621,6 +1633,8 @@ paths:
                       value: 21.5
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           description: Invalid params or the value cannot be written
           content:
@@ -1807,6 +1821,8 @@ paths:
                       id: vl5w8mu65fs1t
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -1950,6 +1966,8 @@ paths:
                       id: vl5w8muszeeyt
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2165,6 +2183,8 @@ paths:
                       id: a2nsiopwetife
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2308,6 +2328,8 @@ paths:
                       id: vl5w8muszeeyt
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2527,6 +2549,8 @@ paths:
                     $ref: '#/components/schemas/Analog_output'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2767,6 +2791,8 @@ paths:
                     $ref: '#/components/schemas/Analog_input'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2813,6 +2839,8 @@ paths:
                       id: 38n16asd4sv98
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2967,6 +2995,8 @@ paths:
                         circuit: "1_01"
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -3026,6 +3056,8 @@ paths:
                     alias: "debug-led"
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -4232,6 +4264,18 @@ components:
                 success: false
                 errors:
                   Unauthorized: Missing or invalid token
+    Forbidden:
+      description: The read_token of the configuration allows only reading, the device is not changed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            read-only:
+              value:
+                success: false
+                errors:
+                  ReadOnlyAccess: The token allows only reading
     BadRequest:
       description: Invalid params or the value cannot be written
       content:
@@ -4285,7 +4329,8 @@ components:
     bearerToken:
       type: http
       scheme: bearer
-      description: The token of apis in the configuration of Evok, required only when it is set
+      description: The token of apis in the configuration of Evok, required only when it is set;
+        the read_token allows only reading, a POST with it is refused with 403
     basicToken:
       type: http
       scheme: basic

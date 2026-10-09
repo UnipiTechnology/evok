@@ -41,6 +41,7 @@ The param `timeout` of `output_set_for_time` is a deprecated alias of `pulse_dur
 | `-32602` | Invalid params: a missing or unknown param, an invalid value, an unknown circuit or alias |
 | `-32603` | Internal error, the details are in the log of Evok                                         |
 | `-32000` | Unit unavailable: the Modbus unit failed its last scan, or a request of the change failed |
+| `-32001` | Forbidden: the `read_token` allows only the methods which read                            |
 
 ```rs title="Example"
 {'jsonrpc': '2.0', 'id': 0, 'error': {'code': -32602, 'message': "Invalid params: Circuit or alias with name '9_99' not defined!"}}

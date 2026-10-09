@@ -273,12 +273,13 @@ async def main():
     # only the local interface by default, an empty address listens on all interfaces
     address_api = evok_config.apis.get("address", "127.0.0.1") or None
     try:
-        auth.set_token(evok_config.apis.get("token"))
+        auth.set_token(evok_config.apis.get("token"), evok_config.apis.get("read_token"))
         auth.set_allowed_origins(evok_config.apis.get("allowed_origins"))
     except ValueError as E:
         sys.exit(f"evok: {E}")
     if auth.is_enabled():
-        logger.info("The API requires the token of the configuration")
+        logger.info("The API requires the token of the configuration"
+                    + (", the read_token allows only reading" if evok_config.apis.get("read_token") else ""))
     else:
         logger.info("The API is not authenticated, set 'token' in 'apis' for an access from the network")
 

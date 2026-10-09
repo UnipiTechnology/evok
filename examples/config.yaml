@@ -34,6 +34,9 @@ apis:
   # ^ required by all APIs except /version, as 'Authorization: Bearer <token>', the password of Basic auth,
   # ^ or ?token=<token> of the WebSocket; without it the APIs are not authenticated
 
+  # read_token: <another long random string>
+  # ^ only reading, a change of a device with it is refused with 403; it requires 'token'
+
   # allowed_origins: ["http://192.168.1.10:1880"]
   # ^ web applications on other addresses which use the API from a browser (CORS and WebSocket)
 

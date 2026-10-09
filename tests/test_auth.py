@@ -201,3 +201,75 @@ async def test_websocket_accepts_origin(server, allowed_origins, origin, headers
 def test_invalid_allowed_origins_are_rejected(origins):
     with pytest.raises(ValueError, match='allowed_origins'):
         auth.set_allowed_origins(origins)
+
+
+READ_TOKEN = 'read-only-token'
+READ = {'Authorization': f'Bearer {READ_TOKEN}'}
+WRITE = {'Authorization': f'Bearer {TOKEN}'}
+
+
+@pytest.fixture
+def read_token():
+    auth.set_token(TOKEN, READ_TOKEN)
+    yield READ_TOKEN
+    auth.set_token(None)
+
+
+@pytest.mark.parametrize('path', ['/rest/all', '/json/di/1_01', '/log'])
+async def test_read_token_reads(server, read_token, path):
+    assert (await fetch(server, path, headers=READ)).code in (200, 404)    # authorized, 404 of no device or log
+
+
+@pytest.mark.parametrize('path, body', [('/rest/di/1_01', 'debounce=10'), ('/json/di/1_01', '{"debounce": 10}')])
+async def test_read_token_cannot_change(server, read_token, path, body):
+    response = await fetch(server, path, 'POST', body, READ)
+    assert response.code == 403
+    assert json.loads(response.body) == {'success': False, 'errors': {'ReadOnlyAccess': 'The token allows only reading'}}
+    assert (await fetch(server, path, 'POST', body, WRITE)).code == 404     # the token for changes, no device
+
+
+async def test_read_token_in_bulk(server, read_token):
+    queries = json.dumps({'group_queries': [{'device_types': ['di']}]})
+    assert (await fetch(server, '/bulk', 'POST', queries, READ)).code == 200
+    # an assignment refuses the whole request before the lookup of its device, also its queries
+    mixed = json.dumps({'group_queries': [{'device_types': ['di']}], 'individual_assignments': [
+        {'device_type': 'di', 'device_circuit': '1_99', 'assigned_values': {'debounce': 1}}]})
+    response = await fetch(server, '/bulk', 'POST', mixed, READ)
+    assert response.code == 403 and 'group_queries' not in json.loads(response.body)
+    assert (await fetch(server, '/bulk', 'POST', mixed, WRITE)).code == 404
+
+
+async def test_read_token_in_rpc(server, read_token):
+    async def call(method, params, headers):
+        body = json.dumps({'jsonrpc': '2.0', 'method': method, 'params': params, 'id': 1})
+        return json.loads((await fetch(server, '/rpc', 'POST', body, headers)).body)
+    assert (await call('relay_get', ['1_01'], READ))['error']['code'] == -32602      # read, no device
+    assert (await call('relay_set', ['1_01', 1], READ))['error'] == \
+        {'code': -32001, 'message': 'Forbidden: The token allows only reading'}
+    assert (await call('relay_set', ['1_01', 1], WRITE))['error']['code'] == -32602  # changed, no device
+
+
+def test_rpc_read_methods_are_rpc_methods():
+    assert RpcHandler.RPC_READ_METHODS < RpcHandler.RPC_METHODS
+    assert all(not ('_set' in method or 'scan' in method) for method in RpcHandler.RPC_READ_METHODS)
+
+
+async def test_read_token_in_websocket(server, read_token):
+    connection = await ws_connect(server, f'?token={READ_TOKEN}')
+    await connection.write_message(json.dumps({'cmd': 'all'}))
+    assert isinstance(json.loads(await connection.read_message()), list)
+    await connection.write_message(json.dumps({'cmd': 'set', 'dev': 'di', 'circuit': '1_99', 'debounce': 1}))
+    assert json.loads(await connection.read_message()) == \
+        {'success': False, 'errors': {'ReadOnlyAccess': 'The token allows only reading'}}
+    connection.close()
+
+
+@pytest.mark.parametrize('token, read, error', [
+    (None, 'x', "'read_token' requires 'token'"),
+    ('x', 'x', "'read_token' must differ from 'token'"),
+    ('x', '', "'read_token' must be a non-empty string"),
+])
+def test_invalid_read_token_is_rejected(token, read, error):
+    with pytest.raises(ValueError, match=error):
+        auth.set_token(token, read)
+    assert not auth.is_enabled()

@@ -32,6 +32,30 @@ the token gets the status `401`.
 The token in the URL is accepted only by the WebSocket, a browser cannot set a header of a WebSocket.
 The other APIs refuse it, the URL is kept in the logs of proxies and in the history of browsers.
 
+### Read-only token
+
+A client which only reads the IOs, e.g. a visualisation or a logger, can get a second token which cannot change
+anything:
+
+```yaml
+apis:
+  token: 3f8c...e21a        # reading and changes
+  read_token: 9b07...4c5d   # only reading
+```
+
+It is sent the same way as the `token`. A request which would change a device gets `403` with
+`{"success": false, "errors": {"ReadOnlyAccess": "The token allows only reading"}}`:
+
+| API       | Allowed with `read_token`                                       | Refused                                         |
+|-----------|-----------------------------------------------------------------|-------------------------------------------------|
+| REST, JSON | `GET` of devices and their properties, `/rest/all`, `/json/all` | `POST`                                          |
+| Bulk      | `group_queries`                                                 | a request with an assignment, also its queries  |
+| WebSocket | `all`, `full`, `filter` and the events                          | `set`, an error reply, the connection stays     |
+| RPC       | `*_get`, `*_get_value`, `owbus_list`                            | the other methods, the error `-32001`           |
+| Log       | `/log`                                                          |                                                 |
+
+`read_token` requires `token`, Evok does not start with only the `read_token`.
+
 ```bash
 curl -H "Authorization: Bearer <token>" http://192.168.1.10:8080/rest/all
 curl -u any:<token> http://192.168.1.10:8080/rest/all

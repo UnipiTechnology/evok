@@ -91,6 +91,9 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
             elif cmd == "filter":
                 self._set_filter(message.get("devices"))
             elif cmd in ("full", "set"):
+                if cmd == "set":
+                    # before the lookup of the device, as REST and bulk
+                    self.require_write()
                 if "dev" not in message or "circuit" not in message:
                     raise ValueError(f"Command '{cmd}' requires 'dev' and 'circuit'")
                 dev = message["dev"]

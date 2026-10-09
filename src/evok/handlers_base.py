@@ -9,7 +9,7 @@ from .devices import OWBUS, DEVICE_INFO, SENSOR, MODBUS_SLAVE, \
     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
     REGISTER, DATA_POINT, NV_SAVE
 from .auth import TokenAuth
-from .errors import DeviceNotFound, UnitUnavailable
+from .errors import DeviceNotFound, ReadOnlyAccess, UnitUnavailable
 from .log import logger
 from .modbus import set_devices
 from .schemas import schemas
@@ -17,7 +17,7 @@ from .schemas import schemas
 SCHEMA_VALIDATE = True
 
 # errors of a request, reported to the client, other errors are internal
-CLIENT_ERRORS = (ValueError, DeviceNotFound, UnitUnavailable, jsonschema.ValidationError)
+CLIENT_ERRORS = (ValueError, DeviceNotFound, ReadOnlyAccess, UnitUnavailable, jsonschema.ValidationError)
 
 
 def check_params(dev_type, kw):
@@ -56,6 +56,8 @@ def client_error(error) -> tuple[dict, int]:
     # a wrong device is not found, an unavailable Modbus unit cannot be changed now, wrong data is a bad request
     if isinstance(error, DeviceNotFound):
         status = 404
+    elif isinstance(error, ReadOnlyAccess):
+        status = 403
     elif isinstance(error, UnitUnavailable):
         status = 503
     else:
@@ -109,10 +111,11 @@ class EvokWebHandlerBase(TokenAuth, tornado.web.RequestHandler):
     async def post(self, dev, circuit, prop):
         """ POST /rest/DEVICE/CIRCUIT[/alias] sets the params of the device in the body, validated by its schema
 
-            An unknown device or circuit is 404, invalid params 400, an unavailable Modbus unit 503,
-            other errors 500.
+            An unknown device or circuit is 404, invalid params 400, the read_token 403, an unavailable
+            Modbus unit 503, other errors 500.
         """
         try:
+            self.require_write()
             # .../alias is the documented URL for setting the alias, the params are in the body
             if prop not in (None, 'alias'):
                 raise DeviceNotFound(f"Invalid URL, POST sets the params of the device in the body, not '{prop}'")

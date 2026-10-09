@@ -18,6 +18,8 @@ In this section you can configure address and port for API listening. These sett
 - `token` - an optional token required by all APIs except `/version`, a long random string,
   e.g. made by `openssl rand -hex 32`. Without it the APIs are not authenticated, use it with an address
   of the network. See [Security](../security.md) for how the clients send it.
+- `read_token` - an optional second token which allows only reading, it requires `token` and must differ from it.
+  A change of a device with it is refused with the status `403`.
 - `allowed_origins` - an optional list of the origins of the web applications on other addresses
   which use the API from a browser, e.g. `["http://192.168.1.10:1880"]`. Only they get the CORS headers
   and can connect to the WebSocket from a browser, a web page of the same address as the API needs no entry.
