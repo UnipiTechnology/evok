@@ -4,7 +4,7 @@ from evok.devices import Devices, DI, DO, RO, AI, AO, LED, WATCHDOG, NV_SAVE
 from evok.modbus.builder import IOParser
 from evok.modbus.digital import DigitalInput, DigitalOutput, ULED
 from evok.modbus.special import Watchdog, NvSave
-from evok.devices import DATA_POINT
+from evok.devices import DATA_POINT, REGISTER
 from evok.modbus.analog import AnalogInput, AnalogOutputBrain, DataPoint, OwTemperature
 
 from conftest import make_client, scan
@@ -214,3 +214,10 @@ def test_data_point_with_valid_mask_reg_is_ow_temperature():
     assert [(d.accessor.index, d.accessor_valid.index, d.accessor_valid.mask) for d in devs] == \
         [(1, 9, 0b001), (2, 9, 0b010), (3, 9, 0b100)]
     assert devs[0].accessor.ratio == 0.01 and devs[0].unit == 'C' and devs[0].major_group == '1'
+
+
+def test_register_is_deprecated(caplog):
+    populate({'modbus_register_blocks': [{'start_reg': 0, 'count': 2, 'scan_divider': 1}],
+              'modbus_features': [{'type': 'REGISTER', 'count': 2, 'start_reg': 0}]})
+    assert circuits(REGISTER) == ['1_0', '1_1']           # still created
+    assert caplog.text.count('the feature REGISTER is deprecated') == 1
