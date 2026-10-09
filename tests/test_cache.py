@@ -254,7 +254,8 @@ async def test_initial_scan_is_retried_after_an_error(caplog):
             raise failures.pop()
         return await read(*args, **kwargs)
     mb.read_holding_registers = flaky
-    slave = SimpleNamespace(cache=cache, circuit='1', populated=False, INITIAL_SCAN_INTERVAL=0, scan_interval=10,
+    slave = SimpleNamespace(cache=cache, circuit='1', populated=False, INITIAL_SCAN_INTERVAL=0, MAX_SCAN_INTERVAL=0,
+                            scan_interval=10,
                             parser=SimpleNamespace(populate=populated.set))
     task = asyncio.create_task(ModbusScanner._scan_loop(slave))
     await asyncio.wait_for(populated.wait(), 1)

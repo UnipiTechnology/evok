@@ -311,3 +311,53 @@ async def test_set_sends_status(l0306, monkeypatch):
     assert events == [scanner, scanner]
     await scanner.set()                                         # nothing set, no event
     assert len(events) == 2
+
+
+async def test_missing_unit_is_retried_slower(l0306):
+    """ A missing unit was retried every 2 s, a third to a half of a shared RTU bus """
+    scanner, mb = make_scanner(l0306)
+    scanner.INITIAL_SCAN_INTERVAL, scanner.MAX_SCAN_INTERVAL = 0.01, 0.04
+    mb.connected = False
+    attempts = []
+    read = mb.read_holding_registers
+
+    async def counted(*args, **kwargs):
+        if mb.connected:
+            return await read(*args, **kwargs)
+        attempts.append(asyncio.get_running_loop().time())  # a failed scan fails by its first read
+        try:
+            return await read(*args, **kwargs)
+        finally:
+            mb.connected = len(attempts) == 6               # the unit responds to the 7th scan
+    mb.read_holding_registers = counted
+    scanner.scan_enabled = False
+    scanner.start_scanning()
+    await asyncio.wait_for(scanner.scan_task, 2)
+    gaps = [later - earlier for earlier, later in zip(attempts, attempts[1:])]
+    # doubled up to MAX_SCAN_INTERVAL, a sleep is never shorter, the bound above is loose for a slow machine
+    assert gaps[1] >= 0.02 and min(gaps[2:]) >= 0.04 and max(gaps) < 0.5
+
+
+async def test_lost_and_restored_unit_is_sent(l0306, monkeypatch):
+    """ The clients learned about an unavailable unit only by an error of a change """
+    events = []
+    monkeypatch.setattr(devents, 'status', lambda device, **kw: events.append(device))
+    scanner, mb = make_scanner(l0306)
+    scanner.INITIAL_SCAN_INTERVAL = 0.01
+    mb.connected = False
+    scanner.start_scanning()
+    await asyncio.sleep(0.05)
+    assert events == [scanner]                              # once, not by every retry
+    mb.connected = True
+    while not scanner.populated:
+        await asyncio.sleep(0.01)
+    assert events[1] is scanner                             # connected
+    events.clear()
+    mb.connected = False
+    await asyncio.sleep(0.1)
+    assert scanner in events                                # lost
+    events.clear()
+    mb.connected = True
+    await asyncio.sleep(0.2)
+    assert scanner in events                                # back
+    await scanner.stop_scanning()

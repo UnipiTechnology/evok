@@ -24,7 +24,7 @@ class ModbusScanner:
         of its devices are changed only by the writes of Evok.
     """
 
-    INITIAL_SCAN_INTERVAL = 2
+    INITIAL_SCAN_INTERVAL = 2       # [s] the first retry of the first scan, it is slowed down as a failing unit
     MAX_SCAN_INTERVAL = 16          # [s] the slowed down scan of a failing unit
 
     def __init__(self, transport: AsyncSmartTransport,
@@ -127,17 +127,26 @@ class ModbusScanner:
         """ Wait for the connected unit, a communication error is retried, it is logged once.
             Create its devices, then scan it periodically with scan_enabled.
             A started again scan does not create the devices again.
+
+            A missing unit is retried slower and slower up to MAX_SCAN_INTERVAL, every 2 s it took
+            a third to a half of a shared RTU bus. A lost and a restored communication is sent
+            as an event of the unit.
         """
         if not self.populated:
             logged_error = None
+            interval = self.INITIAL_SCAN_INTERVAL
             while not await self.cache.do_scan(initial=True):
                 error = self.cache.scan_error
+                if logged_error is None:
+                    devents.status(self)
                 if repr(error) != repr(logged_error):
                     logger.warning(f"Waiting for device '{self.circuit}': {error!r}")
                     logged_error = error
-                await asyncio.sleep(self.INITIAL_SCAN_INTERVAL)
+                await asyncio.sleep(interval)
+                interval = min(interval * 2, self.MAX_SCAN_INTERVAL)
             if logged_error is not None:
                 logger.info(f"Device '{self.circuit}' is connected")
+                devents.status(self)
 
             self.parser.populate()
             self.populated = True
@@ -159,11 +168,13 @@ class ModbusScanner:
                 if err:
                     err = False
                     logger.info(f"Communication with device is back: '{self.circuit}'")
+                    devents.status(self)
                 interval = self.scan_interval
             else:
                 if not err:
                     err = True
                     logger.warning(f"Slowing down device: '{self.circuit}': {self.cache.scan_error!r}")
+                    devents.status(self)
                 # exponential growth interval with limitation [s]
                 interval = min(interval * 2, max(self.MAX_SCAN_INTERVAL, self.scan_interval))
 

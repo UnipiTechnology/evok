@@ -3607,8 +3607,9 @@ components:
             scan_error:
               type: [string, 'null']
               examples: ['RequestRetryFailedError: Failed to get a valid response after 2 attempts', null]
-              description: The error of the last scan, null after a successful one. The scan of a failing slave
-                is slowed down up to 16 s.
+              description: The error of the last scan, null after a successful one. The scan of a failing slave,
+                also of one which did not respond yet, is slowed down up to 16 s. A lost and a restored
+                communication is sent as an event of the slave.
               readOnly: true
       examples:
         - dev: modbus_slave
