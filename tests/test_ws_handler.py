@@ -195,3 +195,78 @@ async def test_event_filter_by_device_type(handlers, devices, dev):
     await send(client, {'cmd': 'filter', 'devices': devices})
     handler.on_event(FakeState(dev))
     assert await send(client, {'cmd': 'filter', 'devices': devices}) == [[{'dev': dev, 'circuit': '1'}]]
+
+
+class Changing:
+    """ A device whose state changes """
+    def __init__(self, value):
+        self.value = value
+
+    def full(self):
+        return {'dev': 'do', 'circuit': '1_01', 'value': self.value}
+
+
+async def test_events_of_slow_client_are_merged(handlers):
+    """ Every event was written at once, the messages of a slow client were buffered without a limit """
+    client, handler = handlers
+    sent, release = [], asyncio.Event()
+
+    async def slow_write(message):
+        sent.append(json.loads(message))
+        await release.wait()
+    handler.write_message = slow_write
+    for value in (1, 2, 3):
+        handler.on_event(Changing(value))
+        await asyncio.sleep(0)
+    handler.on_event(Devices[DI]['1_01'])
+    release.set()
+    while handler.send_task is not None:
+        await asyncio.sleep(0)
+    # the first state is sent at once, the next ones while it is sent are merged, the last state of each device
+    assert sent == [[{'dev': 'do', 'circuit': '1_01', 'value': 1}],
+                    [{'dev': 'do', 'circuit': '1_01', 'value': 3}, {'dev': 'di', 'circuit': '1_01'}]]
+
+
+async def test_event_of_closed_client_is_dropped(handlers, caplog):
+    client, handler = handlers
+
+    async def closed(message):
+        raise tornado.websocket.WebSocketClosedError()
+    handler.write_message = closed
+    handler.on_event(Devices[DI]['1_01'])
+    await asyncio.sleep(0.01)
+    assert handler.send_task is None and handler.pending == {}
+    assert 'error' not in caplog.text.lower()
+
+
+def test_client_removed_during_event_does_not_break_the_others():
+    """ The set of the clients was iterated directly, a removed client raised RuntimeError """
+    from evok.evok import status_cb
+    received = []
+
+    class Client:
+        def on_event(self, device):
+            registered_ws['all'].discard(self)
+            received.append(device)
+    registered_ws['all'] = {Client(), Client()}
+    try:
+        status_cb('event')
+    finally:
+        registered_ws.clear()
+    assert received == ['event', 'event']
+
+
+async def test_large_message_closes_connection():
+    """ A command is short, the default limit was 10 MB """
+    from evok.ws_handler import WEBSOCKET_SETTINGS
+    sock, port = tornado.testing.bind_unused_port()
+    server = tornado.httpserver.HTTPServer(tornado.web.Application([(r"/ws", WsHandler)], **WEBSOCKET_SETTINGS))
+    server.add_sockets([sock])
+    try:
+        client = await tornado.websocket.websocket_connect(f"ws://127.0.0.1:{port}/ws")
+        await client.write_message(json.dumps({'cmd': 'filter', 'devices': ['x' * 70000]}))
+        assert await client.read_message() is None              # closed by the server
+        assert WEBSOCKET_SETTINGS['websocket_ping_interval'] and WEBSOCKET_SETTINGS['websocket_ping_timeout']
+    finally:
+        server.stop()
+        registered_ws.clear()

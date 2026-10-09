@@ -1,6 +1,5 @@
+import asyncio
 import json
-import logging
-import traceback
 
 from tornado import websocket
 
@@ -13,6 +12,10 @@ from .log import logger
 
 # clients notified by status_cb() in evok.py, websocket clients and the webhook
 registered_ws = {}
+
+# settings of the tornado.web.Application of the API: a connection lost without its close, e.g. a lost network,
+# is closed after the timeout of the ping, not after the timeout of TCP; the commands are short
+WEBSOCKET_SETTINGS = dict(websocket_ping_interval=10, websocket_ping_timeout=30, websocket_max_message_size=65536)
 
 
 class WsHandler(TokenAuth, websocket.WebSocketHandler):
@@ -33,6 +36,8 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
 
     def open(self):
         self.filter = ["default"]
+        self.pending: dict[tuple, dict] = {}            # the last state of each changed device not sent yet
+        self.send_task: asyncio.Task | None = None
         logger.debug("New WebSocket client connected")
         if not ("all" in registered_ws):
             registered_ws["all"] = set()
@@ -50,12 +55,29 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
                 states = [states]
             if not self._is_default_filter():
                 states = [state for state in states if devtype_of(state['dev']) in self.filter]
-            if states:
-                self.write_message(json.dumps(states))
+            for state in states:
+                self.pending[(state['dev'], state.get('circuit'))] = state
+            if self.pending and self.send_task is None:
+                self.send_task = asyncio.create_task(self._send())
         except Exception as E:
             logger.error(f"WsHandler error in event: {E}")
-            if logger.level == logging.DEBUG:
-                traceback.print_exc()
+            logger.debug("WsHandler error in event", exc_info=True)
+
+    async def _send(self):
+        """ Send the pending states, one message at a time
+
+            The messages of a slow or lost client were buffered without a limit, every event was written
+            at once. The changes while a message is sent are merged, the last state of each device is sent.
+        """
+        try:
+            while self.pending:
+                states = list(self.pending.values())
+                self.pending.clear()
+                await self.write_message(json.dumps(states))
+        except websocket.WebSocketClosedError:
+            self.pending.clear()
+        finally:
+            self.send_task = None
 
     async def on_message(self, message):
         try:
@@ -141,3 +163,4 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
     def on_close(self):
         if ("all" in registered_ws) and (self in registered_ws["all"]):
             registered_ws["all"].remove(self)
+        self.pending = {}

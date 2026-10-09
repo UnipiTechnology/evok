@@ -23,7 +23,7 @@ from .devices import Devices, devents, devtype_of
 from .handlers_base import EvokWebHandlerBase
 from .log import logger, read_log_tail
 from .modbus.digital import finish_pulses
-from .ws_handler import WsHandler, registered_ws
+from .ws_handler import WEBSOCKET_SETTINGS, WsHandler, registered_ws
 
 logging.basicConfig(level=logging.WARNING)
 logger.setLevel(logging.INFO)
@@ -213,9 +213,9 @@ class AliasTask:
 
 
 def status_cb(device, *args):
-    if "all" in registered_ws:
-        for x in registered_ws['all']:
-            x.on_event(device)
+    # a copy, a client could be removed while the event is sent
+    for x in list(registered_ws.get('all', ())):
+        x.on_event(device)
 
 
 # ---- MAIN ----
@@ -304,7 +304,8 @@ async def main():
         api_routes.append((r"/ws/?", WsHandler, dict(all_filtered=all_filtered)))
 
     app = tornado.web.Application(
-        handlers=api_routes
+        handlers=api_routes,
+        **WEBSOCKET_SETTINGS
     )
 
     # ---- prepare http server ----

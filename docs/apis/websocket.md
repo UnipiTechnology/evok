@@ -8,6 +8,15 @@ The WebSocket is at `ws://<host>:8080/ws`. With a `token` in the configuration i
 `Authorization: Bearer <token>`, a browser sends it as `ws://<host>:8080/ws?token=<token>`. A web page
 in a browser can connect only from the address of Evok or from `allowed_origins`, see [Security](../security.md).
 
+Evok sends a ping every 10 s and closes a connection without a pong for 30 s, e.g. after a lost network.
+A message of a client can have at most 64 kB.
+
+## Events
+
+The changed devices are sent as a list of their states. While a message is being sent to a slow client,
+the next changes are merged and sent in the next message with the last state of each device,
+a short change between two messages (e.g. a pulse of an input) can be missed by a slow client.
+
 ## Commands
 
 The client sends a JSON object with the command in `cmd`.
