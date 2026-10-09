@@ -131,7 +131,7 @@ An invalid value is an error: the unit or the feature is not created and the err
 - **Watchdog:** one per unit, `count` is not used. — `6ac4eb0`
 - **1-Wire:** the type `DS2404` is not supported, it has no PIO and was always lost. The `address` of a sensor
   is found also without the CRC, the dots or in lower case. `scan_interval: 0` searches the bus only after
-  the connection and on request, before once per hour; a changed `scan_interval` applies at once. — #229
+  the connection and on request, before once per hour; a changed `scan_interval` applies at once. — `4ecdf2f`
 
 ## Runtime and installation
 

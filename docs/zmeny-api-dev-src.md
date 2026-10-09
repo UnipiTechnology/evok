@@ -124,7 +124,7 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
 - **Watchdog:** jeden na jednotku, `count` se nepoužívá. — `6ac4eb0`
 - **1-Wire:** typ `DS2404` není podporovaný, nemá PIO a byl vždy ztracený. `address` čidla se najde i bez CRC,
   teček nebo malými písmeny. `scan_interval: 0` prohledá sběrnici jen po připojení a na vyžádání, dřív jednou
-  za hodinu; změněný `scan_interval` platí hned. — #229
+  za hodinu; změněný `scan_interval` platí hned. — `4ecdf2f`
 
 ## Běh a instalace
 
