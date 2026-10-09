@@ -42,6 +42,7 @@ nav:
     - General: configs/evok_configuration.md
     - Aliases: configs/aliases.md
     - HW definitions: configs/hw_definitions.md
+  - Security: security.md
   - Available APIs: apis.md
   - Device circuit: circuit.md
   - API examples:

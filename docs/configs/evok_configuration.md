@@ -15,6 +15,13 @@ In this section you can configure address and port for API listening. These sett
 - `port` - port for API listening, needs to be changed in `etc/nginx/sites-available/evok` too
 - `address` - address of the interface for API listening, `127.0.0.1` if the parameter is missing,
   set it to an empty value to listen on all interfaces
+- `token` - an optional token required by all APIs except `/version`, a long random string,
+  e.g. made by `openssl rand -hex 32`. Without it the APIs are not authenticated, use it with an address
+  of the network. See [Security](../security.md) for how the clients send it.
+- `allowed_origins` - an optional list of the origins of the web applications on other addresses
+  which use the API from a browser, e.g. `["http://192.168.1.10:1880"]`. Only they get the CORS headers
+  and can connect to the WebSocket from a browser, a web page of the same address as the API needs no entry.
+  Evok does not start with an invalid `token` or `allowed_origins`.
 
 ### RPC
 

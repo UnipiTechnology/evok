@@ -30,6 +30,13 @@ apis:
   # ^ to listen on all interfaces set this parameter to empty, 127.0.0.1 is used if it is missing
   # ^ FOR OUR WEB INTERFACE THE PORT SHOULD BE CHANGED IN "etc/nginx/sites-available/evok" TOO !!!
 
+  # token: <a long random string, e.g. made by: openssl rand -hex 32>
+  # ^ required by all APIs except /version, as 'Authorization: Bearer <token>', the password of Basic auth,
+  # ^ or ?token=<token> of the WebSocket; without it the APIs are not authenticated
+
+  # allowed_origins: ["http://192.168.1.10:1880"]
+  # ^ web applications on other addresses which use the API from a browser (CORS and WebSocket)
+
   rpc:
     enabled: true
     # ^ JSON-RPC API at /rpc, enabled if this section is missing

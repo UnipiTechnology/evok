@@ -31,6 +31,11 @@ servers:
       port:
         default: '8080'
         description: TCP port on what API listen on. Can be modified in the config file.
+# the token is required only when it is set in the configuration, {} is a request without it
+security:
+  - {}
+  - bearerToken: []
+  - basicToken: []
 paths:
   /{format}/all:
     parameters:
@@ -233,6 +238,8 @@ paths:
                       board_count: 1
                       circuit: Patron_S167_667
           headers: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
       operationId: get-all-circuits
       description: Retrieve the full information dump of all circuits inside the system.
       x-stoplight:
@@ -291,6 +298,8 @@ paths:
                     - dev: led
                       circuit: '1_04'
                       value: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: get-format-device-all
@@ -323,6 +332,8 @@ paths:
                   value:
                     type: integer
                     examples: [0]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       description: Retrieve specify parameter from specify (or all) device_type.
@@ -361,7 +372,7 @@ paths:
   /version:
     get:
       summary: Get version
-      description: Read Evok version
+      description: Read Evok version, also without the token of the configuration
       tags:
         - General
       responses:
@@ -372,6 +383,9 @@ paths:
               examples:
                 version:
                   value: "v3.0.1"
+      # for monitoring, the token is not required
+      security:
+        - {}
       operationId: get-version
       x-stoplight:
         id: pnta60tkpt5qz
@@ -399,6 +413,8 @@ paths:
               examples:
                 log:
                   value: "2026-10-06 12:00:00,000 - evok - INFO - Starting Evok\n"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           description: Invalid number of lines
         '404':
@@ -568,6 +584,8 @@ paths:
                       modes:
                         - Simple
                         - DirectSwitch
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       x-stoplight:
@@ -610,6 +628,8 @@ paths:
                     $ref: '#/components/schemas/Status'
                   result:
                     $ref: '#/components/schemas/Digital_input'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -672,6 +692,8 @@ paths:
                     - dev: owpower
                       circuit: '1'
                       value: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       description: Get all properties of 1-Wire bus power supply driver.
@@ -718,6 +740,8 @@ paths:
                     $ref: '#/components/schemas/Owpower'
                     x-stoplight:
                       id: 38n1ghv9tgxjx
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -799,6 +823,8 @@ paths:
                       interval: 10
                       do_scan: false
                       do_reset: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       description: Get all properties of 1Wire bus driver.
@@ -841,6 +867,8 @@ paths:
                     $ref: '#/components/schemas/Status'
                   result:
                     $ref: '#/components/schemas/Owbus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -921,6 +949,8 @@ paths:
                       lost: false
                       time: 246690.722
                       type: DS18B20
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       description: Get all properties of 1-Wire temperature sensor
@@ -965,6 +995,8 @@ paths:
                     $ref: '#/components/schemas/Temp'
                     x-stoplight:
                       id: u38ddede1rpq5
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -1121,6 +1153,8 @@ paths:
                       modbus_spec: 127.0.0.1
                       scan_interval: 0.02
                       scan_enabled: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: read-modbus_slave-object
@@ -1162,6 +1196,8 @@ paths:
                     $ref: '#/components/schemas/Status'
                   result:
                     $ref: '#/components/schemas/Modbus_slave'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -1264,6 +1300,8 @@ paths:
                       sn: 81
                       board_count: 1
                       circuit: "S167"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: read-device_info-object
@@ -1334,6 +1372,8 @@ paths:
                     - dev: register
                       circuit: '1_1000'
                       value: 1556
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       description: Get RAW modbus register value. Used for custom user-defined Modbus devices.
@@ -1379,6 +1419,8 @@ paths:
                     $ref: '#/components/schemas/Register'
                     x-stoplight:
                       id: vl5wpaas93pas
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -1523,6 +1565,8 @@ paths:
                       name: ambient_light
                       unit: "lux"
                       value: 46.81760025024414
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       description: Get unit modbus register value. Used for custom user-defined Modbus devices.
@@ -1575,6 +1619,8 @@ paths:
                       name: setpoint
                       unit: "˚C"
                       value: 21.5
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           description: Invalid params or the value cannot be written
           content:
@@ -1711,6 +1757,8 @@ paths:
                       value: 0
                       timeout: 2500
                       was_wd_reset: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       description: Get all properties of internal [master watchdog](https://kb.unipi.technology/en:hw:007-patron:description-of-io:02-description-of-do#mwd).
@@ -1757,6 +1805,8 @@ paths:
                     $ref: '#/components/schemas/Watchdog'
                     x-stoplight:
                       id: vl5w8mu65fs1t
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -1850,6 +1900,8 @@ paths:
                     - dev: ro
                       circuit: '2_04'
                       value: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       description: Get **all** properties of relay output including current value.
@@ -1896,6 +1948,8 @@ paths:
                     $ref: '#/components/schemas/Relay_output'
                     x-stoplight:
                       id: vl5w8muszeeyt
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2060,6 +2114,8 @@ paths:
                       pwm_freq: 4800
                       pwm_duty: 0
                       value: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       description: Get **all** properties of digital output including current value and parameters.
@@ -2107,6 +2163,8 @@ paths:
                     $ref: '#/components/schemas/Digital_output'
                     x-stoplight:
                       id: a2nsiopwetife
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2201,6 +2259,8 @@ paths:
                     - dev: led
                       circuit: '1_04'
                       value: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: read-led-object
@@ -2246,6 +2306,8 @@ paths:
                     $ref: '#/components/schemas/Led'
                     x-stoplight:
                       id: vl5w8muszeeyt
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2418,6 +2480,8 @@ paths:
                           range:
                             - 0
                             - 10
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: read-analog-output-object
@@ -2461,6 +2525,8 @@ paths:
                     $ref: '#/components/schemas/Status'
                   result:
                     $ref: '#/components/schemas/Analog_output'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2654,6 +2720,8 @@ paths:
                           range:
                             - 0
                             - 10
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: read-analog-input-object
@@ -2697,6 +2765,8 @@ paths:
                     $ref: '#/components/schemas/Status'
                   result:
                     $ref: '#/components/schemas/Analog_input'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2741,6 +2811,8 @@ paths:
                     $ref: '#/components/schemas/NvSave'
                     x-stoplight:
                       id: 38n16asd4sv98
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2832,6 +2904,8 @@ paths:
                       switch_living_room:
                         devtype: "di"
                         circuit: "1_01"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: read-aliases-object
@@ -2891,6 +2965,8 @@ paths:
                       switch_living_room:
                         devtype: "di"
                         circuit: "1_01"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2948,6 +3024,8 @@ paths:
                     circuit: 1_01
                     value: 0
                     alias: "debug-led"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -4137,6 +4215,23 @@ components:
           x-stoplight:
             id: hzfxf96rjvnv9
   responses:
+    Unauthorized:
+      description: The token of the configuration is missing or invalid, see the security schemes
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          description: Bearer realm="evok" and Basic realm="evok"
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            unauthorized:
+              value:
+                success: false
+                errors:
+                  Unauthorized: Missing or invalid token
     BadRequest:
       description: Invalid params or the value cannot be written
       content:
@@ -4186,7 +4281,15 @@ components:
                 success: false
                 errors:
                   DeviceNotFound: Invalid device type 'foo'
-  securitySchemes: {}
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: The token of apis in the configuration of Evok, required only when it is set
+    basicToken:
+      type: http
+      scheme: basic
+      description: Any user name and the token of apis in the configuration of Evok as the password
   parameters:
     format:
       name: format

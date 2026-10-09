@@ -2,6 +2,12 @@
 
 The WebSocket API allows for two-way communication between the client and the server over an open connection. Evok sends changes to every connected client. A list of reflected devices can be defined. It is suitable for cases, where you need to immediately react to events in your application.
 
+## Connection
+
+The WebSocket is at `ws://<host>:8080/ws`. With a `token` in the configuration it is required in the header
+`Authorization: Bearer <token>`, a browser sends it as `ws://<host>:8080/ws?token=<token>`. A web page
+in a browser can connect only from the address of Evok or from `allowed_origins`, see [Security](../security.md).
+
 ## Commands
 
 The client sends a JSON object with the command in `cmd`.

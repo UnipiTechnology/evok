@@ -3,7 +3,8 @@
 The RPC (Remote Procedure Call) API is used for invoking procedures, functions or methods across a network. It is suitable for automated request.
 
 The API uses [JSON-RPC](https://www.jsonrpc.org/specification) at `/rpc`. Params can be passed as an array in the order
-of the table below or as an object with their names.
+of the table below or as an object with their names. With a `token` in the configuration it is required as
+`Authorization: Bearer <token>` or as the password of Basic authentication, see [Security](../security.md).
 
 ## Methods
 
