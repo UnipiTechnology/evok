@@ -90,6 +90,9 @@ comm_channels:
 ### Device configuration
 
 - *<device_name\>*: the device will be available in the API under this name. Has to be unique.
+  The name of a Modbus device (`MODBUSTCP`, `MODBUSRTU`) has to be unique over all buses, it is the circuit
+  of the device and of all its IOs, e.g. `1` and `'1'` are the same name. A device with the name of an already
+  created Modbus device is not created and the error is logged.
 - `enabled` - an optional parameter, the device is skipped if it is `false` (Default value is `true`)
 
 #### MODBUSTCP & MODBUSRTU
