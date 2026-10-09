@@ -3550,7 +3550,7 @@ components:
           type:
             - string
             - number
-          description: Enable (1) or disable (0) master watchdog timer.
+          description: Enable (1) or disable (0) master watchdog timer. The write clears *was_wd_reset*.
           default: 0
           examples: [1]
         timeout:
@@ -3759,7 +3759,7 @@ components:
             - 1
             - 0
           examples: [0]
-          description: Set 0 to disable 1-Wire bus power
+          description: Set 1 to disable 1-Wire bus power, 0 powers the bus
     NvSave:
       title: Non-volatile memory
       x-stoplight:

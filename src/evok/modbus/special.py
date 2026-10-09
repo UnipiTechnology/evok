@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
 
-from copy import copy
-
 from ..devices import OWPOWER, WATCHDOG, NV_SAVE, to_bool
 from ..log import logger
 from .base import IODevice
@@ -11,6 +9,7 @@ from .client import Client, AccessorU16
 
 
 class OwPower(IODevice):
+    """ The coil disables the power of the 1-Wire bus, value 1 is the bus without power """
 
     devtype = OWPOWER
 
@@ -112,11 +111,13 @@ class Watchdog(IODevice):
         return ret
 
     async def check_new_data(self):
-        old_value = copy(self.value)
-        self.value = self.accessor.read(self.client) & 0x03  # Only the two lowest bits contains watchdog status
+        """ Bit 0 of the register enables the watchdog, bit 1 is a restart by the watchdog """
+        old_state = (self.value, self.was_wd_boot_value)
+        register = self.accessor.read(self.client)
+        self.value = register & 0b01
+        self.was_wd_boot_value = 1 if register & 0b10 else 0
         self.timeout = self.accessor_timeout.read(self.client)
-        self.was_wd_boot_value = 1 if self.value & 0b10 else 0
-        return old_value != self.value
+        return old_state != (self.value, self.was_wd_boot_value)
 
     async def set(self, value=None, timeout=None, reset=None, nv_save=None, alias=None):
         """ Sets new on/off status. Disable pending timeouts
@@ -130,6 +131,7 @@ class Watchdog(IODevice):
         self.set_alias(alias)
 
         if value is not None:
+            # the whole register is written, it clears the flag of a restart by the watchdog too
             await self.accessor.write(self.client, 1 if to_bool(value) else 0)
 
         if timeout is not None:

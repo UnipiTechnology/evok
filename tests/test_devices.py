@@ -510,12 +510,22 @@ async def test_nv_save_failed_write_releases_timer(nv_save):
 async def test_watchdog(unit):
     client = await unit({12: 0b111, 1008: 500})
     wd = dev(WATCHDOG, '1')
-    assert (wd.value, wd.timeout, wd.was_wd_boot_value) == (3, 500, 1)
+    assert (wd.value, wd.timeout, wd.was_wd_boot_value) == (1, 500, 1)    # value was 3 with the restart bit
     await wd.set(value=0, timeout=70000)
-    assert client.mb_client.holding[12] == 0
+    assert client.mb_client.holding[12] == 0                # the flag of the restart is cleared too
     assert client.mb_client.holding[1008] == 65535
     await wd.check_new_data()
-    assert (wd.value, wd.timeout) == (0, 65535)
+    assert (wd.value, wd.timeout, wd.was_wd_boot_value) == (0, 65535, 0)
+
+
+async def test_watchdog_restart_flag_is_a_change(unit):
+    """ value does not include the flag, its change is reported by was_wd_reset """
+    client = await unit({12: 0b01})
+    wd = dev(WATCHDOG, '1')
+    client.cache.set_register(12, [0b11])
+    assert await wd.check_new_data()
+    assert (wd.value, wd.was_wd_boot_value) == (1, 1)
+    assert not await wd.check_new_data()
 
 
 @pytest.mark.parametrize('nv_save', [1, 0, 'true'])
