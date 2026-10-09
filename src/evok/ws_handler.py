@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from tornado import websocket
 
+from .auth import TokenAuth
 from .devices import DI, RO, AI, AO, SENSOR
 from .devices import Devices, devtype_of, num_to_devtype_name
 from .handlers_base import CLIENT_ERRORS, check_params, client_error
@@ -15,7 +16,9 @@ from .log import logger
 registered_ws = {}
 
 
-class WsHandler(websocket.WebSocketHandler):
+class WsHandler(TokenAuth, websocket.WebSocketHandler):
+
+    query_token = True      # a browser cannot set a header of a WebSocket
 
     def initialize(self, all_filtered=False):
         self.all_filtered = all_filtered

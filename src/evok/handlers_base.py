@@ -8,6 +8,7 @@ from .devices import Devices, to_float
 from .devices import OWBUS, DEVICE_INFO, SENSOR, MODBUS_SLAVE, \
     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
     REGISTER, DATA_POINT, NV_SAVE
+from .auth import TokenAuth
 from .errors import DeviceNotFound, UnitUnavailable
 from .log import logger
 from .modbus import set_devices
@@ -62,7 +63,7 @@ def client_error(error) -> tuple[dict, int]:
     return {type(error).__name__: message}, status
 
 
-class EvokWebHandlerBase(tornado.web.RequestHandler):
+class EvokWebHandlerBase(TokenAuth, tornado.web.RequestHandler):
     def initialize(self):
         self.set_header("Access-Control-Allow-Origin", "*")
         self.set_header("Access-Control-Allow-Headers", "x-requested-with")

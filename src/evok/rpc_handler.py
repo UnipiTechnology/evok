@@ -6,6 +6,7 @@ from typing import Awaitable, Optional
 from tornado_jsonrpc2 import JSONRPCHandler
 from tornado_jsonrpc2.exceptions import JSONRPCError, MethodNotFound, InvalidParams
 
+from .auth import TokenAuth
 from .devices import SENSOR, OWBUS, DI, DO, RO, AI, AO
 from .devices import Devices, DeviceNotFound, to_bool
 from .errors import UnitUnavailable
@@ -75,7 +76,7 @@ class UserBasicHelper(JSONRPCHandler):
         return username == 'rpc' and password in self._passwords
 
 
-class Handler(UserBasicHelper):
+class Handler(TokenAuth, UserBasicHelper):
     # methods callable via JSON-RPC, other attributes of the handler are not exposed
     RPC_METHODS = frozenset((
         'input_get',

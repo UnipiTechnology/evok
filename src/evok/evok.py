@@ -14,8 +14,10 @@ import tornado.httpserver
 import tornado.web
 from tornado import escape
 
+from . import auth
 from . import config
 from . import rpc_handler
+from .auth import TokenAuth
 from .bulk_handler import JSONBulkHandler
 from .devices import MODBUS_SLAVE, RUN, OWBUS
 from .devices import Devices, devents, devtype_of
@@ -162,7 +164,9 @@ class LoadAllHandler(UserCookieHelper, EvokWebHandlerBase):
         await self.finish()
 
 
-class VersionHandler(UserCookieHelper, tornado.web.RequestHandler):
+class VersionHandler(TokenAuth, UserCookieHelper, tornado.web.RequestHandler):
+
+    auth_exempt = True      # for monitoring, it tells only the version
 
     def initialize(self):
         self.set_header("Access-Control-Allow-Origin", "*")
@@ -174,7 +178,7 @@ class VersionHandler(UserCookieHelper, tornado.web.RequestHandler):
         self.finish()
 
 
-class LogHandler(UserCookieHelper, tornado.web.RequestHandler):
+class LogHandler(TokenAuth, UserCookieHelper, tornado.web.RequestHandler):
     """ GET /log?lines=N returns the last N lines of the log file as plain text """
 
     DEFAULT_LINES = 255
@@ -307,6 +311,14 @@ async def main():
     config.load_aliases(alias_file)
     # only the local interface by default, an empty address listens on all interfaces
     address_api = evok_config.apis.get("address", "127.0.0.1") or None
+    try:
+        auth.set_token(evok_config.apis.get("token"))
+    except ValueError as E:
+        sys.exit(f"evok: {E}")
+    if auth.is_enabled():
+        logger.info("The API requires the token of the configuration")
+    else:
+        logger.info("The API is not authenticated, set 'token' in 'apis' for an access from the network")
 
     port_api = evok_config.apis.get("port", 8080)
 

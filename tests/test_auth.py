@@ -1,0 +1,149 @@
+""" The token of the API (apis: token), checked by all handlers """
+import base64
+import json
+
+import pytest
+import tornado.httpclient
+import tornado.httpserver
+import tornado.testing
+import tornado.web
+import tornado.websocket
+
+from evok import auth
+from evok.bulk_handler import JSONBulkHandler
+from evok.evok import LegacyJsonHandler, LegacyRestHandler, LoadAllHandler, LogHandler, VersionHandler
+from evok.rpc_handler import Handler as RpcHandler
+from evok.ws_handler import WsHandler
+
+TOKEN = 'secret-token'
+
+
+@pytest.fixture
+def token():
+    auth.set_token(TOKEN)
+    yield TOKEN
+    auth.set_token(None)
+
+
+@pytest.fixture
+async def server():
+    sock, port = tornado.testing.bind_unused_port()
+    http_server = tornado.httpserver.HTTPServer(tornado.web.Application([
+        (r"/rest/all/?", LoadAllHandler),
+        (r"/rest/([^/]+)/([^/]+)/?([^/]+)?/?", LegacyRestHandler),
+        (r"/json/([^/]+)/([^/]+)/?([^/]+)?/?", LegacyJsonHandler),
+        (r"/bulk/?", JSONBulkHandler),
+        (r"/version/?", VersionHandler),
+        (r"/log/?", LogHandler, dict(log_file=None)),
+        (r"/rpc/?", RpcHandler),
+        (r"/ws/?", WsHandler),
+    ]))
+    http_server.add_sockets([sock])
+    yield port
+    http_server.stop()
+
+
+# every API with a request which succeeds with the token
+REQUESTS = {
+    'rest': ('/rest/all', 'GET', None, 200),
+    'rest post': ('/rest/di/1_01', 'POST', 'value=1', 404),            # no device, but authorized
+    'json': ('/json/di/1_01', 'GET', None, 404),
+    'bulk': ('/bulk', 'POST', '{}', 200),
+    'log': ('/log', 'GET', None, 404),                                  # logging to a file is not configured
+    'rpc': ('/rpc', 'POST', json.dumps({'jsonrpc': '2.0', 'method': 'relay_get', 'params': ['1_01'], 'id': 1}),
+            200),
+}
+
+
+async def fetch(port, path, method='GET', body=None, headers=None):
+    response = await tornado.httpclient.AsyncHTTPClient().fetch(
+        f"http://127.0.0.1:{port}{path}", method=method, body=body, headers=headers, raise_error=False)
+    return response
+
+
+def basic(password, user='any'):
+    return {'Authorization': 'Basic ' + base64.b64encode(f'{user}:{password}'.encode()).decode()}
+
+
+@pytest.mark.parametrize('api', REQUESTS)
+async def test_api_is_open_without_token(server, api):
+    path, method, body, code = REQUESTS[api]
+    assert (await fetch(server, path, method, body)).code == code
+
+
+@pytest.mark.parametrize('api', REQUESTS)
+@pytest.mark.parametrize('headers', [None, {'Authorization': 'Bearer wrong'}, basic('wrong'),
+                                     {'Authorization': 'Basic !!!'}, {'Authorization': 'Token secret-token'}])
+async def test_api_refuses_request_without_token(server, token, api, headers):
+    path, method, body, _ = REQUESTS[api]
+    response = await fetch(server, path, method, body, headers)
+    assert response.code == 401
+    assert response.headers.get_list('WWW-Authenticate') == ['Bearer realm="evok"', 'Basic realm="evok"']
+    assert json.loads(response.body) == {'success': False, 'errors': {'Unauthorized': 'Missing or invalid token'}}
+
+
+@pytest.mark.parametrize('api', REQUESTS)
+@pytest.mark.parametrize('headers', [{'Authorization': f'Bearer {TOKEN}'}, {'Authorization': f'bearer {TOKEN}'},
+                                     basic(TOKEN), basic(TOKEN, user='rpc')])
+async def test_api_accepts_token(server, token, api, headers):
+    path, method, body, code = REQUESTS[api]
+    assert (await fetch(server, path, method, body, headers)).code == code
+
+
+async def test_token_in_url_is_refused_by_http_api(server, token):
+    """ The token in the URL would be kept in the logs of proxies and in the history of browsers """
+    assert (await fetch(server, f'/rest/all?token={TOKEN}')).code == 401
+
+
+async def test_preflight_and_version_without_token(server, token):
+    """ A browser sends no token in a preflight, /version is for monitoring """
+    assert (await fetch(server, '/rest/all', 'OPTIONS')).code == 204
+    assert (await fetch(server, '/bulk', 'OPTIONS')).code == 204
+    assert (await fetch(server, '/version')).code == 200
+
+
+async def test_unauthorized_request_is_logged_without_token(server, token, caplog):
+    await fetch(server, '/rest/all', headers={'Authorization': 'Bearer wrong-value'})
+    assert 'Unauthorized GET /rest/all from 127.0.0.1' in caplog.text
+    assert 'wrong-value' not in caplog.text
+
+
+async def ws_connect(port, query='', headers=None):
+    request = tornado.httpclient.HTTPRequest(f"ws://127.0.0.1:{port}/ws{query}", headers=headers)
+    return await tornado.websocket.websocket_connect(request)
+
+
+@pytest.mark.parametrize('query, headers', [('', None), ('?token=wrong', None),
+                                            ('', {'Authorization': 'Bearer wrong'})])
+async def test_websocket_refuses_connection_without_token(server, token, query, headers):
+    with pytest.raises(tornado.httpclient.HTTPClientError) as error:
+        await ws_connect(server, query, headers)
+    assert error.value.code == 401
+
+
+@pytest.mark.parametrize('query, headers', [(f'?token={TOKEN}', None),
+                                            ('', {'Authorization': f'Bearer {TOKEN}'}), ('', basic(TOKEN))])
+async def test_websocket_accepts_token(server, token, query, headers):
+    connection = await ws_connect(server, query, headers)
+    await connection.write_message(json.dumps({'cmd': 'all'}))
+    assert isinstance(json.loads(await connection.read_message()), list)
+    connection.close()
+
+
+async def test_websocket_without_token_configured(server):
+    connection = await ws_connect(server)
+    connection.close()
+
+
+@pytest.mark.parametrize('token', [None, 'x'])
+def test_valid_token(token):
+    auth.set_token(token)
+    assert auth.is_enabled() is (token is not None)
+    auth.set_token(None)
+
+
+@pytest.mark.parametrize('token', ['', '   ', 123, ['x'], True])
+def test_invalid_token_is_rejected(token):
+    with pytest.raises(ValueError, match="'token' must be a non-empty string"):
+        auth.set_token(token)
+    assert not auth.is_enabled()
