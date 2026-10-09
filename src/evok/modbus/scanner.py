@@ -139,6 +139,8 @@ class ModbusScanner:
 
             self.parser.populate()
             self.populated = True
+            # the values of the devices from the first scan, without scan_enabled they were null until a change
+            await self.client.check_devices()
         if not self.scan_enabled:
             return
 

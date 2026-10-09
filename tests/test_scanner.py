@@ -65,9 +65,12 @@ async def test_devices_are_created_without_scan_enabled(l0306):
     """ Without scan_enabled the unit had no devices, they are created by the first scan """
     scanner, mb = make_scanner(l0306, scan_enabled=False)
     scanner.start_scanning()
+    mb.holding[0] = 0b0001                                      # read by the first scan
     await asyncio.wait_for(scanner.scan_task, 1)                # no periodic scan
     assert sorted(Devices[DI]) == ['1_01', '1_02', '1_03', '1_04']
     assert scanner.full()['last_comm'] is not None
+    # the values of the first scan, they were null until a change
+    assert [Devices[DI][c].value for c in ('1_01', '1_02')] == [1, 0]
 
 
 async def test_scan_error_is_reported(l0306):

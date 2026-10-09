@@ -3206,7 +3206,8 @@ components:
               description: Device circuit (or "all"). You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
               readOnly: true
             counter_modes:
-              description: Supported counter modes
+              deprecated: true
+              description: __Deprecated__. Supported counter modes, see *counter_mode*
               type: array
               uniqueItems: true
               default:
@@ -3269,10 +3270,13 @@ components:
           description: Current counter value
           examples: [0]
         counter_mode:
+          deprecated: true
           enum:
             - Enabled
             - Disabled
           default: Enabled
+          description: __Deprecated__. Disabled only reports the counter as 0, the input counts anyway.
+            The mode is kept by Evok, it is not saved, it is Enabled again after a restart of Evok.
         mode:
           enum:
             - Simple

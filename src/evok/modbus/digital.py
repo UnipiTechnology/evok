@@ -45,21 +45,28 @@ class WithPulse:
         """ Call after the value has been written """
         async def timercallback():
             await asyncio.sleep(pulse_duration)
-            self.pending_task = None
-            await self._end_pulse(end_value)
+            await self._end_pulse(end_value, asyncio.current_task())
 
         # a concurrent set() could start a pulse while this one awaited the writes
         self._cancel_pulse()
         end_value = self.pulse_end_value = 1 - parsed_value
         self.pending_task = asyncio.create_task(timercallback())
 
-    async def _end_pulse(self, end_value):
+    async def _end_pulse(self, end_value, timer: asyncio.Task | None = None):
         """ A change of the unit, its state and event follow the write; written also on an unavailable unit,
             the output must not stay in the state of the pulse
+
+            The timer stays the pending pulse until it writes under the lock, a set() which got the lock
+            before it cancels it; the end of the pulse overwrote the newer value of the set().
         """
+        async def operation():
+            if timer is not None:
+                if self.pending_task is not timer:
+                    return
+                self.pending_task = None
+            await self.client.mb_client.write_single_coil(self.coil, end_value)
         try:
-            await self.client.change(lambda: self.client.mb_client.write_single_coil(self.coil, end_value),
-                                     check_available=False)
+            await self.client.change(operation, check_available=False)
         except Exception:
             logger.exception(f"{self.devtype.upper()} {self.circuit}: end of the pulse failed")
 

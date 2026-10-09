@@ -93,10 +93,20 @@ class Client:
                 if scan:
                     await self._scan(all_groups=True)
 
+    async def check_devices(self):
+        """ Check the devices by the registers read before, e.g. by the first scan before they were created """
+        async with self.lock:
+            await self._check_devices()
+
     async def _scan(self, all_groups: bool = False) -> bool:
         """ Read the register blocks, send the changed devices as one event; under the lock """
         if not await self.cache.do_scan(all_groups=all_groups):
             return False
+        await self._check_devices()
+        return True
+
+    async def _check_devices(self):
+        """ Send the devices changed since their last check as one event; under the lock """
         changeset = []
         for device in self.eventable_devices:
             try:
@@ -116,7 +126,6 @@ class Client:
         if len(changeset) > 0:
             proxy = Proxy(changeset)
             devents.status(proxy)
-        return True
 
 
 class Proxy:
