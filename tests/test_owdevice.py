@@ -6,7 +6,7 @@ import pytest
 
 from evok import devents
 from evok.devices import Devices, SENSOR
-from evok.owdevice import DS18B20, DS2408, DS2438, OwBusDriver, MySensorFabric
+from evok.owdevice import DS18B20, DS2408, DS2438, OwBusDriver, MySensorFabric, address_key
 
 
 @pytest.fixture
@@ -205,3 +205,86 @@ def test_list(bus):
     listed = bus.list()
     assert (listed['DS18B20'], listed['DS2413'], listed['DS2406'], listed['DS2438']) == \
         (['28.000001'], ['3A.000001'], ['12.000001'], [])
+
+
+@pytest.mark.parametrize('configured', [
+    '28.A1B2C3D4E5F6.7B',
+    '28.A1B2C3D4E5F6',                  # without the CRC
+    '28.a1b2c3d4e5f6',                  # lower case
+    '28A1B2C3D4E5F67B',                 # without the dots
+])
+def test_configured_address_matches_the_id_of_owserver(bus, configured):
+    """ owserver names the device 28.A1B2C3D4E5F6.7B, the other forms were never found """
+    sensor = DS18B20(configured, 'DS18B20', bus, circuit='temp1')
+    assert bus._find_sensor('28.A1B2C3D4E5F6.7B') is sensor
+    assert bus._find_sensor('28.A1B2C3D4E5F7.7B') is None
+    assert address_key(configured) == '28A1B2C3D4E5F6'
+
+
+def test_ds2404_is_not_supported(bus):
+    """ DS2404 has no PIO, its read always failed and it was lost """
+    assert MySensorFabric('04.000001', 'DS2404', bus) is None
+    assert 'DS2404' not in bus.list()
+
+
+class FakeServer:
+    def __init__(self):
+        self.scans = 0
+
+    async def scan_now(self, polling):
+        self.scans += 1
+
+
+async def settle():
+    for _ in range(10):
+        await asyncio.sleep(0)
+
+
+async def test_scan_interval_0_scans_only_on_request(bus):
+    bus.bus_lock = anyio.Lock()
+    await bus.set(scan_interval=0)
+    server = FakeServer()
+    task = asyncio.create_task(bus.scanning(server))
+    await settle()
+    assert server.scans == 1                            # after the connection
+    bus.do_scan()
+    await settle()
+    assert server.scans == 2
+    await bus.set(scan_interval=0, do_scan=True)
+    await settle()
+    task.cancel()
+    assert server.scans == 3
+
+
+async def test_changed_scan_interval_applies_at_once(bus, monkeypatch):
+    """ The wait of the previous interval was finished first, with 0 it was an hour """
+    bus.bus_lock = anyio.Lock()
+    await bus.set(scan_interval=0)
+    server = FakeServer()
+    task = asyncio.create_task(bus.scanning(server))
+    await settle()
+    await bus.set(scan_interval=3600)
+    await settle()
+    assert server.scans == 1                            # the change does not scan
+    bus.scan_interval = 0.01                            # check_interval allows whole seconds only
+    bus._wake_scanning()
+    await asyncio.sleep(0.05)
+    task.cancel()
+    assert server.scans >= 2
+
+
+async def test_do_scan_during_a_scan_scans_again(bus):
+    bus.bus_lock = anyio.Lock()
+    await bus.set(scan_interval=0)
+    server = FakeServer()
+    scan_now = server.scan_now
+
+    async def slow_scan(polling):
+        if server.scans == 0:
+            bus.do_scan()                               # a request during the first scan
+        await scan_now(polling)
+    server.scan_now = slow_scan
+    task = asyncio.create_task(bus.scanning(server))
+    await settle()
+    task.cancel()
+    assert server.scans == 2

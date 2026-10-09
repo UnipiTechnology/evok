@@ -122,6 +122,9 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
   — `e005aa4`, `a053e80`
 - **Datové body:** zapisovatelný datový bod v input registru je chyba. — `e792e17`
 - **Watchdog:** jeden na jednotku, `count` se nepoužívá. — `6ac4eb0`
+- **1-Wire:** typ `DS2404` není podporovaný, nemá PIO a byl vždy ztracený. `address` čidla se najde i bez CRC,
+  teček nebo malými písmeny. `scan_interval: 0` prohledá sběrnici jen po připojení a na vyžádání, dřív jednou
+  za hodinu; změněný `scan_interval` platí hned. — #229
 
 ## Běh a instalace
 
