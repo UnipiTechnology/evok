@@ -89,6 +89,22 @@ Allows you to add a relay output for the Modbus device.
     val_coil    : 0
 ```
 
+### LED (user LED)
+
+Allows you to add the user LEDs of the Modbus device (ULED), their [circuits](../circuit.md) are
+`<device_name>_<number>`. An LED is set as a relay output, by `value` and an optional `pulse_duration`.
+
+- `val_coil` - coil address of the first LED, the next LEDs follow
+- `val_reg` - value register address, each bit will be treated as a separate device,
+  the LEDs 17-32 are in the next register
+
+```yaml title="Example"
+  - type        : LED
+    count       : 4
+    val_coil    : 8
+    val_reg     : 20
+```
+
 ### DI (digital input)
 
 Allows you to add a digital input for the Modbus device.
