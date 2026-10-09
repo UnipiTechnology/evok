@@ -54,8 +54,12 @@ class WithPulse:
         self.pending_task = asyncio.create_task(timercallback())
 
     async def _end_pulse(self, end_value):
+        """ A change of the unit, its state and event follow the write; written also on an unavailable unit,
+            the output must not stay in the state of the pulse
+        """
         try:
-            await self.client.mb_client.write_single_coil(self.coil, end_value)
+            await self.client.change(lambda: self.client.mb_client.write_single_coil(self.coil, end_value),
+                                     check_available=False)
         except Exception:
             logger.exception(f"{self.devtype.upper()} {self.circuit}: end of the pulse failed")
 

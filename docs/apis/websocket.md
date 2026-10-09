@@ -42,6 +42,7 @@ only the states of the device types in the filter are sent.
 ## Errors
 
 An invalid request (invalid JSON, unknown command, missing `dev` or `circuit`, unknown device, invalid params)
+or a device on a Modbus unit which failed its last scan (`UnitUnavailable`)
 gets an error reply only to the requesting client, in the same format as REST:
 
 ```json

@@ -39,3 +39,39 @@ class IODevice:
         if self.alias != '':
             ret['alias'] = self.alias
         return ret
+
+
+async def set_devices(assignments: list[tuple], states: dict | None = None) -> list[dict]:
+    """ Set the devices by the params of assignments [(device, kw)], return their states in the same order
+
+        The devices of a Modbus unit are set under the lock of the unit by Client.change(), the unit
+        is read and the states follow the writes. The units are set one after another, in the order
+        of their first assignment, the other devices one by one. A change of only the alias does not
+        write the unit, it is set also on an unavailable unit.
+
+        On an error, states (index of the assignment: state) has the states of the assignments done
+        before it, also of its unit, the units after it are not set.
+    """
+    states = {} if states is None else states
+    units: dict = {}
+    for index, (device, kw) in enumerate(assignments):
+        unit = device.client if isinstance(device, IODevice) else device
+        units.setdefault(unit, []).append((index, device, kw))
+
+    for unit, items in units.items():
+        done = []
+
+        async def operation():
+            for index, device, kw in items:
+                await device.set(**kw)
+                done.append((index, device))
+        try:
+            if isinstance(unit, Client):
+                writes = any(set(kw) - {'alias'} for _, _, kw in items)
+                await unit.change(operation, check_available=writes, scan=writes)
+            else:
+                await operation()
+        finally:
+            for index, device in done:
+                states[index] = device.full()
+    return [states[index] for index in range(len(assignments))]

@@ -352,14 +352,6 @@ async def test_do_pulse_end_error_is_logged(unit, caplog):
     assert do.pending_task is None
 
 
-@pytest.mark.xfail(strict=True, reason="set() reports the cached state until the next scan")
-async def test_do_set_returns_new_value(unit):
-    await unit()
-    do = dev(DO, '1_01')
-    await do.set(value=1)
-    assert do.full()['value'] == 1
-
-
 # --- AnalogInput ------------------------------------------------------------
 
 async def test_ai_value_and_mode(unit):

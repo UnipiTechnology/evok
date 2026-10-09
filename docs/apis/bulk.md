@@ -38,17 +38,21 @@ Altnames of the device types such as `input` or `relay` can be used.
 The response contains a list of results for every part of the request, in the order of the commands:
 a list of states for every group query and group assignment and a state for every individual assignment.
 
-The parts are processed in this order: `group_queries`, `group_assignments`, `individual_assignments`,
-so the queries return the states before the assignments.
+The queries are processed first, so they return the states before the assignments.
+The assignments (`group_assignments` and `individual_assignments` together) are done by the Modbus units:
+the devices of a unit are set together, in the order of the request, then the unit is read once
+and the states of its devices are returned as they are after the writes. The units are set one after another,
+in the order of their first assignment; a device which is not on a Modbus unit (e.g. a 1-Wire sensor)
+is set as a unit of its own. The results are in the order of the request.
 
 ## Errors
 
 All assignments are checked before any device is set. An unknown device type, circuit or alias is reported
 with the status 404, invalid params with the status 400, and no device is set.
 
-An error while setting a device is reported with the status 400 (e.g. a value out of range) or 500
-(e.g. an unavailable Modbus device). The response contains the results of the commands done before the error,
-the following commands are not done.
+An error while setting a device is reported with the status 400 (e.g. a value out of range), 503
+(a Modbus unit which failed its last scan, none of its devices is set) or 500. The response contains the results
+of the units set before the error and of the assignments of its unit done before it, the following units are not set.
 
 ```json
 {"success": false, "errors": {"ValueError": "Value out of range"},

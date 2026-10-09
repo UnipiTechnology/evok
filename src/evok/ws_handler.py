@@ -8,6 +8,7 @@ from tornado import websocket
 from .devices import DI, RO, AI, AO, SENSOR
 from .devices import Devices, devtype_of, num_to_devtype_name
 from .handlers_base import CLIENT_ERRORS, check_params, client_error
+from .modbus import set_devices
 from .log import logger
 
 # clients notified by status_cb() in evok.py, websocket clients and the webhook
@@ -73,7 +74,8 @@ class WsHandler(websocket.WebSocketHandler):
                     # full() is not a coroutine, send the state only to the requesting client
                     await self.write_message(json.dumps(device.full()))
                 else:
-                    await device.set(**self._set_params(dev, message))
+                    # the changed devices are sent as an event to all clients
+                    await set_devices([(device, self._set_params(dev, message))])
             else:
                 raise ValueError(f"Unknown command '{cmd}'")
         except CLIENT_ERRORS as E:

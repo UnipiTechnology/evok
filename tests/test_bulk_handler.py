@@ -87,6 +87,7 @@ async def test_nothing_is_set_before_an_invalid_command(bulk, devices, invalid, 
 
 
 async def test_results_before_an_error_are_returned(bulk, devices):
+    """ The assignments are done by the units, a device out of a Modbus unit is a unit of its own """
     status, reply = await bulk({
         'individual_assignments': [
             {'device_type': 'do', 'device_circuit': '1_01', 'assigned_values': {'value': 1}},
@@ -96,8 +97,8 @@ async def test_results_before_an_error_are_returned(bulk, devices):
     })
     assert status == 400
     assert reply['errors'] == {'ValueError': 'Value out of range'}
-    assert reply['individual_assignments'] == [{'dev': 'do', 'circuit': '1_01'}]
-    assert devices[DO]['1_01'].calls == [{'value': 1}]
+    assert reply['individual_assignments'] == [{'dev': 'do', 'circuit': '1_01'}] * 2
+    assert devices[DO]['1_01'].calls == [{'value': 1}, {'value': 0}]
 
 
 async def test_altnames_are_merged(bulk, devices):

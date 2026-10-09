@@ -3,6 +3,7 @@ import asyncio
 from .devices import SENSOR, OWBUS, OWPOWER
 from .devices import devents, Devices, to_bool  # noqa: F401, to_bool is used also by tests
 from .log import logger
+from .modbus import set_devices
 
 import anyio
 from asyncowfs import OWFS
@@ -306,9 +307,10 @@ class OwBusDriver:
         if self.owpower_circuit is not None:
             logger.info("Invoked reset of 1W master")
             owpower = Devices.by_name(OWPOWER, self.owpower_circuit)
-            await owpower.set(value=True)
+            # under the lock of its Modbus unit, its state and event follow the writes
+            await set_devices([(owpower, dict(value=True))])
             await asyncio.sleep(0.2)
-            await owpower.set(value=False)
+            await set_devices([(owpower, dict(value=False))])
             await asyncio.sleep(0.05)
             self.do_scan()
         else:

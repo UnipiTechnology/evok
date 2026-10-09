@@ -8,14 +8,15 @@ from .devices import Devices, to_float
 from .devices import OWBUS, DEVICE_INFO, SENSOR, MODBUS_SLAVE, \
     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
     REGISTER, DATA_POINT, NV_SAVE
-from .errors import DeviceNotFound
+from .errors import DeviceNotFound, UnitUnavailable
 from .log import logger
+from .modbus import set_devices
 from .schemas import schemas
 
 SCHEMA_VALIDATE = True
 
 # errors of a request, reported to the client, other errors are internal
-CLIENT_ERRORS = (ValueError, DeviceNotFound, jsonschema.ValidationError)
+CLIENT_ERRORS = (ValueError, DeviceNotFound, UnitUnavailable, jsonschema.ValidationError)
 
 
 def check_params(dev_type, kw):
@@ -51,8 +52,14 @@ def client_error(error) -> tuple[dict, int]:
     """ The errors reported to the client and the HTTP status of one of CLIENT_ERRORS """
     # the string of a ValidationError contains the whole schema
     message = error.message if isinstance(error, jsonschema.ValidationError) else str(error)
-    # a wrong device is not found, wrong data is a bad request
-    return {type(error).__name__: message}, 404 if isinstance(error, DeviceNotFound) else 400
+    # a wrong device is not found, an unavailable Modbus unit cannot be changed now, wrong data is a bad request
+    if isinstance(error, DeviceNotFound):
+        status = 404
+    elif isinstance(error, UnitUnavailable):
+        status = 503
+    else:
+        status = 400
+    return {type(error).__name__: message}, status
 
 
 class EvokWebHandlerBase(tornado.web.RequestHandler):
@@ -104,7 +111,8 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
     async def post(self, dev, circuit, prop):
         """ POST /rest/DEVICE/CIRCUIT[/alias] sets the params of the device in the body, validated by its schema
 
-            An unknown device or circuit is 404, invalid params 400, other errors 500.
+            An unknown device or circuit is 404, invalid params 400, an unavailable Modbus unit 503,
+            other errors 500.
         """
         try:
             # .../alias is the documented URL for setting the alias, the params are in the body
@@ -115,8 +123,8 @@ class EvokWebHandlerBase(tornado.web.RequestHandler):
             device = Devices.by_name(dev, circuit)
             kw = self._get_kw()
             check_params(dev, kw)
-            await device.set(**kw)
-            self.write(json.dumps({'success': True, 'result': device.full()}))
+            state, = await set_devices([(device, kw)])
+            self.write(json.dumps({'success': True, 'result': state}))
         except CLIENT_ERRORS as E:
             errors, status = client_error(E)
             logger.error(f"POST: {errors}")

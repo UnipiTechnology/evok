@@ -4,10 +4,18 @@ import inspect
 from typing import Awaitable, Optional
 
 from tornado_jsonrpc2 import JSONRPCHandler
-from tornado_jsonrpc2.exceptions import MethodNotFound, InvalidParams
+from tornado_jsonrpc2.exceptions import JSONRPCError, MethodNotFound, InvalidParams
 
 from .devices import SENSOR, OWBUS, DI, DO, RO, AI, AO
 from .devices import Devices, DeviceNotFound, to_bool
+from .errors import UnitUnavailable
+from .modbus import set_devices
+
+
+class UnitUnavailableError(JSONRPCError):
+    """ The Modbus unit failed its last scan, its devices are not changed """
+    error_code = -32000         # a server error defined by the implementation
+    short_message = "Unit unavailable"
 
 
 async def create_response(request, backend):
@@ -35,6 +43,8 @@ async def create_response(request, backend):
         return result
     except (DeviceNotFound, ValueError) as e:
         raise InvalidParams(str(e))
+    except UnitUnavailable as e:
+        raise UnitUnavailableError(str(e))
 
 
 class UserBasicHelper(JSONRPCHandler):
@@ -107,8 +117,8 @@ class Handler(UserBasicHelper):
 
     async def input_set(self, circuit, debounce):
         inp = Devices.by_name(DI, circuit)
-        await inp.set(debounce=debounce)
-        return inp.full()
+        state, = await set_devices([(inp, dict(debounce=debounce))])
+        return state
 
     # ---- Relay ----
     def relay_get(self, circuit):
@@ -119,13 +129,13 @@ class Handler(UserBasicHelper):
         relay = Devices.by_name(RO, circuit)
         # to_bool() as in REST, the string "0" is off
         value = int(to_bool(value))
-        await relay.set(value=value)
+        await set_devices([(relay, dict(value=value))])
         return value
 
     async def relay_set_for_time(self, circuit, value, pulse_duration):
         relay = Devices.by_name(RO, circuit)
-        await relay.set(value=value, pulse_duration=self._pulse_duration(pulse_duration))
-        return relay.full()
+        state, = await set_devices([(relay, dict(value=value, pulse_duration=self._pulse_duration(pulse_duration)))])
+        return state
 
     def output_get(self, circuit):
         relay = Devices.by_name(DO, circuit)
@@ -135,7 +145,7 @@ class Handler(UserBasicHelper):
     async def output_set(self, circuit, value):
         relay = Devices.by_name(DO, circuit)
         value = int(to_bool(value))
-        await relay.set(value=value)
+        await set_devices([(relay, dict(value=value))])
         return value
 
     async def output_set_for_time(self, circuit, value, pulse_duration=None, timeout=None):
@@ -145,8 +155,8 @@ class Handler(UserBasicHelper):
         if pulse_duration is None:
             pulse_duration = timeout
         relay = Devices.by_name(DO, circuit)
-        await relay.set(value, self._pulse_duration(pulse_duration))
-        return relay.full()
+        state, = await set_devices([(relay, dict(value=value, pulse_duration=self._pulse_duration(pulse_duration)))])
+        return state
 
     @staticmethod
     def _pulse_duration(pulse_duration) -> float:
@@ -163,12 +173,17 @@ class Handler(UserBasicHelper):
     # ---- Analog Output (0-10V) ----
     async def ao_set_value(self, circuit, value):
         ao = Devices.by_name(AO, circuit)
-        return await ao.set_value(value)
+        written = []
+
+        async def operation():
+            written.append(await ao.set_value(value))
+        await ao.client.change(operation)
+        return written[0]
 
     async def ao_set(self, circuit, value, mode):
         ao = Devices.by_name(AO, circuit)
-        await ao.set(value, mode)
-        return ao.full()
+        state, = await set_devices([(ao, dict(value=value, mode=mode))])
+        return state
 
     # ---- OwBus (1wire bus) ----
     def owbus_get(self, circuit):

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import asyncio
 import struct
 from math import isfinite
 import functools
@@ -12,6 +13,7 @@ from tmodbus.utils.order_aware_struct import OrderAwareStruct
 
 from .cache import ModbusCacheMap
 from ..devices import devents
+from ..errors import UnitUnavailable
 from ..log import logger
 
 UINT16 = struct.Struct(">H")
@@ -40,6 +42,12 @@ def to_registers(fmt: struct.Struct, value):
 
 
 class Client:
+    """ The registers of a Modbus unit and its devices
+
+        The scans and the changes of the devices of the unit run under its lock: a change writes,
+        then reads all register blocks and checks the devices, so their states and events follow
+        the writes at once and a scan does not read between the writes of a change.
+    """
 
     def __init__(self, name: str,
                  mb_client: AsyncModbusClient,
@@ -49,6 +57,7 @@ class Client:
         self.mb_client = mb_client
         self.eventable_devices = []
         self.failing_devices = set()    # logged once, until they check new data again
+        self.lock = asyncio.Lock()      # not reentrant, set() of a device must not change the unit again
 
     def read_registers(self, index: int, count: int = 1, is_input: bool = False) -> list[int]:
         """ Return the cached values of count registers, the datatypes are decoded by the accessors """
@@ -62,9 +71,31 @@ class Client:
             await self.mb_client.write_multiple_registers(index, values)
         self.cache.set_register(index, values)
 
-    async def do_scan(self):
+    async def do_scan(self) -> bool:
+        """ The periodic scan of the unit """
+        async with self.lock:
+            return await self._scan()
 
-        if not await self.cache.do_scan():
+    async def change(self, operation, check_available: bool = True, scan: bool = True):
+        """ Run the writes of operation() under the lock of the unit, then read all register blocks
+            and check the devices, also after a failed operation, its writes before the error are seen
+
+            A unit which failed its last scan raises UnitUnavailable without a write, check_available=False
+            writes anyway, e.g. the end of a pulse.
+        """
+        async with self.lock:
+            if check_available and self.cache.scan_error is not None:
+                raise UnitUnavailable(f"Unit {self.name} is not available: "
+                                      f"{type(self.cache.scan_error).__name__}: {self.cache.scan_error}")
+            try:
+                await operation()
+            finally:
+                if scan:
+                    await self._scan(all_groups=True)
+
+    async def _scan(self, all_groups: bool = False) -> bool:
+        """ Read the register blocks, send the changed devices as one event; under the lock """
+        if not await self.cache.do_scan(all_groups=all_groups):
             return False
         changeset = []
         for device in self.eventable_devices:

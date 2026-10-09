@@ -619,6 +619,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       operationId: post-rest-input-circuit
       x-stoplight:
         id: 3qe4b8bqygqvu
@@ -725,6 +727,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       operationId: post-rest-owpower
       parameters: []
       requestBody:
@@ -1384,6 +1388,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       requestBody:
         content:
           application/json:
@@ -1606,6 +1612,8 @@ paths:
                       ValidationError: Additional properties are not allowed ('mode' was unexpected)
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       requestBody:
         content:
           application/json:
@@ -1758,6 +1766,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       operationId: post-rest-watchdog-circuit
       parameters: []
       requestBody:
@@ -1895,6 +1905,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       operationId: post-rest-relay-circuit
       parameters: []
       requestBody:
@@ -2104,6 +2116,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       operationId: post-rest-output-circuit
       parameters: []
       requestBody:
@@ -2241,6 +2255,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       operationId: post-rest-led-circuit
       requestBody:
         content:
@@ -2474,6 +2490,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       operationId: set-analog-output-circuit
       parameters: []
       requestBody:
@@ -2732,6 +2750,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       operationId: set-analog-input-circuit
       parameters: []
       requestBody:
@@ -2774,6 +2794,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       operationId: post-rest-nvsave-circuit
       requestBody:
         content:
@@ -4197,6 +4219,19 @@ components:
                 success: false
                 errors:
                   ValueError: "invalid literal for int() with base 10: 'on'"
+    Unavailable:
+      description: The Modbus unit of the device failed its last scan, the device is not changed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            unavailable-unit:
+              value:
+                success: false
+                errors:
+                  UnitUnavailable: "Unit TCP:127.0.0.1:1 is not available: RequestRetryFailedError: Failed to get
+                    a valid response after 2 attempts"
     NotFound:
       description: Unknown device type, circuit, alias or property
       content:

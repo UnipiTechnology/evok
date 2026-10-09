@@ -83,7 +83,10 @@ class ModbusCacheMap:
                                      f"{other.address}..{other.address + other.count - 1}")
             groups.append(group)
 
-    async def do_scan(self, initial: bool = False) -> bool:
+    async def do_scan(self, initial: bool = False, all_groups: bool = False) -> bool:
+        """ Read the groups by their frequency, with all_groups read all of them and keep their counters,
+            the scan after a change does not shift the phase of the slow groups
+        """
         if initial:
             for group in self.groups + self.igroups:
                 group.clear_counter()
@@ -91,14 +94,15 @@ class ModbusCacheMap:
         read = 0
         for groups, func in ((self.groups, self.modbus_client.read_holding_registers),
                              (self.igroups, self.modbus_client.read_input_registers)):
-            count = await self._do_scan_groups(groups, func)
+            count = await self._do_scan_groups(groups, func, all_groups)
             if count is None:
                 return False
             read += count
         # the counters are ticked after the whole scan, a failed scan is repeated with the same groups,
         # the slow groups keep their phase
-        for group in self.groups + self.igroups:
-            group.tick_counter()
+        if not all_groups:
+            for group in self.groups + self.igroups:
+                group.tick_counter()
         # a scan without a read, e.g. of a unit without register blocks, is not a communication
         if read > 0:
             self.last_comm_time = time.time()
@@ -137,12 +141,12 @@ class ModbusCacheMap:
         self.set_register(index, vals, is_input)
         return vals
 
-    async def _do_scan_groups(self, groups: list[RegisterGroup], func) -> int | None:
+    async def _do_scan_groups(self, groups: list[RegisterGroup], func, all_groups: bool = False) -> int | None:
         """ The number of the read groups, None after a communication error """
         read = 0
         try:
             for group in groups:
-                if group.f_counter == 0:
+                if all_groups or group.f_counter == 0:
                     vals = await func(group.address, quantity=group.count)
                     group.update(vals)
                     read += 1
