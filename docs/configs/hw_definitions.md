@@ -89,6 +89,22 @@ Allows you to add a relay output for the Modbus device.
     val_coil    : 0
 ```
 
+### LED (user LED)
+
+Allows you to add the user LEDs of the Modbus device (ULED), their [circuits](../circuit.md) are
+`<device_name>_<number>`. An LED is set as a relay output, by `value` and an optional `pulse_duration`.
+
+- `val_coil` - coil address of the first LED, the next LEDs follow
+- `val_reg` - value register address, each bit will be treated as a separate device,
+  the LEDs 17-32 are in the next register
+
+```yaml title="Example"
+  - type        : LED
+    count       : 4
+    val_coil    : 8
+    val_reg     : 20
+```
+
 ### DI (digital input)
 
 Allows you to add a digital input for the Modbus device.
@@ -239,6 +255,37 @@ A device has one NV save, `count` is not used, its circuit is the name of the de
 ```yaml title="Example"
   - type        : NV_SAVE
     val_coil    : 1003
+```
+
+### REGISTER (Modbus register)
+
+!!! warning "Deprecated"
+    REGISTER is deprecated, a warning is logged. Use [DATA_POINT](#data_point-data-point) with `datatype: uint16`
+    instead, with `writable: true` for a writable holding register. The data point has the circuit
+    `<device_name>_<register_address>` also for an input register (without `_inp`) and it is available
+    in the API as `data_point` instead of `register`, the clients have to be changed.
+
+Allows you to add raw 16-bit Modbus registers of the device, one device for each register.
+The [circuit](../circuit.md) is `<device_name>_<register_address>`, of an input register `<device_name>_<register_address>_inp`.
+A holding register is writable through the API, an input one is read-only.
+
+- `start_reg` - address of the first register, the next registers follow
+- `reg_type` - `holding` (default) or `input`
+
+```yaml title="Example"
+  - type        : REGISTER
+    count       : 10
+    start_reg   : 0
+```
+
+The same registers as data points:
+
+```yaml title="Example"
+  - type        : DATA_POINT
+    count       : 10
+    value_reg   : 0
+    datatype    : uint16
+    writable    : true
 ```
 
 ### DATA_POINT (data point)
