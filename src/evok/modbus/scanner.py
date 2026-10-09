@@ -17,6 +17,19 @@ from .cache import ModbusCacheMap
 from .client import Client
 
 
+def _error_kind(error: BaseException | None) -> tuple:
+    """ The types of the error and of its causes, the text of a tmodbus error has the duration of the attempts,
+        it differed in every scan, e.g. RequestRetryFailedError, RetryError, ModbusConnectionError, ...
+    """
+    kind = []
+    while error is not None and len(kind) < 10:
+        kind.append(type(error))
+        # tenacity.RetryError has the error of the last attempt, not a cause
+        last_attempt = getattr(error, 'last_attempt', None)
+        error = last_attempt.exception() if last_attempt is not None else error.__cause__
+    return tuple(kind)
+
+
 class ModbusScanner:
     """ A Modbus unit, its devices are created after its first scan
 
@@ -139,7 +152,7 @@ class ModbusScanner:
                 error = self.cache.scan_error
                 if logged_error is None:
                     devents.status(self)
-                if repr(error) != repr(logged_error):
+                if _error_kind(error) != _error_kind(logged_error):
                     logger.warning(f"Waiting for device '{self.circuit}': {error!r}")
                     logged_error = error
                 await asyncio.sleep(interval)
