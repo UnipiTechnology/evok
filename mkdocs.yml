@@ -35,6 +35,11 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/UnipiTechnology
 
+# built without a link in the menu, the changes of the API of a branch
+not_in_nav: |
+  /api-changes-dev-src.md
+  /zmeny-api-dev-src.md
+
 nav:
   - Introduction: index.md
   - Installation: installation.md
