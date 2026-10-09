@@ -1,6 +1,5 @@
 import os
 from typing import List, Dict, Union
-import asyncio
 
 from .modbus import ModbusScanner
 from tenacity import AsyncRetrying, retry_never, stop_after_attempt, stop_after_delay, wait_fixed
@@ -62,21 +61,19 @@ class HWDict:
 
 
 class TcpBusDevice:
+    """ The connection is opened by the first request, see retry_strategies() """
+
     def __init__(self, circuit: str, bus_driver: AsyncSmartTransport):
         self.bus_driver = bus_driver
         self.circuit = circuit
-
-    def switch_to_async(self):
-        self._open_task = asyncio.create_task(self.bus_driver.open())
 
 
 class SerialBusDevice:
+    """ The serial port is opened by the first request, see retry_strategies() """
+
     def __init__(self, circuit: str, bus_driver: AsyncSmartTransport):
         self.bus_driver = bus_driver
         self.circuit = circuit
-
-    def switch_to_async(self):
-        self._open_task = asyncio.create_task(self.bus_driver.open())
 
 
 class DeviceInfo:
@@ -207,7 +204,8 @@ def retry_strategies(timeout: float, connect_timeout: float, retries: int = 1) -
     """
     attempts = retries + 1
     return dict(
-        # one attempt, its failure is a ModbusConnectionError
+        # one attempt, its failure is a ModbusConnectionError; it also opens the connection
+        # before the first request, the bus is not opened by Evok, a failed open was not reported
         auto_reconnect=AsyncRetrying(stop=stop_after_attempt(1), wait=wait_fixed(0)),
         # the retries of the request, e.g. with a new connection after a lost one;
         # retry_never: the default retry of AsyncRetrying is any exception, the transport adds its reasons

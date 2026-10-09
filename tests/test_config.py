@@ -1,8 +1,10 @@
+import asyncio
+import struct
 import time
 from types import SimpleNamespace
 
 import pytest
-from tmodbus import AsyncSmartTransport
+from tmodbus import AsyncModbusClient, AsyncSmartTransport
 from tmodbus.exceptions import CRCError, ModbusConnectionError, RequestRetryFailedError, ServerDeviceBusyError
 
 from evok import config
@@ -133,6 +135,27 @@ def test_modbus_retries(bus, attempts):
     devtype = TCPBUS if bus['type'] == 'MODBUSTCP' else SERIALBUS
     stop = Devices[devtype]['BUS'].bus_driver.response_retry_strategy.stop
     assert [s.max_attempt_number for s in stop.stops if hasattr(s, 'max_attempt_number')] == [attempts]
+
+
+async def test_modbus_tcp_is_opened_by_the_first_request():
+    """ The bus was opened by a task of Evok, its failure was not reported, auto_reconnect opens it """
+    async def unit(reader, writer):
+        # a Modbus TCP unit, read holding registers returns 42
+        while True:
+            header = await reader.readexactly(7)
+            tid, _, length, unit_id = struct.unpack('>HHHB', header)
+            pdu = await reader.readexactly(length - 1)
+            response = bytes([pdu[0], 2]) + struct.pack('>H', 42)
+            writer.write(struct.pack('>HHHB', tid, 0, len(response) + 1, unit_id) + response)
+            await writer.drain()
+
+    server = await asyncio.start_server(unit, '127.0.0.1', 0)
+    try:
+        create({'BUS': {'type': 'MODBUSTCP', 'port': server.sockets[0].getsockname()[1]}})
+        client = AsyncModbusClient(Devices[TCPBUS]['BUS'].bus_driver, unit_id=1)
+        assert await client.read_holding_registers(0, quantity=1) == [42]
+    finally:
+        server.close()
 
 
 def test_modbus_invalid_retries_skips_the_bus(caplog):

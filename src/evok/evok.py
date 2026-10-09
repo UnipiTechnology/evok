@@ -17,7 +17,7 @@ from tornado import escape
 from . import config
 from . import rpc_handler
 from .bulk_handler import JSONBulkHandler
-from .devices import MODBUS_SLAVE, RUN, OWBUS, TCPBUS, SERIALBUS
+from .devices import MODBUS_SLAVE, RUN, OWBUS
 from .devices import Devices, devents, devtype_of
 from .handlers_base import EvokWebHandlerBase
 from .log import logger, read_log_tail
@@ -360,11 +360,7 @@ async def main():
 
     for bustype in [OWBUS]:
         for device in Devices.by_name(bustype):
-            device.bus_driver.switch_to_async()
-
-    for bustype in [TCPBUS, SERIALBUS]:
-        for device in Devices.by_name(bustype):
-            device.switch_to_async()
+            device.bus_driver.start_scanning()
 
     # the devices of a unit are created after its first scan, also without scan_enabled
     for modbus_slave in Devices.by_name(MODBUS_SLAVE):

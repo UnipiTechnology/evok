@@ -138,7 +138,7 @@ async def test_reconnect_after_failure(bus, events, monkeypatch, caplog):
             raise ConnectionRefusedError('owserver is not running')
         await asyncio.Event().wait()
     monkeypatch.setattr(bus, 'run', run)
-    bus.switch_to_async()
+    bus.start_scanning()
     for _ in range(100):
         if len(runs) == 3:
             break

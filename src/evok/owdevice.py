@@ -232,7 +232,7 @@ class OwBusDriver:
         return {sensor_type: [sens.address for sens in self.mysensors if sens.type == sensor_type]
                 for sensor_type in SUPPORTED_DEVICES}
 
-    def switch_to_async(self):
+    def start_scanning(self):
         self._run_task = asyncio.create_task(self.run_forever())
 
     async def run_forever(self):
