@@ -9,7 +9,7 @@ from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, Dat
 from evok.modbus.builder import IOParser
 from evok.modbus.digital import DigitalInput, DigitalOutput, Relay, finish_pulses
 from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
-from evok.modbus.special import NvSave
+from evok.modbus.special import NvSave, OwPower
 
 from conftest import make_client, scan
 
@@ -537,6 +537,17 @@ async def test_watchdog_nv_save_is_rejected(unit, nv_save):
         await wd.set(value=1, nv_save=nv_save, alias='wd')
     assert client.mb_client.writes == [] and wd.alias == ''         # rejected before any change
     assert 'nv_save' not in wd.full()
+
+
+@pytest.mark.parametrize('value, coil', [(True, 1), ('1', 1), ('false', 0), (0, 0)])
+async def test_owpower_value_is_0_or_1(value, coil):
+    """ full() reported true/false after a set, 0 after the start """
+    client = make_client([])
+    owpower = OwPower('1', client, 1001)
+    assert owpower.full()['value'] == 0
+    await owpower.set(value=value)
+    assert client.mb_client.coils[1001] == coil
+    assert owpower.full()['value'] == coil and type(owpower.full()['value']) is int
 
 
 async def test_led(unit):

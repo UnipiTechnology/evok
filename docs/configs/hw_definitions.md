@@ -203,6 +203,34 @@ its circuit is the name of the device.
     reset_coil  : 1002
 ```
 
+### OWPOWER (1-Wire power)
+
+Switches the power of the 1-Wire bus of the device, the [OWFS bus](./evok_configuration.md#bus-configuration) restarts
+the bus by it with its parameter `owpower`. A device has one 1-Wire power, `count` is not used,
+its circuit is the name of the device.
+
+- `val_coil` - coil address, `1` disables the power of the bus, `0` powers it
+
+The state of the coil is not read from the device, the value is the last one written by Evok, `0` after the start.
+
+```yaml title="Example"
+  - type        : OWPOWER
+    val_coil    : 1001
+```
+
+### NV_SAVE (non-volatile memory)
+
+Saves the current settings of the device to its non-volatile memory, the device uses them after a restart.
+Writing `1` writes the coil, the value is held at `1` for 0.5 s and another write is refused until then.
+A device has one NV save, `count` is not used, its circuit is the name of the device.
+
+- `val_coil` - coil address
+
+```yaml title="Example"
+  - type        : NV_SAVE
+    val_coil    : 1003
+```
+
 ### DATA_POINT (data point)
 
 If no other type is viable, data point may be used.

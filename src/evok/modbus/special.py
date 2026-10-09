@@ -28,9 +28,9 @@ class OwPower(IODevice):
         """
         self.set_alias(alias)
         if value is not None:
-            value = to_bool(value)
+            value = int(to_bool(value))     # full() reports 0/1 as the other devices, not true/false
+            await self.client.mb_client.write_single_coil(self.coil, bool(value))
             self.value = value
-            await self.client.mb_client.write_single_coil(self.coil, value)
 
 
 class NvSave(IODevice):
