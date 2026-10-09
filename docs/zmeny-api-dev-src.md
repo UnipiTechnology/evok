@@ -103,6 +103,8 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - `nv_sav_coil` ve WD feature se nepoužívá, ukládání řeší feature NV_SAVE. — `f298e87`
 - `frequency` u registrového bloku je alias `scan_divider`, zaloguje se varování, obojí v jednom bloku je chyba.
   Hodnota je dělitel skenů, ne frekvence. — `d95f57a`
+- Feature REGISTER v HW definicích, nahrazuje ho DATA_POINT s `datatype: uint16`. Jeho zařízení jsou `data_point`
+  místo `register`, okruh input registru je bez `_inp`. — #228
 
 ## Konfigurace a HW definice
 
