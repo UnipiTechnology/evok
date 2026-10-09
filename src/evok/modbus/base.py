@@ -51,6 +51,9 @@ async def set_devices(assignments: list[tuple], states: dict | None = None) -> l
 
         On an error, states (index of the assignment: state) has the states of the assignments done
         before it, also of its unit, the units after it are not set.
+
+        set() of a device on a Modbus unit runs under the lock of its unit, it must not call set_devices()
+        or Client.change() of the same unit: the lock is not reentrant, it would wait for itself forever.
     """
     states = {} if states is None else states
     units: dict = {}
@@ -68,7 +71,7 @@ async def set_devices(assignments: list[tuple], states: dict | None = None) -> l
         try:
             if isinstance(unit, Client):
                 writes = any(set(kw) - {'alias'} for _, _, kw in items)
-                await unit.change(operation, check_available=writes, scan=writes)
+                await unit.change(operation, check_available=writes, read=writes)
             else:
                 await operation()
         finally:

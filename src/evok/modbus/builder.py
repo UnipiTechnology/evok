@@ -30,6 +30,7 @@ class IOParser:
             raise ValueError(f"Duplicate circuit {devtype} {device.circuit}, use start_index of the feature")
         if hasattr(device, 'check_new_data'):
             self.client.eventable_devices.append(device)
+        self.client.devices.append(device)
         Devices.register_device(devtype, device)
 
     def io_circuit(self, i, m_feature):

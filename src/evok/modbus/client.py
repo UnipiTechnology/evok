@@ -59,8 +59,10 @@ class Client:
         # set by ModbusScanner by scan_enabled; without a periodic scan a change reads a failed unit again
         self.periodic_scan = True
         self.mb_client = mb_client
-        self.eventable_devices = []
+        self.eventable_devices = []     # the devices with check_new_data()
+        self.devices = []               # all devices of the unit, also without check_new_data()
         self.failing_devices = set()    # logged once, until they check new data again
+        self.sent_aliases = {}          # the alias of each device by the last check, Devices.set_alias() sends no event
         self.lock = asyncio.Lock()      # not reentrant, set() of a device must not change the unit again
 
     def read_registers(self, index: int, count: int = 1, is_input: bool = False) -> list[int]:
@@ -80,9 +82,10 @@ class Client:
         async with self.lock:
             return await self._scan()
 
-    async def change(self, operation, check_available: bool = True, scan: bool = True):
+    async def change(self, operation, check_available: bool = True, read: bool = True):
         """ Run the writes of operation() under the lock of the unit, then read all register blocks
-            and check the devices, also after a failed operation, its writes before the error are seen
+            and check the devices, also after a failed operation, its writes before the error are seen;
+            without read, e.g. a change of only the alias, the devices are checked without a read
 
             A unit which failed its last scan raises UnitUnavailable without a write, check_available=False
             writes anyway, e.g. the end of a pulse. A unit without a periodic scan is read first, nothing else
@@ -99,8 +102,10 @@ class Client:
                 # it was an internal error with a traceback, the unit did not respond or refused the request
                 raise UnitCommunicationError(f"Unit {self.name}: {type(E).__name__}: {E}") from E
             finally:
-                if scan:
+                if read:
                     await self._scan(all_groups=True)
+                else:
+                    await self._check_devices()
 
     async def check_devices(self):
         """ Check the devices by the registers read before, e.g. by the first scan before they were created """
@@ -115,12 +120,12 @@ class Client:
         return True
 
     async def _check_devices(self):
-        """ Send the devices changed since their last check as one event; under the lock """
+        """ Send the devices changed since their last check as one event, also by their alias; under the lock """
         changeset = []
-        for device in self.eventable_devices:
+        for device in dict.fromkeys(self.eventable_devices + self.devices):
+            changed = False
             try:
-                if await device.check_new_data() is True:
-                    changeset.append(device)
+                changed = hasattr(device, 'check_new_data') and await device.check_new_data() is True
             except Exception as E:
                 # the error repeats on every scan, do not flood the log
                 if device not in self.failing_devices:
@@ -131,6 +136,14 @@ class Client:
                 if device in self.failing_devices:
                     self.failing_devices.discard(device)
                     logger.info(f"Device '{device.devtype}_{device.circuit}' checks new data again")
+            # a new or deleted alias, check_new_data() does not compare it; a device not checked yet
+            # has no alias sent, its first check sends it anyway
+            alias = getattr(device, 'alias', '')
+            if self.sent_aliases.get(device, '') != alias:
+                self.sent_aliases[device] = alias
+                changed = True
+            if changed:
+                changeset.append(device)
 
         if len(changeset) > 0:
             proxy = Proxy(changeset)

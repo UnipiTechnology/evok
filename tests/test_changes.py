@@ -127,6 +127,24 @@ async def test_failed_request_of_change_is_a_communication_error(units):
         await create_response(SimpleNamespace(method='output_set', params=['1_01', 1]), Handler.__new__(Handler))
 
 
+async def test_alias_is_sent_as_event(units, events):
+    """ A new alias of a device on a Modbus unit was not sent, check_new_data() does not compare it """
+    client, = await units('1')
+    do, nv_save = Devices.by_name(DO, '1_01'), Devices.by_name(NV_SAVE, '1')
+    await set_devices([(do, {'alias': 'lamp'}), (nv_save, {'alias': 'save'})])     # also without check_new_data()
+    assert client.mb_client.writes == []                    # the unit is not written nor read
+    assert [proxy.changeset for proxy in events] == [[do, nv_save]]
+    events.clear()
+    coil_drives_register(client, 0, 1, 0b01)
+    await set_devices([(do, {'value': 1, 'alias': 'light'})])
+    assert [proxy.changeset for proxy in events] == [[do]]   # one event of the value and the alias
+    events.clear()
+    Devices.set_alias('', do)                               # e.g. deleted by the device run
+    await client.do_scan()
+    assert [proxy.changeset for proxy in events] == [[do]]
+    assert 'alias' not in events[0].full()[0]
+
+
 async def test_scan_waits_for_the_change(units):
     """ The periodic scan read the registers between the writes of a change """
     client, = await units('1')
