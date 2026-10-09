@@ -120,7 +120,7 @@ An invalid value is an error: the unit or the feature is not created and the err
   — `d1add77`, `96ba320`
 - **Register blocks:** at most 125 registers, addresses up to 65535, no overlaps. — `2f323f0`, `9f9482c`
 - **Modbus devices:** the name must be unique over all buses. The second device with the same name is not
-  created, before it replaced the first one in the API and its IOs were missing. — #222
+  created, before it replaced the first one in the API and its IOs were missing. — `d8acc38`
 - **Circuits:** a duplicate circuit is an error of the feature, `start_index` applies also to RO, DO and LED.
   — `50da3b3`
 - **Modes:** the `value` of a mode must be a unique integer, the datatype of an AI `transformation` must be known.
