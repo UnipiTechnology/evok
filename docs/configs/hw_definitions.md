@@ -244,7 +244,7 @@ If no other type is viable, data point may be used.
     - `uint16`, `int16`, `signed16`
     - `uint32`, `int32`, `float32` (high word first)
 - `writable` - the value can be written through the API, `false` (default) or `true`,
-  the register must be `holding`
+  the register must be `holding`, a writable data point in an `input` register is not created
 
 ```yaml title="Example"
 - type        : DATA_POINT

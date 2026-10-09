@@ -63,18 +63,16 @@ class IOMode:
             raise ValueError(f"{self.name}: this device cant switch mode!")
         return data
 
-    async def set(self, mode: str, apply: bool = False) -> dict:
+    async def set(self, mode: str) -> dict:
         """ Write the mode to the mode register, return its definition
 
-            The write updates the cache, the current mode is changed by the next update(),
-            with apply at once, the next update() still reports the change.
-            Without a mode register nothing is written and any defined mode is accepted.
+            The write updates the cache, the current mode is changed by update() of the scan,
+            which follows every change of the unit. Without a mode register nothing is written
+            and any defined mode is accepted.
         """
         data = self.check(mode)
         if self.accessor.index is not None:
             await self.accessor.write(self.client, int(data['value']))
-        if apply:
-            self.mode = mode
         return data
 
 
@@ -92,7 +90,9 @@ class WithIOMode:
 
     @property
     def modes(self):
-        return self.iomode.modes
+        """ The modes for the API with their unit and range, without the definition of the register """
+        return {mode: {key: data[key] for key in ('unit', 'range') if key in data}
+                for mode, data in self.iomode.modes.items()}
 
     @property
     def mode_value(self):

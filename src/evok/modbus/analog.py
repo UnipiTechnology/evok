@@ -186,7 +186,7 @@ class AnalogOutputBrain(AnalogInput):
             value = self._check_value(value, new_mode)
 
         if mode is not None:
-            await self.iomode.set(mode, apply=True)
+            await self.iomode.set(mode)
         if value is not None:
             await self.ao_accessor.write(self.client, value)
         self.set_alias(alias)
@@ -199,6 +199,9 @@ class DataPoint(IODevice):
     def __init__(self, circuit, client: Client, reg, reg_type=None, major_group=0, datatype=None, unit=None,
                  offset=0, factor=1, name=None, writable=False):
         super().__init__(circuit, client, major_group)
+        if writable and reg_type == "input":
+            # it was found by the first write, an input register is read-only
+            raise ValueError(f"Data point {circuit}: an input register cannot be writable")
         self.unit = unit
         self.name = name
         self.writable = writable
@@ -241,6 +244,7 @@ class DataPoint(IODevice):
         ret = {'dev': 'data_point',
                'circuit': self.circuit,
                'value': self.value,
+               'writable': self.writable,
                }
 
         if self.name is not None:
@@ -259,8 +263,9 @@ class Register(DataPoint):
     devtype = REGISTER
 
     def __init__(self, circuit, client: Client, reg, reg_type="holding", major_group=0):
+        # a holding register is writable, an input one is read-only
         super().__init__(circuit, client, reg, reg_type=reg_type, major_group=major_group, datatype='uint16',
-                         writable=True)
+                         writable=reg_type != "input")
 
     def full(self):
         ret = {'dev': 'register',

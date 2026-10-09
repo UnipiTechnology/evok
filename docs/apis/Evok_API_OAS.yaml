@@ -171,13 +171,11 @@ paths:
                       mode: Voltage
                       modes:
                         Voltage:
-                          value: 0
                           unit: V
                           range:
                             - 0
                             - 10
                         Current:
-                          value: 1
                           unit: mA
                           range:
                             - 0
@@ -187,19 +185,16 @@ paths:
                       mode: Voltage
                       modes:
                         Voltage:
-                          value: 0
                           unit: V
                           range:
                             - 0
                             - 10
                         Current:
-                          value: 1
                           unit: mA
                           range:
                             - 0
                             - 20
                         Resistance:
-                          value: 2
                           unit: Ohm
                           range:
                             - 0
@@ -2295,10 +2290,8 @@ paths:
                     unit: "V"
                     mode: "Voltage"
                     modes:
-                      Disabled:
-                        value: 0
+                      Disabled: {}
                       Voltage:
-                        value: 1
                         unit: "V"
                         range:
                           - 0
@@ -2311,10 +2304,8 @@ paths:
                       unit: "V"
                       mode: "Voltage"
                       modes:
-                        Disabled:
-                          value: 0
+                        Disabled: {}
                         Voltage:
-                          value: 1
                           unit: "V"
                           range:
                             - 0
@@ -2325,10 +2316,8 @@ paths:
                       unit: "V"
                       mode: "Voltage"
                       modes:
-                        Disabled:
-                          value: 0
+                        Disabled: {}
                         Voltage:
-                          value: 1
                           unit: "V"
                           range:
                             - 0
@@ -2339,10 +2328,8 @@ paths:
                       unit: "V"
                       mode: "Voltage"
                       modes:
-                        Disabled:
-                          value: 0
+                        Disabled: {}
                         Voltage:
-                          value: 1
                           unit: "V"
                           range:
                             - 0
@@ -2353,10 +2340,8 @@ paths:
                       unit: "V"
                       mode: "Voltage"
                       modes:
-                        Disabled:
-                          value: 0
+                        Disabled: {}
                         Voltage:
-                          value: 1
                           unit: "V"
                           range:
                             - 0
@@ -2377,10 +2362,8 @@ paths:
                     unit: "V"
                     mode: "Voltage"
                     modes:
-                      Disabled:
-                        value: 0
+                      Disabled: {}
                       Voltage:
-                        value: 1
                         unit: "V"
                         range:
                           - 0
@@ -2393,10 +2376,8 @@ paths:
                       unit: "V"
                       mode: "Voltage"
                       modes:
-                        Disabled:
-                          value: 0
+                        Disabled: {}
                         Voltage:
-                          value: 1
                           unit: "V"
                           range:
                             - 0
@@ -2407,10 +2388,8 @@ paths:
                       unit: "V"
                       mode: "Voltage"
                       modes:
-                        Disabled:
-                          value: 0
+                        Disabled: {}
                         Voltage:
-                          value: 1
                           unit: "V"
                           range:
                             - 0
@@ -2421,10 +2400,8 @@ paths:
                       unit: "V"
                       mode: "Voltage"
                       modes:
-                        Disabled:
-                          value: 0
+                        Disabled: {}
                         Voltage:
-                          value: 1
                           unit: "V"
                           range:
                             - 0
@@ -2435,10 +2412,8 @@ paths:
                       unit: "V"
                       mode: "Voltage"
                       modes:
-                        Disabled:
-                          value: 0
+                        Disabled: {}
                         Voltage:
-                          value: 1
                           unit: "V"
                           range:
                             - 0
@@ -2531,16 +2506,13 @@ paths:
                     unit: "V"
                     mode: "Voltage"
                     modes:
-                      Disabled:
-                        value: 0
+                      Disabled: {}
                       Voltage:
-                        value: 1
                         unit: "V"
                         range:
                           - 0
                           - 10
                       Current:
-                        value: 2
                         unit: "mA"
                         range:
                           - 0
@@ -2553,16 +2525,13 @@ paths:
                     unit: "mA"
                     mode: "Current"
                     modes:
-                      Disabled:
-                        value: 0
+                      Disabled: {}
                       Voltage:
-                        value: 1
                         unit: "V"
                         range:
                           - 0
                           - 10
                       Current:
-                        value: 2
                         unit: "mA"
                         range:
                           - 0
@@ -2575,16 +2544,13 @@ paths:
                       unit: "V"
                       mode: "Voltage"
                       modes:
-                        Disabled:
-                          value: 0
+                        Disabled: {}
                         Voltage:
-                          value: 1
                           unit: "V"
                           range:
                             - 0
                             - 10
                         Current:
-                          value: 2
                           unit: "mA"
                           range:
                             - 0
@@ -2595,16 +2561,13 @@ paths:
                       unit: "mA"
                       mode: "Current"
                       modes:
-                        Disabled:
-                          value: 0
+                        Disabled: {}
                         Voltage:
-                          value: 1
                           unit: "V"
                           range:
                             - 0
                             - 10
                         Current:
-                          value: 2
                           unit: "mA"
                           range:
                             - 0
@@ -2625,16 +2588,13 @@ paths:
                     unit: "V"
                     mode: "Voltage"
                     modes:
-                      Disabled:
-                        value: 0
+                      Disabled: {}
                       Voltage:
-                        value: 1
                         unit: "V"
                         range:
                           - 0
                           - 10
                       Current:
-                        value: 2
                         unit: "mA"
                         range:
                           - 0
@@ -2647,16 +2607,13 @@ paths:
                     unit: "mA"
                     mode: "Current"
                     modes:
-                      Disabled:
-                        value: 0
+                      Disabled: {}
                       Voltage:
-                        value: 1
                         unit: "V"
                         range:
                           - 0
                           - 10
                       Current:
-                        value: 2
                         unit: "mA"
                         range:
                           - 0
@@ -2669,16 +2626,13 @@ paths:
                       unit: "V"
                       mode: "Voltage"
                       modes:
-                        Disabled:
-                          value: 0
+                        Disabled: {}
                         Voltage:
-                          value: 1
                           unit: "V"
                           range:
                             - 0
                             - 10
                         Current:
-                          value: 2
                           unit: "mA"
                           range:
                             - 0
@@ -2689,16 +2643,13 @@ paths:
                       unit: "mA"
                       mode: "Current"
                       modes:
-                        Disabled:
-                          value: 0
+                        Disabled: {}
                         Voltage:
-                          value: 1
                           unit: "V"
                           range:
                             - 0
                             - 10
                         Current:
-                          value: 2
                           unit: "mA"
                           range:
                             - 0
@@ -3351,17 +3302,15 @@ components:
               readOnly: true
             modes:
               readOnly: true
-              description: All modes supported by this analog output.
+              description: All modes supported by this analog output with their unit and range.
               type: object
               examples:
                 - Voltage:
-                    value: 0
                     unit: V
                     range:
                       - 0
                       - 10
                   Current:
-                    value: 1
                     unit: mA
                     range:
                       - 0
@@ -3370,11 +3319,6 @@ components:
                 type: object
                 additionalProperties: false
                 properties:
-                  value:
-                    description: mode ID
-                    type: integer
-                    x-stoplight:
-                      id: hwb837htaxqj7
                   unit:
                     type: string
                     examples: [V]
@@ -3396,10 +3340,8 @@ components:
           unit: "V"
           mode: "Voltage"
           modes:
-            Disabled:
-              value: 0
+            Disabled: {}
             Voltage:
-              value: 1
               unit: "V"
               range: [0, 10]
     Analog_input:
@@ -3426,41 +3368,30 @@ components:
               readOnly: true
             modes:
               readOnly: true
-              description: Supported modes is specify for analog input device.
-                It is defined in [HW configuration](https://evok.readthedocs.io/en/stable/configs/hw_definitions/).
+              description: Supported modes of the analog input with their unit and range.
+                They are defined in [HW configuration](https://evok.readthedocs.io/en/stable/configs/hw_definitions/).
               type: object
               examples:
-                - Disabled:
-                    value: 0
+                - Disabled: {}
                   Voltage:
-                    value: 1
                     unit: V
                     range: [0, 10]
                   Voltage2V5:
-                    value: 2
                     unit: V
                     range: [0, 2.5]
                   Current:
-                    value: 3
                     unit: mA
                     range: [0, 20]
                   Resistance3W:
-                    value: 4
                     unit: Ohm
                     range: [0, 1960]
                   Resistance2W:
-                    value: 5
                     unit: Ohm
                     range: [0, 100000]
               additionalProperties:
                 type: object
                 additionalProperties: false
                 properties:
-                  value:
-                    description: mode ID
-                    type: integer
-                    x-stoplight:
-                      id: hwb837htaxqj7
                   unit:
                     type: string
                     examples: [V]
@@ -3480,14 +3411,11 @@ components:
           unit: "V"
           mode: "Voltage"
           modes:
-            Disabled:
-              value: 0
+            Disabled: {}
             Voltage:
-              value: 1
               unit: "V"
               range: [0, 10]
             Current:
-              value: 2
               unit: "mA"
               range: [0, 20]
         - circuit: 2_02
@@ -3496,14 +3424,11 @@ components:
           unit: "mA"
           mode: "Current"
           modes:
-            Disabled:
-              value: 0
+            Disabled: {}
             Voltage:
-              value: 1
               unit: "V"
               range: [0, 10]
             Current:
-              value: 2
               unit: "mA"
               range: [0, 20]
     Led_params:
@@ -4089,6 +4014,11 @@ components:
                 id: aqz0wn45se7n3
               examples: [458.16, 'NaN', null]
               description: Value in the unit of the data point, 'NaN', 'Infinity' or '-Infinity' for a float value which is not finite, null before the first read
+            writable:
+              type: boolean
+              examples: [false]
+              description: The value can be set, as defined by the hardware definition
+              readOnly: true
             unit:
               type: string
               x-stoplight:

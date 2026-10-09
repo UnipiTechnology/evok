@@ -4,12 +4,14 @@ import math
 
 import pytest
 
+from evok import devents
 from evok.devices import Devices, DI, DO, RO, AI, LED, WATCHDOG
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
 from evok.modbus.builder import IOParser
 from evok.modbus.digital import DigitalInput, DigitalOutput, Relay, finish_pulses
 from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
 from evok.modbus.special import NvSave, OwPower
+from evok.modbus import set_devices
 
 from conftest import make_client, scan
 
@@ -362,6 +364,17 @@ async def test_ai_value_and_mode(unit):
     assert (ai2.mode, ai2.unit_name) == ('Current', 'mA')
 
 
+async def test_ai_modes_have_only_unit_and_range():
+    """ modes returned the definition of the HW, the code of the mode register and the transformation """
+    modes = {'Disabled': {'value': 0},
+             'Voltage': {'value': 1, 'unit': 'V', 'range': [0, 10],
+                         'transformation': {'datatype': 'uint32', 'ratio': 0.001}}}
+    client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}], {2: 1})
+    ai = AnalogInput('x', client, 0, regmode=2, modes=modes)
+    assert ai.full()['modes'] == {'Disabled': {}, 'Voltage': {'unit': 'V', 'range': [0, 10]}}
+    assert ai.iomode.modes is modes                        # the device works by the whole definition
+
+
 async def test_ai_set_mode_writes_mode_register(unit):
     client = await unit()
     await dev(AI, '1_03').set(mode='Resistance')
@@ -664,24 +677,28 @@ async def test_analog_output_brain_set_mode():
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
-    await ao.set(mode='Current')
-    res = ao.full()
+    client.eventable_devices.append(ao)
+    res, = await set_devices([(ao, {'mode': 'Current'})])
     # mode register is written, the value is reset to 0 in the new mode
     assert client.mb_client.writes == [('reg', 4, 1), ('regs', 0, to_registers(FLOAT32_LE, 0.0))]
     assert (res['mode'], res['unit']) == ('Current', 'mA')
-    await ao.set(mode='Resistance')
+    await set_devices([(ao, {'mode': 'Resistance'})])
     assert client.mb_client.holding[4] == 3
     assert ao.unit_name == 'Ohm'
 
 
-async def test_analog_output_brain_mode_is_applied_and_reported():
+async def test_analog_output_brain_mode_is_applied_and_reported(monkeypatch):
+    """ The mode was applied by set(), the scan after the change reads it """
+    events = []
+    monkeypatch.setattr(devents, 'status', lambda device, **kw: events.append(device))
     client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 0})
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
+    client.eventable_devices.append(ao)
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
-    await ao.set(mode='Current')
-    assert ao.full()['mode'] == 'Current'                  # at once
-    assert await ao.check_new_data()                        # and sent as an event by the scan
+    state, = await set_devices([(ao, {'mode': 'Current'})])
+    assert state['mode'] == 'Current'                      # at once
+    assert [list(proxy.changeset) for proxy in events] == [[ao]]     # and sent as an event
 
 
 async def test_analog_output_brain_without_resistance_register():
@@ -798,13 +815,13 @@ async def test_data_point_read_only_without_valid():
     client, dp = make_dp([7])
     await client.cache.do_scan(initial=True)
     assert await dp.check_new_data()
-    assert dp.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 7}
+    assert dp.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 7, 'writable': False}
     assert not await dp.check_new_data()
     with pytest.raises(ValueError, match='read-only'):
         await dp.set(value=1)
     assert client.mb_client.writes == []
     assert await dp.set() is None
-    assert dp.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 7}
+    assert dp.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 7, 'writable': False}
 
 
 async def test_ow_temperature_valid_mask():
@@ -815,7 +832,8 @@ async def test_ow_temperature_valid_mask():
     assert t.is_valid is False
     await client.cache.do_scan(initial=True)
     assert await t.check_new_data()
-    assert t.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 21.5, 'unit': 'C', 'valid': True}
+    assert t.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 21.5, 'writable': False, 'unit': 'C',
+                        'valid': True}
     # only the validity changes
     client.mb_client.holding[2] = 0b01
     await client.cache.do_scan()
@@ -884,11 +902,20 @@ async def test_data_point_set_signed16():
 
 
 async def test_data_point_input_is_read_only():
+    """ A writable data point in an input register was found by the first write """
     client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1, 'type': 'input'}])
-    dp = DataPoint('x', client, 0, reg_type='input', writable=True)
+    with pytest.raises(ValueError, match='input register cannot be writable'):
+        DataPoint('x', client, 0, reg_type='input', writable=True)
+    dp = DataPoint('x', client, 0, reg_type='input')
     with pytest.raises(ValueError, match='read-only'):
         await dp.set(value=1)
     assert client.mb_client.writes == []
+
+
+async def test_register_in_input_register_is_read_only():
+    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1, 'type': 'input'}])
+    assert not Register('x', client, 0, reg_type='input').writable
+    assert Register('x', client, 0).writable
 
 
 @pytest.mark.parametrize('params', [{'pwm_duty': 150}, {'pwm_duty': '-1'}, {'pwm_freq': 0}, {'pwm_duty': 'nan'}])

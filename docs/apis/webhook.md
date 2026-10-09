@@ -58,11 +58,11 @@ Press CTRL+C to quit
 127.0.0.1 - - [12/Feb/2024 13:55:02] "POST / HTTP/1.1" 200 -
 {'[{"dev": "ro", "circuit": "2_04", "value": 0, "pending": false, "mode": "Simple", "modes": ["Simple"]}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:55:02] "POST / HTTP/1.1" 200 -
-{'[{"dev": "ao", "circuit": "1_01", "mode": "Voltage", "modes": {"Voltage": {"value": 0, "unit": "V", "range": [0, 10]}, "Current": {"value": 1, "unit": "mA", "range": [0, 20]}, "Resistance": {"value": 2, "unit": "Ohm", "range": [0, 2000]}}, "unit": "V", "value": 8.301}]': ''}
+{'[{"dev": "ao", "circuit": "1_01", "mode": "Voltage", "modes": {"Voltage": {"unit": "V", "range": [0, 10]}, "Current": {"unit": "mA", "range": [0, 20]}, "Resistance": {"unit": "Ohm", "range": [0, 2000]}}, "unit": "V", "value": 8.301}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:55:05] "POST / HTTP/1.1" 200 -
 {'[{"dev": "ao", "circuit": "2_01", "mode": "Voltage", "modes": {"Voltage": {"unit": "V", "range": [0, 10]}}, "value": 1.5, "unit": "V", "range": [0, 10]}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:55:05] "POST / HTTP/1.1" 200 -
-{'[{"dev": "ao", "circuit": "1_01", "mode": "Voltage", "modes": {"Voltage": {"value": 0, "unit": "V", "range": [0, 10]}, "Current": {"value": 1, "unit": "mA", "range": [0, 20]}, "Resistance": {"value": 2, "unit": "Ohm", "range": [0, 2000]}}, "unit": "V", "value": 2.7}]': ''}
+{'[{"dev": "ao", "circuit": "1_01", "mode": "Voltage", "modes": {"Voltage": {"unit": "V", "range": [0, 10]}, "Current": {"unit": "mA", "range": [0, 20]}, "Resistance": {"unit": "Ohm", "range": [0, 2000]}}, "unit": "V", "value": 2.7}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:55:06] "POST / HTTP/1.1" 200 -
 ...
 ```
