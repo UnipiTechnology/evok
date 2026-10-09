@@ -1,4 +1,5 @@
 import asyncio
+import math
 
 from .devices import SENSOR, OWBUS, OWPOWER
 from .devices import devents, Devices, to_bool  # noqa: F401, to_bool is used also by tests
@@ -20,8 +21,18 @@ def check_interval(interval, name='interval', zero=False):
         raise ValueError(f"Invalid {name} {interval}, it must be {'0 or ' if zero else ''}a positive number")
     return interval
 
-# the sensor types created by MySensorFabric
-SUPPORTED_DEVICES = ["DS18S20", "DS18B20", "DS2438", "DS2408", "DS2406", "DS2404", "DS2413"]
+
+def address_key(address) -> str:
+    """ The family and the serial number of a 1-Wire address, without the dots and the CRC, in upper case
+
+        owserver names a device 28.A1B2C3D4E5F6.7B, an address of the configuration without the CRC,
+        without the dots or in lower case was never found
+    """
+    return str(address).replace('.', '').strip().upper()[:14]
+
+
+# the sensor types created by MySensorFabric, DS2404 has no PIO, its read always failed
+SUPPORTED_DEVICES = ["DS18S20", "DS18B20", "DS2438", "DS2408", "DS2406", "DS2413"]
 
 
 class NotSupportedError(ValueError):
@@ -195,7 +206,7 @@ def MySensorFabric(address, sensor_type, bus, interval=None, circuit=None):
         return DS18B20(address, sensor_type, bus, interval=interval, circuit=circuit)
     elif sensor_type == 'DS2438':
         return DS2438(address, sensor_type, bus, interval=interval, circuit=circuit)
-    elif sensor_type in ('DS2408', 'DS2406', 'DS2404', 'DS2413'):
+    elif sensor_type in ('DS2408', 'DS2406', 'DS2413'):
         return DS2408(address, sensor_type, bus, interval=interval, circuit=circuit)
     else:
         logger.info("Unsupported 1wire device %s (%s) detected", sensor_type, address)
@@ -210,7 +221,7 @@ class OwBusDriver:
         self.devtype = OWBUS
         self.circuit = circuit
         self.major_group = major_group
-        # scan_interval 0 scans only on request (do_scan), in fact once per hour
+        # scan_interval 0 scans only after the connection and on request (do_scan)
         self.scan_interval = check_interval(scan_interval, 'scan_interval', zero=True)
         self.interval = check_interval(interval)
         self.scanned = set()
@@ -218,6 +229,8 @@ class OwBusDriver:
         self.ow = None
         self.owpower_circuit = owpower_circuit
         self._wakeup = None     # the event waking up poll()
+        self._scan_wakeup = None    # the event waking up scanning()
+        self._scan_requested = False
 
     def full(self):
         return {'dev': 'owbus',
@@ -266,6 +279,8 @@ class OwBusDriver:
             await self.do_reset()
         if not (scan_interval is None) and (scan_interval != self.scan_interval):
             self.scan_interval = scan_interval
+            # the new interval applies at once, not after the current one, with 0 it was an hour
+            self._wake_scanning()
             was_changed = True
         if do_scan:
             logger.info("Invoked scan of 1W bus")
@@ -299,9 +314,18 @@ class OwBusDriver:
             await self._wakeup.wait()
         self._wakeup = None
 
+    def _find_sensor(self, address):
+        key = address_key(address)
+        return next((x for x in self.mysensors if address_key(x.address) == key), None)
+
     def do_scan(self):
-        if hasattr(self, 'scanning_scope'):
-            self.scanning_scope.cancel()
+        """ Search the bus at once """
+        self._scan_requested = True
+        self._wake_scanning()
+
+    def _wake_scanning(self):
+        if self._scan_wakeup is not None:
+            self._scan_wakeup.set()
 
     async def do_reset(self):
         if self.owpower_circuit is not None:
@@ -318,16 +342,28 @@ class OwBusDriver:
 
     # Running async tasks: scanning, poll, mon
     async def scanning(self, server):
+        """ Search the bus after the connection, then every scan_interval, with 0 only on request """
         while True:
+            # a request during the scan scans again
+            self._scan_requested = False
             async with self.bus_lock:
                 try:
                     await server.scan_now(polling=False)
                 except Exception as E:
-                    logger.error(f"{type(E)}: {str(E)}")
-            with anyio.CancelScope() as scope:
-                self.scanning_scope = scope
-                await anyio.sleep(self.scan_interval if self.scan_interval > 0 else 3600)
-            delattr(self, 'scanning_scope')
+                    logger.error(f"1-Wire bus {self.circuit}: scan failed: {type(E).__name__}: {E}")
+            await self._wait_for_scan()
+
+    async def _wait_for_scan(self):
+        """ Wait for scan_interval or do_scan(), a change of scan_interval starts the wait again """
+        while not self._scan_requested:
+            self._scan_wakeup = anyio.Event()
+            try:
+                with anyio.move_on_after(self.scan_interval or math.inf) as scope:
+                    await self._scan_wakeup.wait()
+            finally:
+                self._scan_wakeup = None
+            if scope.cancelled_caught:
+                return
 
     async def poll(self):
         """
@@ -370,7 +406,7 @@ class OwBusDriver:
                 if isinstance(msg, event.DeviceLocated):
                     sensor_type = await msg.device.get_type()
                     address = msg.device.id
-                    mysensor = next((x for x in self.mysensors if x.address == address), None)
+                    mysensor = self._find_sensor(address)
                     if mysensor is not None:
                         logger.info(f"Sensor {mysensor.circuit} found")
                     else:
@@ -385,7 +421,7 @@ class OwBusDriver:
 
                 elif isinstance(msg, event.DeviceNotFound):
                     address = msg.device.id
-                    mysensor = next((x for x in self.mysensors if x.address == address), None)
+                    mysensor = self._find_sensor(address)
                     if mysensor is not None:
                         logger.info(f"Sensor {address} disappeared")
                         mysensor.sens = None
