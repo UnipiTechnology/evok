@@ -114,7 +114,7 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
   — `d1add77`, `96ba320`
 - **Registrové bloky:** nejvýš 125 registrů, adresy do 65535, bez překryvů. — `2f323f0`, `9f9482c`
 - **Modbus zařízení:** jméno musí být jedinečné přes všechny sběrnice. Druhé zařízení se stejným jménem se
-  nevytvoří, dřív v API nahradilo první a chyběly jeho IO. — #222
+  nevytvoří, dřív v API nahradilo první a chyběly jeho IO. — `d8acc38`
 - **Okruhy:** duplicitní okruh je chyba feature, `start_index` platí i pro RO, DO a LED. — `50da3b3`
 - **Režimy:** `value` režimu musí být jedinečné celé číslo, datový typ v `transformation` AI musí být známý.
   — `e005aa4`, `a053e80`
