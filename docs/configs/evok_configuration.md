@@ -83,8 +83,8 @@ comm_channels:
           (Default value is `1`)
     - `OWFS` (1-Wire bus, the former name `OWBUS` is not supported)
         - `interval` - interval of values updating in seconds, a positive number (Default value is `60`)
-        - `scan_interval` - interval of the search for new devices in seconds, `0` searches only on request
-          (Default value is `300`)
+        - `scan_interval` - interval of the search for new devices in seconds, `0` searches only after the connection
+          to owserver and on request (`do_scan`) (Default value is `300`). A change by the API applies at once.
         - `owpower` - [Circuit](../circuit.md) of owpower device (for restarting bus; optional parameter)
 
 ### Device configuration
@@ -108,8 +108,9 @@ comm_channels:
 
 #### OWFS
 
-- `type` - 1-Wire sensor type, options: [`DS18B20`, `DS18S20`, `DS2438`, `DS2408`, `DS2406`, `DS2404`, `DS2413`]
-- `address` - 1-Wire device address
+- `type` - 1-Wire sensor type, options: [`DS18B20`, `DS18S20`, `DS2438`, `DS2408`, `DS2406`, `DS2413`]
+- `address` - 1-Wire device address, the family and the serial number as listed by owserver, e.g. `28.A1B2C3D4E5F6`;
+  the CRC (`28.A1B2C3D4E5F6.7B`), the dots and the case are not significant
 - `interval` - an optional parameter, interval of values updating in seconds (Default value is 15).
 
 !!! Note
