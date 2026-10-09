@@ -369,7 +369,7 @@ async def test_ai_modes_have_only_unit_and_range():
     modes = {'Disabled': {'value': 0},
              'Voltage': {'value': 1, 'unit': 'V', 'range': [0, 10],
                          'transformation': {'datatype': 'uint32', 'ratio': 0.001}}}
-    client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}], {2: 1})
+    client = make_client([{'start_reg': 0, 'count': 3, 'scan_divider': 1}], {2: 1})
     ai = AnalogInput('x', client, 0, regmode=2, modes=modes)
     assert ai.full()['modes'] == {'Disabled': {}, 'Voltage': {'unit': 'V', 'range': [0, 10]}}
     assert ai.iomode.modes is modes                        # the device works by the whole definition
@@ -389,7 +389,7 @@ AI_MODES = {
 
 
 def make_ai(mode_value, regs):
-    client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}],
+    client = make_client([{'start_reg': 0, 'count': 3, 'scan_divider': 1}],
                          {0: regs[0], 1: regs[1], 2: mode_value})
     return client, AnalogInput('x', client, 0, regmode=2, modes=AI_MODES)
 
@@ -427,7 +427,7 @@ async def test_ai_mode_without_transformation_uses_default():
     ({'datatype': 'uint16', 'ratio': 0.1, 'offset': -5, 'decimals': 1}, [100, 0], 5.0),
 ])
 async def test_ai_transformation_datatypes(transformation, regs, expected):
-    client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}],
+    client = make_client([{'start_reg': 0, 'count': 3, 'scan_divider': 1}],
                          {0: regs[0], 1: regs[1], 2: 1})
     ai = AnalogInput('x', client, 0, regmode=2, modes={'M': {'value': 1, 'transformation': transformation}})
     await client.cache.do_scan(initial=True)
@@ -437,7 +437,7 @@ async def test_ai_transformation_datatypes(transformation, regs, expected):
 
 def test_ai_unknown_transformation_datatype_is_an_error():
     """ The value was null with a warning when the mode was known, it is an error of the feature """
-    client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}])
+    client = make_client([{'start_reg': 0, 'count': 3, 'scan_divider': 1}])
     with pytest.raises(ValueError, match='unknown datatype "bogus" of mode "M"'):
         AnalogInput('x', client, 0, regmode=2, modes={'M': {'value': 1, 'transformation': {'datatype': 'bogus'}}})
 
@@ -463,7 +463,7 @@ async def test_ai_non_finite_is_a_string_and_reported_once(value, expected):
 
 async def test_ai_fixed_mode_applies_transformation():
     # without a mode register the single mode is known before the first scan
-    client = make_client([{'start_reg': 0, 'count': 2, 'frequency': 1}], {0: 1234})
+    client = make_client([{'start_reg': 0, 'count': 2, 'scan_divider': 1}], {0: 1234})
     ai = AnalogInput('x', client, 0, modes={'Raw': {'transformation': {'datatype': 'uint16', 'ratio': 0.1}}})
     await client.cache.do_scan(initial=True)
     await ai.check_new_data()
@@ -483,7 +483,7 @@ async def test_ai_rejected_mode_keeps_alias(unit):
 @pytest.fixture
 def nv_save(monkeypatch):
     monkeypatch.setattr(NvSave, 'HOLD_TIME', 0.01)
-    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1}])
+    client = make_client([{'start_reg': 0, 'count': 1, 'scan_divider': 1}])
     return client, NvSave('x', client, 5)
 
 
@@ -583,7 +583,7 @@ async def test_led_pulse(unit):
 # --- AnalogOutput -----------------------------------------------------------
 
 async def test_analog_output_scaling():
-    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1}], {0: 2000})
+    client = make_client([{'start_reg': 0, 'count': 1, 'scan_divider': 1}], {0: 2000})
     ao = AnalogOutput('x', client, 0, modes={'Voltage': {'value': 0, 'unit': 'V'}})
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
@@ -600,7 +600,7 @@ async def test_analog_output_scaling():
     ({'Voltage': {'value': 0, 'range': [0, 10]}}, 10.1),                # above the range of the mode
 ])
 async def test_analog_output_rejects_value_out_of_range(modes, value):
-    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1}], {0: 0})
+    client = make_client([{'start_reg': 0, 'count': 1, 'scan_divider': 1}], {0: 0})
     ao = AnalogOutput('x', client, 0, modes=modes)
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
@@ -612,7 +612,7 @@ async def test_analog_output_rejects_value_out_of_range(modes, value):
 
 async def test_analog_output_value_checked_in_new_mode():
     modes = {'Voltage': {'value': 0, 'range': [0, 10]}, 'Current': {'value': 1, 'range': [0, 20]}}
-    client = make_client([{'start_reg': 0, 'count': 2, 'frequency': 1}], {0: 0, 1: 1})
+    client = make_client([{'start_reg': 0, 'count': 2, 'scan_divider': 1}], {0: 0, 1: 1})
     ao = AnalogOutput('x', client, 0, regmode=1, modes=modes)
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
@@ -624,7 +624,7 @@ async def test_analog_output_value_checked_in_new_mode():
 async def test_analog_output_mode_register():
     modes = {'Voltage': {'value': 0, 'unit': 'V', 'range': [0, 10]},
              'Current': {'value': 1, 'unit': 'mA', 'range': [0, 20]}}
-    client = make_client([{'start_reg': 0, 'count': 2, 'frequency': 1}], {0: 0, 1: 1})
+    client = make_client([{'start_reg': 0, 'count': 2, 'scan_divider': 1}], {0: 0, 1: 1})
     ao = AnalogOutput('x', client, 0, regmode=1, modes=modes)
     assert (ao.mode, ao.unit_name, ao.range) == (None, None, None)
     await client.cache.do_scan(initial=True)
@@ -638,14 +638,14 @@ async def test_analog_output_mode_register():
 
 
 async def test_analog_without_modes():
-    client = make_client([{'start_reg': 0, 'count': 2, 'frequency': 1}])
+    client = make_client([{'start_reg': 0, 'count': 2, 'scan_divider': 1}])
     assert AnalogOutput('x', client, 0).mode is None
     assert AnalogInput('x', client, 0).mode is None
 
 
 async def test_analog_output_brain_float():
     f, r = to_registers(FLOAT32_LE, 2.5), to_registers(FLOAT32_LE, 100.0)
-    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}],
+    client = make_client([{'start_reg': 0, 'count': 5, 'scan_divider': 1}],
                          {0: f[0], 1: f[1], 2: r[0], 3: r[1], 4: 3})
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     await client.cache.do_scan(initial=True)
@@ -666,7 +666,7 @@ async def test_analog_output_brain_float():
 
 
 async def test_analog_output_brain_set_value_unknown_mode():
-    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 7})
+    client = make_client([{'start_reg': 0, 'count': 5, 'scan_divider': 1}], {4: 7})
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
@@ -678,7 +678,7 @@ async def test_analog_output_brain_set_value_unknown_mode():
 
 async def test_analog_output_brain_set_mode():
     f = to_registers(FLOAT32_LE, 2.5)
-    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}],
+    client = make_client([{'start_reg': 0, 'count': 5, 'scan_divider': 1}],
                          {0: f[0], 1: f[1], 4: 0})
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     await client.cache.do_scan(initial=True)
@@ -697,7 +697,7 @@ async def test_analog_output_brain_mode_is_applied_and_reported(monkeypatch):
     """ The mode was applied by set(), the scan after the change reads it """
     events = []
     monkeypatch.setattr(devents, 'status', lambda device, **kw: events.append(device))
-    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 0})
+    client = make_client([{'start_reg': 0, 'count': 5, 'scan_divider': 1}], {4: 0})
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     client.eventable_devices.append(ao)
     await client.cache.do_scan(initial=True)
@@ -708,7 +708,7 @@ async def test_analog_output_brain_mode_is_applied_and_reported(monkeypatch):
 
 
 async def test_analog_output_brain_without_resistance_register():
-    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 3})
+    client = make_client([{'start_reg': 0, 'count': 5, 'scan_divider': 1}], {4: 3})
     ao = AnalogOutputBrain('x', client, 0, regmode=4)
     assert set(ao.modes) == {'Voltage', 'Current'}
     await client.cache.do_scan(initial=True)
@@ -719,7 +719,7 @@ async def test_analog_output_brain_without_resistance_register():
 
 
 async def test_analog_output_brain_set_value_returns_value_written():
-    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 0})
+    client = make_client([{'start_reg': 0, 'count': 5, 'scan_divider': 1}], {4: 0})
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
@@ -727,7 +727,7 @@ async def test_analog_output_brain_set_value_returns_value_written():
 
 
 async def test_analog_output_brain_same_mode_keeps_value():
-    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 0})
+    client = make_client([{'start_reg': 0, 'count': 5, 'scan_divider': 1}], {4: 0})
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
@@ -742,7 +742,7 @@ async def test_analog_output_brain_same_mode_keeps_value():
     {'mode': 'Voltage', 'value': 'x'},
 ])
 async def test_analog_output_brain_rejected_request_writes_nothing(params):
-    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 1})     # Current
+    client = make_client([{'start_reg': 0, 'count': 5, 'scan_divider': 1}], {4: 1})     # Current
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
@@ -753,7 +753,7 @@ async def test_analog_output_brain_rejected_request_writes_nothing(params):
 
 
 async def test_analog_output_brain_value_checked_in_new_mode():
-    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 0})     # Voltage
+    client = make_client([{'start_reg': 0, 'count': 5, 'scan_divider': 1}], {4: 0})     # Voltage
     ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     await client.cache.do_scan(initial=True)
     await ao.check_new_data()
@@ -764,7 +764,7 @@ async def test_analog_output_brain_value_checked_in_new_mode():
 @pytest.mark.parametrize('params', [{'mode': 'Unknown', 'value': 1}, {'mode': 'Current', 'value': 'x'}])
 async def test_analog_output_rejected_request_writes_nothing(params):
     modes = {'Voltage': {'value': 0}, 'Current': {'value': 1}}
-    client = make_client([{'start_reg': 0, 'count': 2, 'frequency': 1}], {0: 0, 1: 0})
+    client = make_client([{'start_reg': 0, 'count': 2, 'scan_divider': 1}], {0: 0, 1: 0})
     ao = AnalogOutput('x', client, 0, regmode=1, modes=modes)
     with pytest.raises(ValueError):
         await ao.set(alias='rejected', **params)
@@ -775,8 +775,8 @@ async def test_analog_output_rejected_request_writes_nothing(params):
 # --- Register, DataPoint ----------------------------------------------------
 
 async def test_register_holding_and_input():
-    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1},
-                          {'start_reg': 0, 'count': 1, 'frequency': 1, 'type': 'input'}],
+    client = make_client([{'start_reg': 0, 'count': 1, 'scan_divider': 1},
+                          {'start_reg': 0, 'count': 1, 'scan_divider': 1, 'type': 'input'}],
                          holding={0: 11}, inputs={0: 22})
     hreg = Register('h', client, 0)
     ireg = Register('i', client, 0, reg_type='input')
@@ -797,7 +797,7 @@ async def test_register_holding_and_input():
 
 
 def make_dp(regs, **kw):
-    client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}],
+    client = make_client([{'start_reg': 0, 'count': 3, 'scan_divider': 1}],
                          dict(enumerate(regs)))
     return client, DataPoint('x', client, 0, **kw)
 
@@ -831,7 +831,7 @@ async def test_data_point_read_only_without_valid():
 
 
 async def test_ow_temperature_valid_mask():
-    client = make_client([{'start_reg': 0, 'count': 3, 'frequency': 1}], {0: 2150, 2: 0b10})
+    client = make_client([{'start_reg': 0, 'count': 3, 'scan_divider': 1}], {0: 2150, 2: 0b10})
     t = OwTemperature('x', client, 0, 2, 0b10, factor=0.01, unit='C')
     assert await t.check_new_data()     # not scanned yet, is_valid None -> False
     assert (t.value, t.is_valid) == (None, False)
@@ -870,7 +870,7 @@ async def test_data_point_datatypes(regs, kw, expected):
 
 
 async def test_data_point_input_register():
-    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1, 'type': 'input'}],
+    client = make_client([{'start_reg': 0, 'count': 1, 'scan_divider': 1, 'type': 'input'}],
                          inputs={0: 0xffff})
     dp = DataPoint('x', client, 0, reg_type='input')
     await client.cache.do_scan(initial=True)
@@ -909,7 +909,7 @@ async def test_data_point_set_signed16():
 
 async def test_data_point_input_is_read_only():
     """ A writable data point in an input register was found by the first write """
-    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1, 'type': 'input'}])
+    client = make_client([{'start_reg': 0, 'count': 1, 'scan_divider': 1, 'type': 'input'}])
     with pytest.raises(ValueError, match='input register cannot be writable'):
         DataPoint('x', client, 0, reg_type='input', writable=True)
     dp = DataPoint('x', client, 0, reg_type='input')
@@ -919,7 +919,7 @@ async def test_data_point_input_is_read_only():
 
 
 async def test_register_in_input_register_is_read_only():
-    client = make_client([{'start_reg': 0, 'count': 1, 'frequency': 1, 'type': 'input'}])
+    client = make_client([{'start_reg': 0, 'count': 1, 'scan_divider': 1, 'type': 'input'}])
     assert not Register('x', client, 0, reg_type='input').writable
     assert Register('x', client, 0).writable
 
@@ -995,7 +995,7 @@ async def test_do_without_pwm_rejects_pwm(unit, params):
 
 @pytest.mark.parametrize('value', [float('nan'), 'nan', 'inf', float('-inf')])
 async def test_analog_output_rejects_nan(value):
-    client = make_client([{'start_reg': 0, 'count': 5, 'frequency': 1}], {4: 0})
+    client = make_client([{'start_reg': 0, 'count': 5, 'scan_divider': 1}], {4: 0})
     brain = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
     await client.cache.do_scan(initial=True)
     await brain.check_new_data()

@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from tmodbus import AsyncModbusClient
 from tmodbus.exceptions import TModbusError
 
+from ..log import logger
+
 
 MAX_READ_COUNT = 125     # registers read by one Modbus request
 
@@ -60,11 +62,18 @@ def _make_group(block: dict) -> RegisterGroup:
             raise ValueError(f"Register block {block}: '{name}' must be an integer >= {minimum}")
         return value
 
+    if "frequency" in block:
+        # frequency was the old name, the block is read in every scan_divider-th scan, it is not a frequency
+        if "scan_divider" in block:
+            raise ValueError(f"Register block {block}: 'frequency' is a deprecated alias of 'scan_divider', "
+                             f"do not set both")
+        logger.warning(f"Register block {block}: 'frequency' is deprecated, rename it to 'scan_divider'")
+        block = {**block, "scan_divider": block["frequency"]}
     if block.get("type", "holding") not in ("holding", "input"):
         raise ValueError(f"Register block {block}: unknown type '{block['type']}', use 'holding' or 'input'")
     group = RegisterGroup(address=positive_int("start_reg", 0),
                           count=positive_int("count", 1),
-                          f_divider=positive_int("frequency", 1))
+                          f_divider=positive_int("scan_divider", 1))
     # a block is read by one request, a larger one stopped the scan of the unit by an error of the request
     if group.count > MAX_READ_COUNT:
         raise ValueError(f"Register block {block}: 'count' must be at most {MAX_READ_COUNT}, split the block")
@@ -95,7 +104,7 @@ class ModbusCacheMap:
             groups.append(group)
 
     async def do_scan(self, initial: bool = False, all_groups: bool = False) -> bool:
-        """ Read the groups by their frequency, with all_groups read all of them and keep their counters,
+        """ Read the groups by their scan_divider, with all_groups read all of them and keep their counters,
             the scan after a change does not shift the phase of the slow groups
         """
         if initial:

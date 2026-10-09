@@ -8,8 +8,8 @@ from evok.modbus.client import Proxy
 import conftest
 
 BLOCKS = [
-    {'start_reg': 0, 'count': 2, 'frequency': 1},
-    {'start_reg': 0, 'count': 2, 'frequency': 1, 'type': 'input'},
+    {'start_reg': 0, 'count': 2, 'scan_divider': 1},
+    {'start_reg': 0, 'count': 2, 'scan_divider': 1, 'type': 'input'},
 ]
 
 
