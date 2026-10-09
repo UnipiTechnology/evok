@@ -102,7 +102,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - `timeout` u DO je alias `pulse_duration`. — `e16a3bf`
 - `nv_sav_coil` ve WD feature se nepoužívá, ukládání řeší feature NV_SAVE. — `f298e87`
 - `frequency` u registrového bloku je alias `scan_divider`, zaloguje se varování, obojí v jednom bloku je chyba.
-  Hodnota je dělitel skenů, ne frekvence. — #224
+  Hodnota je dělitel skenů, ne frekvence. — `d95f57a`
 
 ## Konfigurace a HW definice
 
