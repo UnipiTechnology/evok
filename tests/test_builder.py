@@ -10,6 +10,10 @@ from evok.modbus.analog import AnalogInput, AnalogOutputBrain, DataPoint, OwTemp
 from conftest import make_client, scan
 
 
+# registers 0..399, a block is read by one request of at most 125 registers
+BLOCKS_0_399 = [{'start_reg': start, 'count': 100, 'frequency': 1} for start in range(0, 400, 100)]
+
+
 def populate(hw, circuit='1'):
     client = make_client(hw['modbus_register_blocks'])
     IOParser(client, hw['modbus_features'], circuit).populate()
@@ -72,7 +76,7 @@ BIT_IO_FEATURES = {
 
 @pytest.mark.parametrize('devtype', BIT_IO_FEATURES)
 async def test_bit_ios_over_16_use_next_register(devtype):
-    hw = {'modbus_register_blocks': [{'start_reg': 0, 'count': 400, 'frequency': 1}],
+    hw = {'modbus_register_blocks': BLOCKS_0_399,
           'modbus_features': [dict(BIT_IO_FEATURES[devtype], count=32)]}
     client = populate(hw)
     ios = [Devices.by_name(devtype, f'1_{i:02d}') for i in range(1, 33)]
@@ -87,7 +91,7 @@ async def test_bit_ios_over_16_use_next_register(devtype):
 
 async def test_di_over_16_use_next_register():
     """ The inputs 17-32 read the bits of the inputs 1-16 """
-    hw = {'modbus_register_blocks': [{'start_reg': 0, 'count': 400, 'frequency': 1}],
+    hw = {'modbus_register_blocks': BLOCKS_0_399,
           'modbus_features': [{'type': 'DI', 'count': 32, 'val_reg': 1, 'counter_reg': 100, 'deboun_reg': 200,
                                'modes': ['Simple', 'DirectSwitch'], 'ds_modes': ['Simple', 'Inverted', 'Toggle'],
                                'direct_reg': 300, 'polar_reg': 310, 'toggle_reg': 320}]}
@@ -110,7 +114,7 @@ async def test_bit_ios_of_second_feature_use_start_index(devtype):
     second = dict(BIT_IO_FEATURES[devtype], count=12, val_reg=2, val_coil=16, start_index=16)
     if devtype == DO:
         second['pwm_reg'] = 116
-    client = populate({'modbus_register_blocks': [{'start_reg': 0, 'count': 400, 'frequency': 1}],
+    client = populate({'modbus_register_blocks': BLOCKS_0_399,
                        'modbus_features': [first, second]})
     assert circuits(devtype) == [f'1_{i:02d}' for i in range(1, 29)]
     io = Devices.by_name(devtype, '1_17')

@@ -7,6 +7,9 @@ from tmodbus import AsyncModbusClient
 from tmodbus.exceptions import TModbusError
 
 
+MAX_READ_COUNT = 125     # registers read by one Modbus request
+
+
 class ENoCacheRegister(Exception):
     """ The register was not read yet """
     pass
@@ -59,16 +62,24 @@ def _make_group(block: dict) -> RegisterGroup:
 
     if block.get("type", "holding") not in ("holding", "input"):
         raise ValueError(f"Register block {block}: unknown type '{block['type']}', use 'holding' or 'input'")
-    return RegisterGroup(address=positive_int("start_reg", 0),
-                         count=positive_int("count", 1),
-                         f_divider=positive_int("frequency", 1))
+    group = RegisterGroup(address=positive_int("start_reg", 0),
+                          count=positive_int("count", 1),
+                          f_divider=positive_int("frequency", 1))
+    # a block is read by one request, a larger one stopped the scan of the unit by an error of the request
+    if group.count > MAX_READ_COUNT:
+        raise ValueError(f"Register block {block}: 'count' must be at most {MAX_READ_COUNT}, split the block")
+    if group.address + group.count > 0x10000:
+        raise ValueError(f"Register block {block}: the registers must be at most 65535")
+    return group
 
 
 class ModbusCacheMap:
 
     def __init__(self, modbus_reg_map, modbus_client):
         self.modbus_client: AsyncModbusClient = modbus_client
-        self.last_comm_time: float | None = None    # None before the first successful scan
+        # time.monotonic() of the last read, None before the first successful scan; the clock of the system
+        # can jump, e.g. by NTP after the start of a controller without RTC
+        self.last_comm_time: float | None = None
         # the error of the last scan, None after a successful one
         self.scan_error: Exception | None = None
         self.groups = []
@@ -105,7 +116,7 @@ class ModbusCacheMap:
                 group.tick_counter()
         # a scan without a read, e.g. of a unit without register blocks, is not a communication
         if read > 0:
-            self.last_comm_time = time.time()
+            self.last_comm_time = time.monotonic()
         self.scan_error = None
         return True
 

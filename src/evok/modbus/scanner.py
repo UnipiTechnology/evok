@@ -177,7 +177,7 @@ class ModbusScanner:
                'modbus_spec': self.modbus_spec,
                'scan_interval': self.scan_interval,
                'scan_enabled': self.scan_enabled,
-               'last_comm': time.time() - last_comm_time if last_comm_time is not None else None,
+               'last_comm': time.monotonic() - last_comm_time if last_comm_time is not None else None,
                'scan_error': f"{type(scan_error).__name__}: {scan_error}" if scan_error is not None else None,
                }
         if self.alias != '':

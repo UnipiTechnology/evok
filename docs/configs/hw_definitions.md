@@ -7,7 +7,8 @@ Hardware definitions specify the communication with Modbus devices. They are loc
 Contains a list that defines the Modbus register groups. These registers must be placed consecutively. Each block is read in a separate request. Parameters:
 
 - `start_reg` - first Modbus register address of the block
-- `count` - number of Modbus registers to read
+- `count` - number of Modbus registers to read, at most `125` (one Modbus request), the registers must be at most `65535`;
+  the blocks of one type must not overlap
 - `frequency` - denominator of the scanning frequency. The block will be read each [scan_frequency](./evok_configuration.md#modbustcp-modbusrtu)÷`frequency` seconds (division).
 - `type` - Modbus register type, set to `holding` (default) or `input`
 

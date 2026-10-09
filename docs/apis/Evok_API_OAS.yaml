@@ -4155,6 +4155,8 @@ components:
                   ValueError: "invalid literal for int() with base 10: 'on'"
     Unavailable:
       description: The Modbus unit of the device failed its last scan, the device is not changed
+        (UnitUnavailable), or a request of the change failed, the writes before it are done
+        (UnitCommunicationError)
       content:
         application/json:
           schema:

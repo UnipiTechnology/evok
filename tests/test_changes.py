@@ -3,11 +3,12 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
+from tmodbus.exceptions import RequestRetryFailedError
 from tmodbus import AsyncSmartTransport, AsyncTcpTransport
 
 from evok import devents
 from evok.devices import Devices, DI, DO, NV_SAVE
-from evok.errors import UnitUnavailable
+from evok.errors import UnitCommunicationError, UnitUnavailable
 from evok.handlers_base import client_error
 from evok.modbus import set_devices
 from evok.modbus.builder import IOParser
@@ -109,6 +110,21 @@ async def test_unavailable_unit_has_its_name(l0306):
     with pytest.raises(UnitUnavailable, match=r"Unit 'IAQ' \(TCP:127.0.0.1:1\) is not available: "
                                               r"TimeoutError: no response"):
         await scanner.client.change(lambda: asyncio.sleep(0))
+
+
+async def test_failed_request_of_change_is_a_communication_error(units):
+    """ A failed write was an internal error with a traceback, HTTP 500 """
+    client, = await units('1')
+    do = Devices.by_name(DO, '1_01')
+
+    async def no_response(*args):
+        raise RequestRetryFailedError('no response')
+    client.mb_client.write_single_coil = no_response
+    with pytest.raises(UnitCommunicationError, match="RequestRetryFailedError: no response") as error:
+        await set_devices([(do, {'value': 1})])
+    assert client_error(error.value)[1] == 503
+    with pytest.raises(UnitUnavailableError):
+        await create_response(SimpleNamespace(method='output_set', params=['1_01', 1]), Handler.__new__(Handler))
 
 
 async def test_scan_waits_for_the_change(units):

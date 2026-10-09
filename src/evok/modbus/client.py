@@ -9,11 +9,12 @@ from typing import Literal
 from tmodbus import (
     AsyncModbusClient
 )
+from tmodbus.exceptions import TModbusError
 from tmodbus.utils.order_aware_struct import OrderAwareStruct
 
 from .cache import ModbusCacheMap
 from ..devices import devents
-from ..errors import UnitUnavailable
+from ..errors import UnitCommunicationError, UnitUnavailable
 from ..log import logger
 
 UINT16 = struct.Struct(">H")
@@ -94,6 +95,9 @@ class Client:
                                           f"{type(self.cache.scan_error).__name__}: {self.cache.scan_error}")
             try:
                 await operation()
+            except (TModbusError, TimeoutError) as E:
+                # it was an internal error with a traceback, the unit did not respond or refused the request
+                raise UnitCommunicationError(f"Unit {self.name}: {type(E).__name__}: {E}") from E
             finally:
                 if scan:
                     await self._scan(all_groups=True)

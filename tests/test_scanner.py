@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 import pytest
 from tmodbus import AsyncRtuTransport, AsyncSmartTransport, AsyncTcpTransport
@@ -71,6 +72,14 @@ async def test_devices_are_created_without_scan_enabled(l0306):
     assert scanner.full()['last_comm'] is not None
     # the values of the first scan, they were null until a change
     assert [Devices[DI][c].value for c in ('1_01', '1_02')] == [1, 0]
+
+
+async def test_last_comm_does_not_follow_the_clock_of_the_system(l0306, monkeypatch):
+    """ A jump of the clock, e.g. by NTP after the start, made last_comm huge or negative """
+    scanner, mb = make_scanner(l0306)
+    assert await scanner.cache.do_scan(initial=True)
+    monkeypatch.setattr(time, 'time', lambda: 0.0)          # the clock jumped back to 1970
+    assert 0 <= scanner.full()['last_comm'] < 1
 
 
 async def test_scan_error_is_reported(l0306):

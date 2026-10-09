@@ -51,7 +51,8 @@ All assignments are checked before any device is set. An unknown device type, ci
 with the status 404, invalid params with the status 400, and no device is set.
 
 An error while setting a device is reported with the status 400 (e.g. a value out of range), 503
-(a Modbus unit which failed its last scan, none of its devices is set) or 500. The response contains the results
+(a Modbus unit which failed its last scan, none of its devices is set, or a failed request of a change
+of the unit) or 500. The response contains the results
 of the units set before the error and of the assignments of its unit done before it, the following units are not set.
 
 ```json

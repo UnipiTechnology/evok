@@ -64,6 +64,21 @@ def test_unknown_register_is_not_client_error():
     assert not issubclass(EUnknownRegister, ValueError)
 
 
+@pytest.mark.parametrize('block, error', [
+    ({'start_reg': 0, 'count': 126, 'frequency': 1}, 'at most 125'),
+    ({'start_reg': 65500, 'count': 100, 'frequency': 1}, 'at most 65535'),
+])
+def test_block_out_of_one_request_is_rejected(block, error):
+    """ The read of the block failed by ValueError of the request and stopped the scan of the unit """
+    with pytest.raises(ValueError, match=error):
+        ModbusCacheMap([block], FakeModbus())
+
+
+def test_largest_blocks_are_accepted():
+    ModbusCacheMap([{'start_reg': 0, 'count': 125, 'frequency': 1},
+                    {'start_reg': 65411, 'count': 125, 'frequency': 1}], FakeModbus())
+
+
 async def test_initial_scan_reads_all_groups():
     mb = FakeModbus(holding={0: 1, 1: 2, 10: 3, 13: 4}, inputs={100: 5, 101: 6})
     cache = ModbusCacheMap(BLOCKS, mb)
