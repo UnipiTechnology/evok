@@ -137,6 +137,9 @@ class IOParser:
             self._register(AI, _ai)
 
     def parse_feature_register(self, max_count, m_feature):
+        """ Deprecated, a DATA_POINT of uint16 is the same register """
+        logger.warning(f"Unit '{self.circuit}': the feature REGISTER is deprecated, use DATA_POINT with "
+                       f"'datatype: uint16' (and 'writable: true' for a holding register)")
         for i in range(max_count):
             board_val_reg = m_feature['start_reg']
             if 'reg_type' in m_feature and m_feature['reg_type'] == 'input':

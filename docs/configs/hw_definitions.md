@@ -260,8 +260,8 @@ A device has one NV save, `count` is not used, its circuit is the name of the de
 ### REGISTER (Modbus register)
 
 !!! warning "Deprecated"
-    REGISTER is deprecated, use [DATA_POINT](#data_point-data-point) with `datatype: uint16` instead,
-    with `writable: true` for a writable holding register. The data point has the circuit
+    REGISTER is deprecated, a warning is logged. Use [DATA_POINT](#data_point-data-point) with `datatype: uint16`
+    instead, with `writable: true` for a writable holding register. The data point has the circuit
     `<device_name>_<register_address>` also for an input register (without `_inp`) and it is available
     in the API as `data_point` instead of `register`, the clients have to be changed.
 

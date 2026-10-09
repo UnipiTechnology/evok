@@ -108,8 +108,8 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - `nv_sav_coil` of the WD feature is not used, the settings are saved by the NV_SAVE feature. — `f298e87`
 - `frequency` of a register block is a deprecated alias of `scan_divider`, a warning is logged, both in one block
   are an error. The value is a divider of the scans, not a frequency. — `d95f57a`
-- The REGISTER feature of the HW definitions, a DATA_POINT with `datatype: uint16` replaces it. Its devices are
-  `data_point` instead of `register`, without `_inp` in the circuit of an input register. — #228
+- The REGISTER feature of the HW definitions, a warning is logged. A DATA_POINT with `datatype: uint16` replaces it,
+  its devices are `data_point` instead of `register`, without `_inp` in the circuit of an input register. — #228
 
 ## Configuration and HW definitions
 
