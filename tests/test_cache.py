@@ -3,7 +3,9 @@ import logging
 from types import SimpleNamespace
 
 import pytest
-from tmodbus.exceptions import CRCError, IllegalDataAddressError, RequestRetryFailedError
+from tenacity import RetryError
+from tmodbus.exceptions import (CRCError, IllegalDataAddressError, ModbusConnectionError,
+                                 RequestRetryFailedError)
 
 from evok.modbus.cache import ModbusCacheMap, RegisterGroup, ENoCacheRegister, EUnknownRegister
 from evok.modbus.scanner import ModbusScanner
@@ -279,3 +281,38 @@ async def test_initial_scan_is_retried_after_an_error(caplog):
     task.cancel()
     assert caplog.text.count("Waiting for device '1'") == 1     # the same error is logged once
     assert "Device '1' is connected" in caplog.text
+
+
+def retry_failed(seconds, cause):
+    """ The error of AsyncSmartTransport, its text has the duration of the attempts """
+    retry_error = RetryError(SimpleNamespace(exception=lambda: cause))
+    error = RequestRetryFailedError(f'Failed after 2 attempts over {seconds} seconds. Last error: {cause!r}')
+    error.__cause__ = retry_error
+    return error
+
+
+async def test_initial_scan_logs_the_same_error_once(caplog):
+    """ The text of the error differed by the duration of the attempts, every retry was logged """
+    caplog.set_level(logging.INFO, logger='evok')
+    mb = FakeModbus()
+    cache = ModbusCacheMap(BLOCKS, mb)
+    populated = asyncio.Event()
+    failures = [retry_failed(0.3, TimeoutError()),
+                retry_failed(0.2, ModbusConnectionError('Failed to reconnect over 0.0004 seconds')),
+                retry_failed(0.1, ModbusConnectionError('Failed to reconnect over 0.0005 seconds'))]
+    read = mb.read_holding_registers
+
+    async def flaky(*args, **kwargs):
+        if failures:
+            raise failures.pop()
+        return await read(*args, **kwargs)
+    mb.read_holding_registers = flaky
+    slave = SimpleNamespace(cache=cache, circuit='1', populated=False, INITIAL_SCAN_INTERVAL=0, MAX_SCAN_INTERVAL=0,
+                            scan_interval=10,
+                            parser=SimpleNamespace(populate=populated.set))
+    task = asyncio.create_task(ModbusScanner._scan_loop(slave))
+    await asyncio.wait_for(populated.wait(), 1)
+    task.cancel()
+    # the connection error is logged once, another cause of the error is logged again
+    assert caplog.text.count("Waiting for device '1'") == 2
+    assert caplog.text.count('ModbusConnectionError') == 1
