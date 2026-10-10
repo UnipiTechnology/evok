@@ -198,6 +198,60 @@ def test_modbus_device_name_is_reserved_only_by_a_created_device(l0306, caplog):
     assert 'has the same name' not in caplog.text
 
 
+def test_serial_port_used_by_two_buses(l0306, tmp_path, caplog):
+    """ A symlink is the same port, the second bus and its devices are not created """
+    link = tmp_path / 'ttyNS0'
+    link.symlink_to('/dev/null')
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {1: {'slave-id': 1, 'model': 'L0306'}}),
+        'RTU2': modbus_bus(str(link), {2: {'slave-id': 2, 'model': 'L0306'}}),
+        'RTU3': modbus_bus('/dev/zero', {3: {'slave-id': 1, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert list(Devices[SERIALBUS]) == ['RTU1', 'RTU3']
+    assert list(Devices[MODBUS_SLAVE]) == ['1', '3']
+    assert f"Serial port '{link}' is already used by bus 'RTU1'" in caplog.text
+
+
+def test_modbus_slave_id_collision_in_rtu_bus(l0306, caplog):
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {1: {'slave-id': 5, 'model': 'L0306'},
+                                         2: {'slave-id': 5, 'model': 'L0306'},
+                                         3: {'slave-id': 6, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert list(Devices[MODBUS_SLAVE]) == ['1', '3']
+    assert len(Devices[DEVICE_INFO]) == 2
+    assert "Modbus device '2' of bus 'RTU1' has the same slave-id 5 as the device '1' of bus 'RTU1'" in caplog.text
+
+
+def tcp_bus(host, port, devices):
+    return {'type': 'MODBUSTCP', 'hostname': host, 'port': port, 'devices': devices}
+
+
+def test_modbus_slave_id_collision_on_tcp_server(l0306, caplog):
+    """ More buses may connect to one server, the slave-id must differ on the same host and port """
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'TCP1': tcp_bus('localhost', 502, {1: {'slave-id': 1, 'model': 'L0306'}}),
+        'TCP2': tcp_bus('LocalHost', 502, {2: {'slave-id': 1, 'model': 'L0306'},
+                                           3: {'slave-id': 2, 'model': 'L0306'}}),
+        'TCP3': tcp_bus('localhost', 503, {4: {'slave-id': 1, 'model': 'L0306'}}),
+        'TCP4': tcp_bus('10.0.0.1', 502, {5: {'slave-id': 1, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert list(Devices[TCPBUS]) == ['TCP1', 'TCP2', 'TCP3', 'TCP4']
+    assert list(Devices[MODBUS_SLAVE]) == ['1', '3', '4', '5']
+    assert "Modbus device '2' of bus 'TCP2' has the same slave-id 1 as the device '1' of bus 'TCP1'" in caplog.text
+
+
+def test_modbus_slave_id_is_reserved_only_by_a_created_device(l0306, caplog):
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {1: {'slave-id': 1, 'model': 'unknown'},
+                                         2: {'slave-id': 2, 'model': 'L0306', 'enabled': False},
+                                         3: {'slave-id': 1, 'model': 'L0306'},
+                                         4: {'slave-id': 2, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert list(Devices[MODBUS_SLAVE]) == ['3', '4']
+    assert 'has the same slave-id' not in caplog.text
+
+
 def test_modbus_invalid_retries_skips_the_bus(caplog):
     create({'BUS': {'type': 'MODBUSTCP', 'retries': -1}})
     assert 'BUS' not in Devices[TCPBUS]

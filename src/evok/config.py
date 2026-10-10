@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Union
+from typing import List, Dict, Tuple, Union
 
 from .modbus import ModbusScanner
 from tenacity import AsyncRetrying, retry_never, stop_after_attempt, stop_after_delay, wait_fixed
@@ -178,13 +178,24 @@ class EvokConfig:
         return self.apis[name]
 
 
+class ModbusClaims:
+    """ What the created Modbus buses and devices occupy, a second claim is an error of the config """
+
+    def __init__(self):
+        # the circuits of the created Modbus devices -> their bus, the circuit is only the name of the device
+        self.names: Dict[str, str] = {}
+        # the real paths of the serial ports -> their bus, two buses would mix their requests on one line
+        self.serial_ports: Dict[str, str] = {}
+        # (line, slave-id) -> the device and its bus, the line is the serial port or (host, port) of TCP
+        self.units: Dict[tuple, Tuple[str, str]] = {}
+
+
 def create_devices(evok_config: EvokConfig, hw_dict):
-    # the circuits of the created Modbus devices -> their bus, the circuit is only the name of the device
-    modbus_names: Dict[str, str] = {}
+    claims = ModbusClaims()
     for bus_name, bus_data in evok_config.get_comm_channels().items():
         # an error in the config of a bus does not stop creating the other buses
         try:
-            _create_bus(bus_name, bus_data or {}, hw_dict, modbus_names)
+            _create_bus(bus_name, bus_data or {}, hw_dict, claims)
         except Exception as E:
             logger.exception(f"Error in config of bus '{bus_name}' - {str(E)}")
 
@@ -219,13 +230,14 @@ def retry_strategies(timeout: float, connect_timeout: float, retries: int = 1) -
     )
 
 
-def _create_bus(bus_name, bus_data: dict, hw_dict, modbus_names: Dict[str, str]):
+def _create_bus(bus_name, bus_data: dict, hw_dict, claims: ModbusClaims):
     if not bus_data.get("enabled", True):
         logger.info(f"Skipping disabled bus '{bus_name}'")
         return
     bus_type = bus_data.get('type')
 
     bus = None
+    line = None
     bus_device_info: Union[None, DeviceInfo] = None
     if bus_type == 'OWFS':
         interval = bus_data.get("interval", 60)
@@ -256,10 +268,17 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, modbus_names: Dict[str, str])
             **retry_strategies(timeout, connect_timeout, bus_retries(bus_data)),
         )
         bus = TcpBusDevice(circuit=bus_name, bus_driver=bus_driver)
+        # more buses may connect to one server, its units must differ
+        line = ('tcp', str(host).lower(), port)
         Devices.register_device(TCPBUS, bus)
 
     elif bus_type == "MODBUSRTU":
         serial_port = bus_data["port"]
+        # e.g. a symlink of /dev/ttyNS0
+        line = ('rtu', os.path.realpath(serial_port))
+        if line[1] in claims.serial_ports:
+            raise EvokConfigError(f"Serial port '{serial_port}' is already used by bus "
+                                  f"'{claims.serial_ports[line[1]]}'")
         serial_baud_rate = bus_data.get("baudrate", 19200)
         serial_parity = bus_data.get("parity", 'N')
         serial_stopbits = bus_data.get("stopbits", 1)
@@ -280,6 +299,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, modbus_names: Dict[str, str])
         )
         bus = SerialBusDevice(circuit=bus_name, bus_driver=bus_driver)
         Devices.register_device(SERIALBUS, bus)
+        claims.serial_ports[line[1]] = bus_name
 
     else:
         # e.g. 'OWBUS', the 1-Wire bus type before it was renamed to 'OWFS'
@@ -328,9 +348,9 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, modbus_names: Dict[str, str])
                 device_model = device_data["model"]
                 circuit = str(device_name)
                 # the second device replaced the first one in Devices and its IOs were not created
-                if circuit in modbus_names:
+                if circuit in claims.names:
                     raise EvokConfigError(f"Modbus device '{circuit}' of bus '{bus_name}' has the same name "
-                                          f"as the device of bus '{modbus_names[circuit]}', rename one of them")
+                                          f"as the device of bus '{claims.names[circuit]}', rename one of them")
                 if device_model not in hw_dict.definitions:
                     logger.error("Unsupported device model %s. Check HW definitions",
                                  device_model)
@@ -339,8 +359,15 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, modbus_names: Dict[str, str])
 
                 slave = ModbusScanner(bus.bus_driver, circuit, scanfreq, scan_enabled,
                                       hw_model_dict, unit_id=slave_id)
+                # the scanner validated the slave-id, two devices would read and write the same unit
+                unit = (line, slave.modbus_address)
+                if unit in claims.units:
+                    other, other_bus = claims.units[unit]
+                    raise EvokConfigError(f"Modbus device '{circuit}' of bus '{bus_name}' has the same slave-id "
+                                          f"{slave.modbus_address} as the device '{other}' of bus '{other_bus}'")
                 Devices.register_device(MODBUS_SLAVE, slave)
-                modbus_names[circuit] = bus_name
+                claims.names[circuit] = bus_name
+                claims.units[unit] = (circuit, bus_name)
 
                 if bus_device_info is None or "device_info" in device_data:
                     device_info = {'model': device_data.get("model", device_name)}
