@@ -125,7 +125,7 @@ An invalid value is an error: the unit or the feature is not created and the err
   created, before it replaced the first one in the API and its IOs were missing. — `d8acc38`
 - **Modbus addresses:** a serial port can be used by one `MODBUSRTU` bus only, the `slave-id` must be unique on an RTU
   bus and on a TCP server (`hostname`, `port`) over all `MODBUSTCP` buses. The second bus or device is not created,
-  before both read and wrote the same unit. — #131
+  before both read and wrote the same unit. — `dc7b1ee`
 - **Circuits:** a duplicate circuit is an error of the feature, `start_index` applies also to RO, DO and LED.
   — `50da3b3`
 - **Modes:** the `value` of a mode must be a unique integer, the datatype of an AI `transformation` must be known.
