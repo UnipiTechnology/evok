@@ -119,7 +119,7 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
   nevytvoří, dřív v API nahradilo první a chyběly jeho IO. — `d8acc38`
 - **Modbus adresy:** sériový port může používat jen jedna sběrnice `MODBUSRTU`, `slave-id` musí být jedinečné na RTU
   sběrnici a na TCP serveru (`hostname`, `port`) přes všechny sběrnice `MODBUSTCP`. Druhá sběrnice nebo zařízení se
-  nevytvoří, dřív obě četla a zapisovala stejnou jednotku. — #131
+  nevytvoří, dřív obě četla a zapisovala stejnou jednotku. — `dc7b1ee`
 - **Okruhy:** duplicitní okruh je chyba feature, `start_index` platí i pro RO, DO a LED. — `50da3b3`
 - **Režimy:** `value` režimu musí být jedinečné celé číslo, datový typ v `transformation` AI musí být známý.
   — `e005aa4`, `a053e80`
