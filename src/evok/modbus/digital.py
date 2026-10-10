@@ -10,20 +10,63 @@ from .iomode import DIMode, WithDIMode
 from .pwm import PwmFrequency
 
 
-class WithPulse:
-    """ Mixin for the outputs with a coil, which set a value for a single pulse
+class BinaryOutput(IODevice):
+    """ Base of the outputs with a bit in a status register: RO, DO and LED
 
-        After pulse_duration seconds the opposite of the value is written,
-        the output is pending until then. The pulse is timed by Evok,
+        The value is written to the coil, an output without a coil writes the bit of its holding register
+        (read-modify-write under the lock of the unit), e.g. a unit which has no coils.
+
+        A value with pulse_duration is set for a single pulse: after pulse_duration seconds the opposite
+        of the value is written, the output is pending until then. The pulse is timed by Evok,
         finish_pulses() ends the pending pulses on shutdown.
     """
 
-    devtype: str
-    circuit: str
-    client: Client
-    coil: int
-    pending_task: asyncio.Task | None = None
-    pulse_end_value: int | None = None
+    def __init__(self, circuit, client: Client, coil: int | None, reg, mask, major_group=0):
+        super().__init__(circuit, client, major_group)
+        self.coil = coil
+        self.accessor = AccessorBit(reg, mask)
+        self.value = None
+        self.pending_task: asyncio.Task | None = None
+        self.pulse_end_value: int | None = None
+
+    def full(self):
+        return self._with_alias(self._state())
+
+    def _state(self) -> dict:
+        """ The state without the alias, the alias is the last item of full() """
+        return {'dev': self.devtype,
+                'circuit': self.circuit,
+                'value': self.value,
+                'pending': self.pending_task is not None,
+                }
+
+    async def check_new_data(self):
+        old_value = self.value
+        self.value = self.accessor.read(self.client)
+        return old_value != self.value
+
+    async def set(self, value=None, pulse_duration=None, alias=None):
+        """ Sets new on/off status. A new value disables the pending pulse
+
+            pulse_duration in seconds sets the opposite of value after the pulse, it requires value
+        """
+        parsed_value = None if value is None else int(to_bool(value))
+        pulse_duration = self._check_pulse(parsed_value, pulse_duration)
+        if parsed_value is not None:
+            self._cancel_pulse()
+            await self._write_value(parsed_value)
+
+        self.set_alias(alias)
+
+        if pulse_duration is not None:
+            self._start_pulse(parsed_value, pulse_duration)
+
+    async def _write_value(self, value: int):
+        """ Write the value to the coil, or to the bit of the register of an output without a coil """
+        if self.coil is not None:
+            await self.client.mb_client.write_single_coil(self.coil, value)
+        else:
+            await self.accessor.write_raw(self.client, value)
 
     def _check_pulse(self, parsed_value, pulse_duration) -> float | None:
         """ Return pulse_duration as a float, raise ValueError if it is invalid """
@@ -64,7 +107,7 @@ class WithPulse:
                 if self.pending_task is not timer:
                     return
                 self.pending_task = None
-            await self.client.mb_client.write_single_coil(self.coil, end_value)
+            await self._write_value(end_value)
         try:
             await self.client.change(operation, check_available=False)
         except Exception:
@@ -81,7 +124,7 @@ class WithPulse:
 async def finish_pulses(timeout: float = 5.0):
     """ End the pending pulses of all outputs, used on shutdown """
     outputs = [dev for devtype in (DO, RO, LED) for dev in Devices.by_name(devtype)
-               if isinstance(dev, WithPulse) and dev.pending_task is not None]
+               if isinstance(dev, BinaryOutput) and dev.pending_task is not None]
     if not outputs:
         return
     logger.info(f"Ending {len(outputs)} pending pulses")
@@ -91,14 +134,14 @@ async def finish_pulses(timeout: float = 5.0):
         logger.error("Ending of the pending pulses timed out, some outputs may stay in the state of the pulse")
 
 
-class DigitalOutput(WithPulse, IODevice):
+class DigitalOutput(BinaryOutput):
 
     devtype = DO
 
     def __init__(self, circuit, client: Client, coil, reg, mask, major_group=0,
                  pwm: PwmFrequency | None = None, pwmdutyreg=None, modes=None):
         """ pwm is the frequency shared by the outputs of the group, pwmdutyreg the duty register of this output """
-        super().__init__(circuit, client, major_group)
+        super().__init__(circuit, client, coil, reg, mask, major_group)
         if pwm is not None and pwmdutyreg is None:
             raise ValueError(f'DO {circuit}: pwm requires pwmdutyreg')
         self.modes = modes if modes is not None else ['Simple']
@@ -108,22 +151,10 @@ class DigitalOutput(WithPulse, IODevice):
         self.pwm_duty_val = None
         self.pwm_freq = None
         self.mode = None
-        self.coil = coil
-        self.accessor = AccessorBit(reg, mask)
-        self.value = None
 
-    def full(self):
-        ret = {'dev': 'do',
-               'circuit': self.circuit,
-               'value': self.value,
-               'pending': self.pending_task is not None,
-               'mode': self.mode,
-               'modes': self.modes,
-               'pwm_freq': self.pwm_freq,
-               'pwm_duty': self.pwm_duty,
-               }
-        self._with_alias(ret)
-        return ret
+    def _state(self):
+        return dict(super()._state(), mode=self.mode, modes=self.modes, pwm_freq=self.pwm_freq,
+                    pwm_duty=self.pwm_duty)
 
     async def check_new_data(self):
         is_change = False
@@ -137,9 +168,7 @@ class DigitalOutput(WithPulse, IODevice):
         # Mode field is for backward compatibility, will be deprecated soon
         self.mode = 'PWM' if self.pwm_duty else 'Simple'
 
-        old_value = self.value
-        self.value = self.accessor.read(self.client)
-        return is_change or old_value != self.value
+        return await super().check_new_data() or is_change
 
     async def set(self, value=None, pulse_duration=None, mode=None, pwm_freq=None, pwm_duty=None, alias=None,
                   timeout=None):
@@ -186,7 +215,7 @@ class DigitalOutput(WithPulse, IODevice):
 
         # Set Binary value
         if parsed_value is not None:
-            await self.client.mb_client.write_single_coil(self.coil, parsed_value)
+            await self._write_value(parsed_value)
             if self.pwm_duty:
                 self.pwm_duty = 0
                 # Turn off PWM
@@ -195,7 +224,7 @@ class DigitalOutput(WithPulse, IODevice):
         # Set PWM Duty
         elif pwm_duty is not None:
             if self.value != 0:
-                await self.client.mb_client.write_single_coil(self.coil, 0)
+                await self._write_value(0)
             await self.accessor_pwm_duty.write(self.client, self.pwm.duty_raw(pwm_duty))
 
         self.set_alias(alias)
@@ -221,56 +250,14 @@ class DigitalOutput(WithPulse, IODevice):
                     dev.pwm_duty_val = raw
 
 
-class Relay(WithPulse, IODevice):
+class Relay(BinaryOutput):
 
     devtype = RO
 
-    def __init__(self, circuit, client: Client, coil, reg, mask, major_group=0):
-        super().__init__(circuit, client, major_group)
-        self.coil = coil
-        self.accessor = AccessorBit(reg, mask)
-        self.value = None
 
-    def full(self):
-        ret = {'dev': 'ro',
-               'circuit': self.circuit,
-               'value': self.value,
-               'pending': self.pending_task is not None,
-               }
-        self._with_alias(ret)
-        return ret
-
-    async def check_new_data(self):
-        old_value = self.value
-        self.value = self.accessor.read(self.client)
-        return old_value != self.value
-
-    async def set(self, value=None, pulse_duration=None, alias=None):
-        """ Sets new on/off status. A new value disables the pending pulse
-
-            pulse_duration in seconds sets the opposite of value after the pulse, it requires value
-        """
-        parsed_value = None if value is None else int(to_bool(value))
-        pulse_duration = self._check_pulse(parsed_value, pulse_duration)
-        if parsed_value is not None:
-            self._cancel_pulse()
-            await self.client.mb_client.write_single_coil(self.coil, parsed_value)
-
-        self.set_alias(alias)
-
-        if pulse_duration is not None:
-            self._start_pulse(parsed_value, pulse_duration)
-
-
-class ULED(Relay):
+class ULED(BinaryOutput):
 
     devtype = LED
-
-    def full(self):
-        ret = {'dev': 'led', 'circuit': self.circuit, 'value': self.value,
-               'pending': self.pending_task is not None}
-        self._with_alias(ret)
-        return ret
 
 
 class DigitalInput(WithDIMode, IODevice):

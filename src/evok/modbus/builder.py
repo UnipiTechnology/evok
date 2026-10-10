@@ -57,32 +57,42 @@ class IOParser:
                                 modes=m_feature['modes'], **direct_switch)
             self._register(DI, _inp)
 
+    @staticmethod
+    def output_coil(m_feature, i):
+        """ Coil of the output, None without val_coil: the output writes the bit of its val_reg """
+        coil = m_feature.get('val_coil')
+        return None if coil is None else coil + i
+
     def parse_feature_ro(self, max_count, m_feature):
         for i in range(max_count):
             board_val_reg = self.bit_reg(m_feature['val_reg'], i)
-            _r = Relay(self.io_circuit(i, m_feature), self.client, m_feature['val_coil'] + i,
+            _r = Relay(self.io_circuit(i, m_feature), self.client, self.output_coil(m_feature, i),
                        board_val_reg, 0x1 << (i % 16), major_group=self.circuit)
             self._register(RO, _r)
 
     def parse_feature_do(self, max_count, m_feature):
+        """ A DO without the PWM registers is a simple output """
         if m_feature.get('pwm_reg') and m_feature.get('pwm_ps_reg') and m_feature.get('pwm_c_reg'):
             pwm = HardPwmFrequency(self.client, m_feature['pwm_c_reg'], m_feature['pwm_ps_reg'])
         elif m_feature.get('pwm_reg') and m_feature.get('pwm_preset_reg') and m_feature.get('pwm_cpres_reg'):
             pwm = SoftPwmFrequency(self.client, m_feature['pwm_preset_reg'], m_feature['pwm_cpres_reg'])
+        elif any(key in m_feature for key in ('pwm_reg', 'pwm_ps_reg', 'pwm_c_reg', 'pwm_preset_reg',
+                                               'pwm_cpres_reg')) or 'PWM' in m_feature.get('modes', []):
+            raise ValueError(f"Incomplete PWM registers of feature {m_feature['type']}")
         else:
-            raise ValueError(f"Unexpected feature  {m_feature['type']}")
+            pwm = None
         for i in range(max_count):
+            pwm_params = dict(pwm=pwm, pwmdutyreg=m_feature['pwm_reg'] + i) if pwm is not None else {}
             _r = DigitalOutput(self.io_circuit(i, m_feature), self.client,
-                               m_feature['val_coil'] + i, self.bit_reg(m_feature['val_reg'], i),
+                               self.output_coil(m_feature, i), self.bit_reg(m_feature['val_reg'], i),
                                0x1 << (i % 16),
-                               major_group=self.circuit, pwm=pwm,
-                               pwmdutyreg=m_feature['pwm_reg'] + i, modes=m_feature['modes'])
+                               major_group=self.circuit, modes=m_feature.get('modes'), **pwm_params)
             self._register(DO, _r)
 
     def parse_feature_led(self, max_count, m_feature):
         for i in range(max_count):
             board_val_reg = self.bit_reg(m_feature['val_reg'], i)
-            _led = ULED(self.io_circuit(i, m_feature), self.client, m_feature['val_coil'] + i,
+            _led = ULED(self.io_circuit(i, m_feature), self.client, self.output_coil(m_feature, i),
                         board_val_reg, 0x1 << (i % 16), major_group=self.circuit)
             self._register(LED, _led)
 

@@ -52,10 +52,12 @@ Other parameters depend on the specific type of device.
 Allows you to add a digital output for the Modbus device.
 
 - `val_reg` - value register address, each bit will be treated as a separate device
-- `pwm_reg` - PWM duty register address
+- `val_coil` - coil address of the first output, optional. Without it, the value is written to the bit of `val_reg`,
+  which has to be a holding register, e.g. on a unit without coils.
+- `pwm_reg` - PWM duty register address, optional with the other PWM registers, a DO without them has no PWM
 - `pwm_ps_reg` - PWM prescale register address
 - `pwm_c_reg` - PWM cycle register address
-- `modes` - list of available DO modes
+- `modes` - list of available DO modes, optional (Default value is `[Simple]`), `PWM` requires the PWM registers
     - `Simple` - basic binary mode
     - `PWM` - output with PWM support
 
@@ -79,7 +81,8 @@ Allows you to add a digital output for the Modbus device.
 
 Allows you to add a relay output for the Modbus device.
 
-- `val_coil` - coil register address
+- `val_coil` - coil address of the first relay, optional. Without it, the value is written to the bit of `val_reg`,
+  which has to be a holding register.
 - `val_reg` - value register address, each bit will be treated as a separate device
 
 ```yaml title="Example"
@@ -94,7 +97,8 @@ Allows you to add a relay output for the Modbus device.
 Allows you to add the user LEDs of the Modbus device (ULED), their [circuits](../circuit.md) are
 `<device_name>_<number>`. An LED is set as a relay output, by `value` and an optional `pulse_duration`.
 
-- `val_coil` - coil address of the first LED, the next LEDs follow
+- `val_coil` - coil address of the first LED, the next LEDs follow, optional. Without it, the value is written
+  to the bit of `val_reg`, which has to be a holding register.
 - `val_reg` - value register address, each bit will be treated as a separate device,
   the LEDs 17-32 are in the next register
 
@@ -103,6 +107,15 @@ Allows you to add the user LEDs of the Modbus device (ULED), their [circuits](..
     count       : 4
     val_coil    : 8
     val_reg     : 20
+```
+
+```yaml title="Example of outputs without coils, the bits of the holding registers 10 and 11"
+  - type        : RO
+    count       : 2
+    val_reg     : 10
+  - type        : DO
+    count       : 2
+    val_reg     : 11
 ```
 
 ### DI (digital input)

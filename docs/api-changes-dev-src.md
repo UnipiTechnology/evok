@@ -99,6 +99,8 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - Deleting the alias of a device which is not connected by `POST /rest/run/alias` with `delete`. — `b7cebd6`
 - **Configuration:** `apis.rpc.enabled`, `min_interval` of the webhook, `timeout`, `connect_timeout` and `retries`
   of the buses. — `f7ebda1`, `0044241`, `16463d5`, `a6ede44`
+- **Outputs without coils:** RO, DO and LED without `val_coil` write their bit of `val_reg` (a holding register),
+  e.g. a unit which has no coils. A DO without the PWM registers is a simple output, `modes` is optional. — #124
 
 ## Deprecated
 
