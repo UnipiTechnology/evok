@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import math
 
 from .devices import SENSOR, OWBUS, OWPOWER
@@ -12,6 +13,32 @@ from asyncowfs import event
 
 MAX_LOSTINTERVAL = 300  # 5 minutes
 RECONNECT_DELAY = 10  # s, the next connection to owserver after a failure
+OWSERVER_HOST = '127.0.0.1'
+OWSERVER_PORT = 4304
+
+
+class _NoStartErrorFilter(logging.Filter):
+    """ asyncowfs logged 'Could not start 127.0.0.1:4304 CancelledError(...)' on every attempt to connect,
+        the bus logs the reason itself
+    """
+    def filter(self, record):
+        return not record.getMessage().startswith('Could not start')
+
+
+logging.getLogger('asyncowfs.service').addFilter(_NoStartErrorFilter())
+
+
+def leaf_error(error: BaseException) -> BaseException:
+    """ The first error in the nested exception groups of anyio and the cause of an OSError,
+        e.g. ConnectionRefusedError of OSError('All connection attempts failed')
+    """
+    while True:
+        if isinstance(error, BaseExceptionGroup) and error.exceptions:
+            error = error.exceptions[0]
+        elif isinstance(error, OSError) and error.__cause__ is not None:
+            error = error.__cause__
+        else:
+            return error
 
 
 def check_interval(interval, name='interval', zero=False):
@@ -231,6 +258,7 @@ class OwBusDriver:
         self._wakeup = None     # the event waking up poll()
         self._scan_wakeup = None    # the event waking up scanning()
         self._scan_requested = False
+        self._logged_error = None   # (type, text) of the logged failure, the same one is not logged again
 
     def full(self):
         return {'dev': 'owbus',
@@ -257,13 +285,38 @@ class OwBusDriver:
             except asyncio.CancelledError:
                 raise
             except Exception as E:
-                logger.error(f"1-Wire bus {self.circuit} failed, connecting again in {RECONNECT_DELAY} s: "
-                             f"{type(E).__name__}: {E}")
+                self._log_failure(E)
             # the devices are located again after the connection
             for mysensor in self.mysensors:
                 mysensor.sens = None
                 mysensor.set_lost()
             await asyncio.sleep(RECONNECT_DELAY)
+
+    def _log_failure(self, error):
+        """ Log the reason of the failure once until the next connection, it was an ExceptionGroup of anyio """
+        error = leaf_error(error)
+        if isinstance(error, OSError):
+            message = (f"1-Wire bus {self.circuit}: cannot connect to owserver at {OWSERVER_HOST}:{OWSERVER_PORT}, "
+                       f"is owserver running? {type(error).__name__}: {error}")
+        else:
+            message = f"1-Wire bus {self.circuit} failed: {type(error).__name__}: {error}"
+        kind = (type(error), str(error))
+        if kind != self._logged_error:
+            self._logged_error = kind
+            logger.error(f"{message}; connecting again every {RECONNECT_DELAY} s, the next errors are not logged")
+        else:
+            logger.debug(message)
+
+    def _log_connected(self):
+        """ The connection ends a failed connection, another failure of the bus repeats after every connection,
+            it is logged once
+        """
+        message = f"1-Wire bus {self.circuit} connected to owserver at {OWSERVER_HOST}:{OWSERVER_PORT}"
+        if self._logged_error is None or issubclass(self._logged_error[0], OSError):
+            self._logged_error = None
+            logger.info(message)
+        else:
+            logger.debug(message)
 
     async def set(self, scan_interval=None, do_scan=False, interval=None, do_reset=None):
         was_changed = False
@@ -431,6 +484,7 @@ class OwBusDriver:
         self.bus_lock = anyio.Lock()
         async with OWFS(initial_scan=False) as ow:
             await ow.add_task(self.mon, ow)
-            server = await ow.add_server('127.0.0.1', 4304)  # host, port)
+            server = await ow.add_server(OWSERVER_HOST, OWSERVER_PORT)
+            self._log_connected()
             await ow.add_task(self.scanning, server)
             await self.poll()
