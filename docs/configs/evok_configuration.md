@@ -82,6 +82,9 @@ comm_channels:
         - `retries` - count of retries of a request after a failure of the port or a busy unit, an integer `>= 0`
           (Default value is `1`)
     - `OWFS` (1-Wire bus, the former name `OWBUS` is not supported)
+      The bus reads the sensors by `owserver` at `127.0.0.1:4304` (Debian package `owserver`). If owserver is not running,
+      Evok logs `cannot connect to owserver ..., is owserver running?` once and connects again every 10 s,
+      the sensors are reported as lost until the connection.
         - `interval` - interval of values updating in seconds, a positive number (Default value is `60`)
         - `scan_interval` - interval of the search for new devices in seconds, `0` searches only after the connection
           to owserver and on request (`do_scan`) (Default value is `300`). A change by the API applies at once.

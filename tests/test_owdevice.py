@@ -1,12 +1,13 @@
 import asyncio
 import json
+import logging
 
 import anyio
 import pytest
 
 from evok import devents
 from evok.devices import Devices, SENSOR
-from evok.owdevice import DS18B20, DS2408, DS2438, OwBusDriver, MySensorFabric, address_key
+from evok.owdevice import DS18B20, DS2408, DS2438, OwBusDriver, MySensorFabric, address_key, leaf_error
 
 
 @pytest.fixture
@@ -147,7 +148,7 @@ async def test_reconnect_after_failure(bus, events, monkeypatch, caplog):
     assert len(runs) == 3
     assert (sensor.sens, sensor.lost) == (None, True)
     assert events == [sensor]                   # the loss is reported once
-    assert caplog.text.count('connecting again') == 2
+    assert caplog.text.count('connecting again') == 1      # the same error is logged once
 
 
 async def test_ds18b20_reports_only_changes(bus, events):
@@ -288,3 +289,83 @@ async def test_do_scan_during_a_scan_scans_again(bus):
     await settle()
     task.cancel()
     assert server.scans == 2
+
+
+def refused():
+    """ The error of OWFS without owserver, an OSError of anyio caused by ConnectionRefusedError in task groups """
+    error = OSError('All connection attempts failed')
+    error.__cause__ = ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 4304)")
+    return ExceptionGroup('unhandled errors in a TaskGroup', [ExceptionGroup('unhandled errors in a TaskGroup',
+                                                                             [error])])
+
+
+def test_leaf_error():
+    assert type(leaf_error(refused())) is ConnectionRefusedError
+    error = ValueError('x')
+    assert leaf_error(error) is error
+
+
+async def run_bus(bus, monkeypatch, run, runs):
+    """ Run the bus until run() was called runs times """
+    from evok import owdevice
+    monkeypatch.setattr(owdevice, 'RECONNECT_DELAY', 0)
+    calls = []
+
+    async def counted():
+        calls.append(None)
+        if len(calls) > runs:
+            await asyncio.Event().wait()
+        await run(len(calls))
+    monkeypatch.setattr(bus, 'run', counted)
+    bus.start_scanning()
+    for _ in range(100):
+        if len(calls) > runs:
+            break
+        await asyncio.sleep(0)
+    bus._run_task.cancel()
+    assert len(calls) > runs
+
+
+async def test_owserver_not_running_is_logged_once(bus, monkeypatch, caplog):
+    """ The ExceptionGroup of anyio did not say that owserver is not running, it was logged every 10 s """
+    async def run(n):
+        raise refused()
+    await run_bus(bus, monkeypatch, run, 3)
+    errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert 'cannot connect to owserver at 127.0.0.1:4304, is owserver running? ConnectionRefusedError' in errors[0]
+    assert 'ExceptionGroup' not in caplog.text
+
+
+async def test_connection_after_owserver_failure_is_logged(bus, monkeypatch, caplog):
+    caplog.set_level(logging.INFO, logger='evok')
+
+    async def run(n):
+        if n == 3:
+            bus._log_connected()                # owserver is running, then it stops
+        raise refused()
+    await run_bus(bus, monkeypatch, run, 4)
+    messages = [r.getMessage() for r in caplog.records if r.levelno >= logging.INFO]
+    assert ['connected' in m for m in messages] == [False, True, False]   # the next failure is logged again
+
+
+async def test_failure_after_every_connection_is_logged_once(bus, monkeypatch, caplog):
+    """ A failure after the connection reset the logged error, it was logged after every connection """
+    caplog.set_level(logging.INFO, logger='evok')
+
+    async def run(n):
+        bus._log_connected()
+        raise ValueError('a bug')
+    await run_bus(bus, monkeypatch, run, 3)
+    messages = [r.getMessage() for r in caplog.records if r.levelno >= logging.INFO]
+    assert len(messages) == 2
+    assert 'connected' in messages[0] and 'ValueError: a bug' in messages[1]
+
+
+def test_start_error_of_asyncowfs_is_not_logged(caplog):
+    """ asyncowfs logged 'Could not start 127.0.0.1:4304 CancelledError(...)' on every attempt """
+    log = logging.getLogger('asyncowfs.service')
+    log.error("Could not start %s:%s %s", '127.0.0.1', 4304, "CancelledError('Cancelled via cancel scope')")
+    log.error("Unprocessed: %s", 'event')
+    assert 'Could not start' not in caplog.text
+    assert 'Unprocessed: event' in caplog.text
