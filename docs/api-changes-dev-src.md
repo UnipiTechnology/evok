@@ -42,6 +42,9 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - NaN and infinite values of AIs and data points are returned as the strings `'NaN'`, `'Infinity'`, `'-Infinity'`.
   — `5f15f41`
 - `last_comm` of a unit is `null` before the first communication, before about 1.7e9 s. — `2f323f0`
+- **1-Wire sensors of the configuration:** no `lost: true` event right after the start or a reconnection to owserver,
+  a sensor is read after owserver locates it. A sensor which the search of the bus has not found is reported lost.
+  — #231
 
 ### Circuits by the HW definitions
 

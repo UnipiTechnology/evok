@@ -404,7 +404,21 @@ class OwBusDriver:
                     await server.scan_now(polling=False)
                 except Exception as E:
                     logger.error(f"1-Wire bus {self.circuit}: scan failed: {type(E).__name__}: {E}")
+                else:
+                    self._report_not_located(server.service)
             await self._wait_for_scan()
+
+    def _report_not_located(self, service):
+        """ A sensor of the configuration which the scan has not located is lost
+
+            The located devices are taken from asyncowfs, mon() gets their DeviceLocated by a queue
+            and may not have assigned them yet.
+        """
+        located = {address_key(dev.id) for dev in service.devices if dev.bus is not None}
+        for mysensor in self.mysensors:
+            if mysensor.sens is None and not mysensor.lost and address_key(mysensor.address) not in located:
+                logger.info(f"Sensor {mysensor.circuit} ({mysensor.address}) not found on the bus")
+                mysensor.set_lost()
 
     async def _wait_for_scan(self):
         """ Wait for scan_interval or do_scan(), a change of scan_interval starts the wait again """
@@ -424,11 +438,14 @@ class OwBusDriver:
         """
 
         while True:
-            if not self.mysensors:
+            # a sensor without its asyncowfs device is not located yet or disappeared, its read failed
+            # and reported it lost at the start; mon() wakes poll() when it is located
+            located = [x for x in self.mysensors if x.sens is not None]
+            if not located:
                 await self._sleep(self.interval)
                 continue
             # Find sensor with min time (all se to 0 as default)
-            mysensor = min(self.mysensors, key=lambda x: x.time)
+            mysensor = min(located, key=lambda x: x.time)
             t1 = anyio.current_time()
             if t1 < mysensor.time:
                 await self._sleep(mysensor.time - t1)
