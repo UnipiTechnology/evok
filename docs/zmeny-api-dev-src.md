@@ -40,7 +40,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - NaN a nekonečné hodnoty AI a datových bodů se vrací jako řetězce `'NaN'`, `'Infinity'`, `'-Infinity'`. — `5f15f41`
 - `last_comm` jednotky je `null` před první komunikací, dřív asi 1,7e9 s. — `2f323f0`
 - **1-Wire čidla z konfigurace:** žádná událost `lost: true` hned po startu nebo po novém připojení k owserveru, čidlo
-  se čte až po nalezení owserverem. Čidlo, které hledání na sběrnici nenašlo, se hlásí jako ztracené. — #231
+  se čte až po nalezení owserverem. Čidlo, které hledání na sběrnici nenašlo, se hlásí jako ztracené. — `5fa3eca`
 
 ### Okruhy podle HW definic
 
