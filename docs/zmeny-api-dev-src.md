@@ -95,6 +95,8 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - Smazání aliasu nepřipojeného zařízení přes `POST /rest/run/alias` s `delete`. — `b7cebd6`
 - **Konfigurace:** `apis.rpc.enabled`, webhook `min_interval`, u sběrnic `timeout`, `connect_timeout` a `retries`.
   — `f7ebda1`, `0044241`, `16463d5`, `a6ede44`
+- **Výstupy bez coilů:** RO, DO a LED bez `val_coil` zapisují svůj bit ve `val_reg` (holding registr), např. u jednotky
+  bez coilů. DO bez PWM registrů je jednoduchý výstup, `modes` je nepovinné. — #124
 
 ## Zastaralé
 

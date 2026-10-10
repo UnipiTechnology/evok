@@ -8,7 +8,7 @@ from evok import devents
 from evok.devices import Devices, DI, DO, RO, AI, LED, WATCHDOG
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
 from evok.modbus.builder import IOParser
-from evok.modbus.digital import DigitalInput, DigitalOutput, Relay, finish_pulses
+from evok.modbus.digital import BinaryOutput, DigitalInput, DigitalOutput, Relay, ULED, finish_pulses
 from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
 from evok.modbus.special import NvSave, OwPower
 from evok.modbus import set_devices
@@ -315,6 +315,31 @@ async def test_ro_rejects_invalid_pulse(relay, kw):
     with pytest.raises(ValueError):
         await ro.set(**kw)
     assert client.mb_client.writes == []
+
+
+async def test_ro_without_coil_pulse_writes_the_register(unit):
+    """ #124: the end of the pulse writes the bit of the register too """
+    client = await unit({1: 0b1000})
+    ro = Devices[RO]['9_01'] = Relay('9_01', client, None, 1, 0b0100)
+    await ro.set(value=1, pulse_duration=0.01)
+    await asyncio.sleep(0.05)
+    assert client.mb_client.writes == [('reg', 1, 0b1100), ('reg', 1, 0b1000)]
+    assert ro.pending_task is None
+
+
+def test_outputs_share_the_base():
+    assert not issubclass(ULED, Relay)
+    assert all(issubclass(cls, BinaryOutput) for cls in (Relay, ULED, DigitalOutput))
+
+
+async def test_output_states(unit):
+    await unit({1: 0b01})
+    do, led = dev(DO, '1_01'), dev(LED, '1_01')
+    Devices.set_alias('my_do', do)
+    assert list(do.full()) == ['dev', 'circuit', 'value', 'pending', 'mode', 'modes', 'pwm_freq', 'pwm_duty',
+                               'alias']
+    assert (do.full()['dev'], do.full()['value']) == ('do', 1)
+    assert led.full() == {'dev': 'led', 'circuit': '1_01', 'value': 0, 'pending': False}
 
 
 async def test_finish_pulses_ends_pending_pulses(unit):

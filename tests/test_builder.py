@@ -221,3 +221,28 @@ def test_register_is_deprecated(caplog):
               'modbus_features': [{'type': 'REGISTER', 'count': 2, 'start_reg': 0}]})
     assert circuits(REGISTER) == ['1_0', '1_1']           # still created
     assert caplog.text.count('the feature REGISTER is deprecated') == 1
+
+
+@pytest.mark.parametrize('devtype', [RO, DO, LED])
+async def test_output_without_coil_writes_its_register(devtype):
+    """ #124: a unit without coils, the value is the bit of a holding register """
+    feature = {'type': devtype.upper(), 'count': 2, 'val_reg': 1}
+    client = populate({'modbus_register_blocks': BLOCKS_0_399, 'modbus_features': [feature]})
+    client.mb_client.holding[1] = 0b1000
+    await scan(client, initial=True)
+    out = Devices.by_name(devtype, '1_02')
+    assert out.coil is None
+    await out.set(value=1)
+    assert client.mb_client.writes == [('reg', 1, 0b1010)]     # the other bits are kept
+    await out.check_new_data()
+    assert out.value == 1
+    if devtype == DO:
+        assert (out.pwm, out.modes) == (None, ['Simple'])
+
+
+@pytest.mark.parametrize('pwm', [{'pwm_reg': 16}, {'modes': ['Simple', 'PWM']}])
+def test_do_with_incomplete_pwm_is_an_error(caplog, pwm):
+    populate({'modbus_register_blocks': BLOCKS_0_399,
+              'modbus_features': [dict({'type': 'DO', 'count': 2, 'val_reg': 1, 'val_coil': 0}, **pwm)]})
+    assert circuits(DO) == []
+    assert 'Incomplete PWM registers of feature DO' in caplog.text

@@ -21,7 +21,7 @@ class FakeOutput:
         if value is not None and int(value) > 1:
             raise ValueError('Value out of range')
         if pulse_duration is not None:
-            # as WithPulse._check_pulse() of an output, RPC passes pulse_duration to it
+            # as BinaryOutput._check_pulse() of an output, RPC passes pulse_duration to it
             pulse_duration = to_float(pulse_duration)
             if pulse_duration <= 0:
                 raise ValueError('pulse_duration must be positive')
