@@ -117,7 +117,8 @@ comm_channels:
 
 - `type` - 1-Wire sensor type, options: [`DS18B20`, `DS18S20`, `DS2438`, `DS2408`, `DS2406`, `DS2413`]
 - `address` - 1-Wire device address, the family and the serial number as listed by owserver, e.g. `28.A1B2C3D4E5F6`;
-  the CRC (`28.A1B2C3D4E5F6.7B`), the dots and the case are not significant
+  the CRC (`28.A1B2C3D4E5F6.7B`), the dots and the case are not significant. The sensor is read after owserver
+  locates it, a sensor which the search of the bus has not found is reported as `lost`.
 - `interval` - an optional parameter, interval of values updating in seconds (Default value is 15).
 
 !!! Note
