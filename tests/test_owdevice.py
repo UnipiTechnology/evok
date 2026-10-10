@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from types import SimpleNamespace
 
 import anyio
 import pytest
@@ -229,11 +230,15 @@ def test_ds2404_is_not_supported(bus):
 
 
 class FakeServer:
-    def __init__(self):
+    """ The server of asyncowfs, the scan locates the devices of found """
+    def __init__(self, found=()):
         self.scans = 0
+        self.found = found
+        self.service = SimpleNamespace(devices=[])
 
     async def scan_now(self, polling):
         self.scans += 1
+        self.service.devices = [SimpleNamespace(id=address, bus='bus.0') for address in self.found]
 
 
 async def settle():
@@ -369,3 +374,53 @@ def test_start_error_of_asyncowfs_is_not_logged(caplog):
     log.error("Unprocessed: %s", 'event')
     assert 'Could not start' not in caplog.text
     assert 'Unprocessed: event' in caplog.text
+
+
+async def test_configured_sensor_is_not_lost_before_it_is_located(bus, monkeypatch):
+    """ #231: poll() read the sensor without its asyncowfs device at the start and reported it lost """
+    states = []
+    monkeypatch.setattr(devents, 'status', lambda device, **kw: states.append((device.circuit, device.lost)))
+    bus.bus_lock = anyio.Lock()
+    sensor = DS18B20('28.A1B2C3D4E5F6', 'DS18B20', bus, circuit='temp1')
+    task = asyncio.create_task(bus.poll())
+    await settle()
+    assert (sensor.lost, states) == (False, [])          # not read without sens
+    sensor.sens = FakeSens(temperature=21.5)             # located by mon()
+    bus.wake()
+    await settle()
+    task.cancel()
+    assert (sensor.value, sensor.lost, states) == (21.5, False, [('temp1', False)])
+
+
+async def test_configured_sensor_not_located_by_the_scan_is_lost(bus, events, caplog):
+    caplog.set_level(logging.INFO)
+    bus.bus_lock = anyio.Lock()
+    await bus.set(scan_interval=0)
+    events.clear()                                       # the change of the bus
+    found = DS18B20('28.A1B2C3D4E5F6', 'DS18B20', bus, circuit='found')
+    missing = DS18B20('28.000000000001', 'DS18B20', bus, circuit='missing')
+    # DeviceLocated of found is still in the queue of mon(), its sens is not assigned
+    task = asyncio.create_task(bus.scanning(FakeServer(found=['28.A1B2C3D4E5F6.7B'])))
+    await settle()
+    bus.do_scan()                                        # the next scan does not report it again
+    await settle()
+    task.cancel()
+    assert (found.lost, missing.lost) == (False, True)
+    assert events == [missing]
+    assert caplog.text.count('Sensor missing (28.000000000001) not found on the bus') == 1
+
+
+async def test_failed_scan_does_not_report_sensors_lost(bus, events):
+    bus.bus_lock = anyio.Lock()
+    await bus.set(scan_interval=0)
+    events.clear()
+    sensor = DS18B20('28.000000000001', 'DS18B20', bus)
+    server = FakeServer()
+
+    async def failed_scan(polling):
+        raise OSError('owserver closed the connection')
+    server.scan_now = failed_scan
+    task = asyncio.create_task(bus.scanning(server))
+    await settle()
+    task.cancel()
+    assert (sensor.lost, events) == (False, [])
