@@ -32,8 +32,12 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["evok"]
 package-dir = {"" = "src"}
+
+# all packages of src, also evok.modbus; packages = ["evok"] did not include the subpackages
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["evok*"]
 
 [project.scripts]
 evok = "evok.evok:run"
