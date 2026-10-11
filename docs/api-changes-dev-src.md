@@ -143,7 +143,7 @@ An invalid value is an error: the unit or the feature is not created and the err
 - **OWFS buses:** `hostname` and `port` of owserver (`127.0.0.1:4304` by default), each bus needs its own owserver.
   The name of a 1-Wire sensor must be unique over all OWFS buses, a duplicate configured sensor is not created,
   a found one is skipped; before the second sensor replaced the first one in the API. The second bus does not fail
-  at its start when both buses locate sensors of the same family. — #230
+  at its start when both buses locate sensors of the same family. — `fa35a94`
 
 ## Runtime and installation
 
