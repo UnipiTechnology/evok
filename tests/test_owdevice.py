@@ -424,3 +424,48 @@ async def test_failed_scan_does_not_report_sensors_lost(bus, events):
     await settle()
     task.cancel()
     assert (sensor.lost, events) == (False, [])
+
+
+async def test_found_sensor_with_the_circuit_of_a_sensor_is_skipped(bus, caplog):
+    """ #230: a configured sensor named by the circuit of a found one, the found one replaced it """
+    other = OwBusDriver('OW2', port=4305)
+    configured = DS18B20('28.000000000001', 'DS18B20', other, circuit='28A1B2C3D4E5F67B')
+    assert bus._create_found('28.A1B2C3D4E5F6.7B', 'DS18B20') is None
+    assert bus._create_found('28.A1B2C3D4E5F6.7B', 'DS18B20') is None     # the next scan
+    assert Devices[SENSOR]['28A1B2C3D4E5F67B'] is configured
+    assert bus.mysensors == []
+    assert caplog.text.count("has the same name as the sensor 28.000000000001 of bus 'OW2', "
+                             "the found sensor is skipped") == 1
+    assert bus._create_found('28.A1B2C3D4E5F7.7B', 'DS18B20').circuit == '28A1B2C3D4E5F77B'
+
+
+async def test_owserver_address_of_the_bus(bus, monkeypatch, caplog):
+    remote = OwBusDriver('REMOTE', host='192.168.1.10', port=4305)
+
+    async def run(n):
+        raise refused()
+    await run_bus(remote, monkeypatch, run, 1)
+    assert 'cannot connect to owserver at 192.168.1.10:4305' in caplog.text
+
+
+async def test_located_device_waits_for_the_struct_set_up_by_another_bus():
+    """ The device classes of asyncowfs are shared, the setup by the first bus was in progress and
+        get_type() of the device of the second bus failed, the bus failed
+    """
+    from evok.owdevice import wait_for_struct
+
+    class Device_28:
+        _did_setup = None                       # set up by another bus
+    device = Device_28()
+
+    async def finish_setup():
+        await asyncio.sleep(0.1)
+        Device_28._did_setup = True
+    task = asyncio.create_task(finish_setup())
+    await wait_for_struct(device)
+    assert Device_28._did_setup is True
+    await task
+    Device_28._did_setup = None
+    with anyio.move_on_after(1) as scope:
+        await wait_for_struct(device, timeout=0.1)   # a failed setup does not wait forever
+    assert not scope.cancelled_caught

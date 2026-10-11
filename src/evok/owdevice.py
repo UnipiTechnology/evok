@@ -15,6 +15,7 @@ MAX_LOSTINTERVAL = 300  # 5 minutes
 RECONNECT_DELAY = 10  # s, the next connection to owserver after a failure
 OWSERVER_HOST = '127.0.0.1'
 OWSERVER_PORT = 4304
+STRUCT_TIMEOUT = 10  # s, the wait for the setup of the device class by another bus
 
 
 class _NoStartErrorFilter(logging.Filter):
@@ -62,8 +63,24 @@ def address_key(address) -> str:
 SUPPORTED_DEVICES = ["DS18S20", "DS18B20", "DS2438", "DS2408", "DS2406", "DS2413"]
 
 
+async def wait_for_struct(device, timeout=STRUCT_TIMEOUT):
+    """ Wait until the class of the asyncowfs device has its accessors (get_type)
+
+        The classes are shared by all OWFS buses by the family, the setup by one bus is in progress
+        (_did_setup None) and another bus located its device without the accessors, its bus failed.
+    """
+    with anyio.move_on_after(timeout):
+        while type(device)._did_setup is None:
+            await anyio.sleep(0.05)
+
+
 class NotSupportedError(ValueError):
     """ The request is not supported by the device, a ValueError is reported as a bad request """
+    pass
+
+
+class DuplicateCircuitError(ValueError):
+    """ A sensor with the circuit of a created one, it replaced the created sensor in Devices """
     pass
 
 
@@ -243,8 +260,10 @@ def MySensorFabric(address, sensor_type, bus, interval=None, circuit=None):
 class OwBusDriver:
 
     def __init__(self, circuit, interval=60, scan_interval=300, major_group=1,
-                 owpower_circuit=None):
+                 owpower_circuit=None, host=OWSERVER_HOST, port=OWSERVER_PORT):
         self.bus_driver = self
+        self.host = host
+        self.port = port
         self.devtype = OWBUS
         self.circuit = circuit
         self.major_group = major_group
@@ -259,6 +278,7 @@ class OwBusDriver:
         self._scan_wakeup = None    # the event waking up scanning()
         self._scan_requested = False
         self._logged_error = None   # (type, text) of the logged failure, the same one is not logged again
+        self._skipped = set()       # the address keys of the found sensors skipped for their circuit, warned once
 
     def full(self):
         return {'dev': 'owbus',
@@ -296,7 +316,7 @@ class OwBusDriver:
         """ Log the reason of the failure once until the next connection, it was an ExceptionGroup of anyio """
         error = leaf_error(error)
         if isinstance(error, OSError):
-            message = (f"1-Wire bus {self.circuit}: cannot connect to owserver at {OWSERVER_HOST}:{OWSERVER_PORT}, "
+            message = (f"1-Wire bus {self.circuit}: cannot connect to owserver at {self.host}:{self.port}, "
                        f"is owserver running? {type(error).__name__}: {error}")
         else:
             message = f"1-Wire bus {self.circuit} failed: {type(error).__name__}: {error}"
@@ -311,7 +331,7 @@ class OwBusDriver:
         """ The connection ends a failed connection, another failure of the bus repeats after every connection,
             it is logged once
         """
-        message = f"1-Wire bus {self.circuit} connected to owserver at {OWSERVER_HOST}:{OWSERVER_PORT}"
+        message = f"1-Wire bus {self.circuit} connected to owserver at {self.host}:{self.port}"
         if self._logged_error is None or issubclass(self._logged_error[0], OSError):
             self._logged_error = None
             logger.info(message)
@@ -351,6 +371,12 @@ class OwBusDriver:
             devents.status(self)
 
     def register_sensor(self, mysensor):
+        """ A circuit of a sensor of any OWFS bus raises DuplicateCircuitError """
+        other = Devices[SENSOR].get(str(mysensor.circuit))
+        if other is not None:
+            raise DuplicateCircuitError(f"1-Wire sensor '{mysensor.circuit}' ({mysensor.address}) of bus "
+                                        f"'{self.circuit}' has the same name as the sensor {other.address} "
+                                        f"of bus '{other.bus.circuit}'")
         self.mysensors.append(mysensor)
         Devices.register_device(SENSOR, mysensor)
         self.wake()
@@ -474,15 +500,14 @@ class OwBusDriver:
             async for msg in events:
                 logger.debug("%s", msg)
                 if isinstance(msg, event.DeviceLocated):
+                    await wait_for_struct(msg.device)
                     sensor_type = await msg.device.get_type()
                     address = msg.device.id
                     mysensor = self._find_sensor(address)
                     if mysensor is not None:
                         logger.info(f"Sensor {mysensor.circuit} found")
                     else:
-                        mysensor = MySensorFabric(address, sensor_type, self, self.interval)
-                        if mysensor is not None:
-                            logger.info(f"New sensor {sensor_type} {address} found")
+                        mysensor = self._create_found(address, sensor_type)
                     if mysensor:
                         # read at once, poll() reports the recovery of a lost sensor
                         mysensor.sens = msg.device
@@ -497,11 +522,25 @@ class OwBusDriver:
                         mysensor.sens = None
                         mysensor.set_lost()
 
+    def _create_found(self, address, sensor_type):
+        """ Create a found sensor, a sensor with the circuit of a created one is skipped and warned once """
+        try:
+            mysensor = MySensorFabric(address, sensor_type, self, self.interval)
+        except DuplicateCircuitError as E:
+            key = address_key(address)
+            if key not in self._skipped:
+                self._skipped.add(key)
+                logger.warning(f"{E}, the found sensor is skipped")
+            return None
+        if mysensor is not None:
+            logger.info(f"New sensor {sensor_type} {address} found")
+        return mysensor
+
     async def run(self):
         self.bus_lock = anyio.Lock()
         async with OWFS(initial_scan=False) as ow:
             await ow.add_task(self.mon, ow)
-            server = await ow.add_server(OWSERVER_HOST, OWSERVER_PORT)
+            server = await ow.add_server(self.host, self.port)
             self._log_connected()
             await ow.add_task(self.scanning, server)
             await self.poll()
