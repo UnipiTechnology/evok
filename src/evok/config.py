@@ -60,20 +60,31 @@ class HWDict:
             logger.debug(f"YAML Definition loaded: {file_path}, definition count {len(self.definitions)}")
 
 
-class TcpBusDevice:
+class BusDevice:
+    """ A Modbus bus, full() returns its configuration and its Modbus devices, it cannot be set """
+
+    devtype = None
+
+    def __init__(self, circuit: str, bus_driver: AsyncSmartTransport, **settings):
+        self.bus_driver = bus_driver
+        self.circuit = circuit
+        self.settings = settings
+        self.devices: List[str] = []    # the circuits of the created Modbus devices of the bus
+
+    def full(self):
+        return dict({'dev': self.devtype, 'circuit': self.circuit}, **self.settings, devices=list(self.devices))
+
+
+class TcpBusDevice(BusDevice):
     """ The connection is opened by the first request, see retry_strategies() """
 
-    def __init__(self, circuit: str, bus_driver: AsyncSmartTransport):
-        self.bus_driver = bus_driver
-        self.circuit = circuit
+    devtype = TCPBUS
 
 
-class SerialBusDevice:
+class SerialBusDevice(BusDevice):
     """ The serial port is opened by the first request, see retry_strategies() """
 
-    def __init__(self, circuit: str, bus_driver: AsyncSmartTransport):
-        self.bus_driver = bus_driver
-        self.circuit = circuit
+    devtype = SERIALBUS
 
 
 class DeviceInfo:
@@ -266,6 +277,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
         port = bus_data.get("port", 502)
         timeout = float(bus_data.get("timeout", 0.5))
         connect_timeout = float(bus_data.get("connect_timeout", 1.0))
+        retries = bus_retries(bus_data)
         bus_driver = AsyncSmartTransport(
             AsyncTcpTransport(
                 host,
@@ -277,9 +289,10 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
             wait_after_connect=0.0,
             retry_on_device_busy=True,
             retry_on_device_failure=False,
-            **retry_strategies(timeout, connect_timeout, bus_retries(bus_data)),
+            **retry_strategies(timeout, connect_timeout, retries),
         )
-        bus = TcpBusDevice(circuit=bus_name, bus_driver=bus_driver)
+        bus = TcpBusDevice(circuit=bus_name, bus_driver=bus_driver, hostname=host, port=port, timeout=timeout,
+                           connect_timeout=connect_timeout, retries=retries)
         # more buses may connect to one server, its units must differ
         line = ('tcp', str(host).lower(), port)
         Devices.register_device(TCPBUS, bus)
@@ -295,6 +308,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
         serial_parity = bus_data.get("parity", 'N')
         serial_stopbits = bus_data.get("stopbits", 1)
         timeout = float(bus_data.get("timeout", 0.5))
+        retries = bus_retries(bus_data)
         bus_driver = AsyncSmartTransport(
             AsyncRtuTransport(
                 serial_port,
@@ -307,9 +321,11 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
             retry_on_device_busy=True,
             retry_on_device_failure=False,
             # the serial port is opened at once, its timeout is the response timeout
-            **retry_strategies(timeout, timeout, bus_retries(bus_data)),
+            **retry_strategies(timeout, timeout, retries),
         )
-        bus = SerialBusDevice(circuit=bus_name, bus_driver=bus_driver)
+        bus = SerialBusDevice(circuit=bus_name, bus_driver=bus_driver, port=serial_port, baudrate=serial_baud_rate,
+                              parity=serial_parity, stopbits=serial_stopbits, timeout=timeout,
+                              retries=retries)
         Devices.register_device(SERIALBUS, bus)
         claims.serial_ports[line[1]] = bus_name
 
@@ -380,6 +396,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
                 Devices.register_device(MODBUS_SLAVE, slave)
                 claims.names[circuit] = bus_name
                 claims.units[unit] = (circuit, bus_name)
+                bus.devices.append(circuit)
 
                 if bus_device_info is None or "device_info" in device_data:
                     device_info = {'model': device_data.get("model", device_name)}

@@ -1339,6 +1339,113 @@ paths:
             - rest
           default: json
         description: Content type - use "json" for application/json OR "rest" for text/html.
+  '/{format}/serial_bus/{circuit}':
+    get:
+      summary: Read Modbus RTU bus
+      description: Get the configuration and the Modbus devices of a single (or all) Modbus RTU bus. The bus cannot be set.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/Serial_bus'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Serial_bus'
+              examples:
+                RS485_1:
+                  value:
+                    dev: serial_bus
+                    circuit: RS485_1
+                    port: /dev/ttyAMA1
+                    baudrate: 19200
+                    parity: N
+                    stopbits: 1
+                    timeout: 0.5
+                    retries: 1
+                    devices: ['xS51']
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: read-serial_bus-object
+      tags:
+        - Modbus bus
+        - Getter
+    parameters:
+      - schema:
+          type: string
+          examples: ['RS485_1']
+        name: circuit
+        in: path
+        required: true
+        description: Name of the bus (or "all"). You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
+      - name: format
+        in: path
+        required: true
+        schema:
+          type: string
+          examples: [json]
+          enum:
+            - json
+            - rest
+          default: json
+        description: Content type - use "json" for application/json OR "rest" for text/html.
+  '/{format}/tcp_bus/{circuit}':
+    get:
+      summary: Read Modbus TCP bus
+      description: Get the configuration and the Modbus devices of a single (or all) Modbus TCP bus. The bus cannot be set.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/Tcp_bus'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Tcp_bus'
+              examples:
+                LOCAL_TCP:
+                  value:
+                    dev: tcp_bus
+                    circuit: LOCAL_TCP
+                    hostname: 127.0.0.1
+                    port: 502
+                    timeout: 0.5
+                    connect_timeout: 1.0
+                    retries: 1
+                    devices: ['1']
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: read-tcp_bus-object
+      tags:
+        - Modbus bus
+        - Getter
+    parameters:
+      - schema:
+          type: string
+          examples: ['LOCAL_TCP']
+        name: circuit
+        in: path
+        required: true
+        description: Name of the bus (or "all"). You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
+      - name: format
+        in: path
+        required: true
+        schema:
+          type: string
+          examples: [json]
+          enum:
+            - json
+            - rest
+          default: json
+        description: Content type - use "json" for application/json OR "rest" for text/html.
   '/{format}/register/{circuit}':
     get:
       summary: Read Modbus register
@@ -3780,6 +3887,78 @@ components:
           model: S167
           sn: 81
           board_count: 1
+    Serial_bus:
+      title: Modbus RTU bus
+      description: Configuration of a Modbus RTU bus, read-only.
+      type: object
+      properties:
+        dev:
+          type: string
+          examples: ['serial_bus']
+          readOnly: true
+        circuit:
+          type: string
+          examples: ['RS485_1']
+          description: Name of the bus in the configuration.
+          readOnly: true
+        port:
+          type: string
+          examples: ['/dev/ttyAMA1']
+          description: Serial port.
+        baudrate:
+          type: integer
+          examples: [19200]
+        parity:
+          type: string
+          enum: [N, E, O]
+        stopbits:
+          type: integer
+          examples: [1]
+        timeout:
+          type: number
+          description: Timeout of a response in seconds.
+        retries:
+          type: integer
+          description: Count of retries of a request.
+        devices:
+          type: array
+          items:
+            type: string
+          description: Names of the Modbus devices of the bus.
+    Tcp_bus:
+      title: Modbus TCP bus
+      description: Configuration of a Modbus TCP bus, read-only.
+      type: object
+      properties:
+        dev:
+          type: string
+          examples: ['tcp_bus']
+          readOnly: true
+        circuit:
+          type: string
+          examples: ['LOCAL_TCP']
+          description: Name of the bus in the configuration.
+          readOnly: true
+        hostname:
+          type: string
+          examples: ['127.0.0.1']
+        port:
+          type: integer
+          examples: [502]
+        timeout:
+          type: number
+          description: Timeout of a response in seconds.
+        connect_timeout:
+          type: number
+          description: Timeout of connecting in seconds.
+        retries:
+          type: integer
+          description: Count of retries of a request.
+        devices:
+          type: array
+          items:
+            type: string
+          description: Names of the Modbus devices of the bus.
     Owpower:
       title: 1-Wire power supply
       x-stoplight:
@@ -4387,6 +4566,8 @@ tags:
     description: Superclass of Device info.
   - name: Modbus slave
     description: Information about modbus slave (last_comm, modbus_spec, scan_interval, ...)
+  - name: Modbus bus
+    description: Configuration of a Modbus RTU or TCP bus and its Modbus devices, read-only.
   - name: Non-volatile memory
     description: Device for manage save Non-volatile memory.
   - name: Aliases
