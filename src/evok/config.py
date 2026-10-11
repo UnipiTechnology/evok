@@ -178,8 +178,8 @@ class EvokConfig:
         return self.apis[name]
 
 
-class ModbusClaims:
-    """ What the created Modbus buses and devices occupy, a second claim is an error of the config """
+class BusClaims:
+    """ What the created buses and Modbus devices occupy, a second claim is an error of the config """
 
     def __init__(self):
         # the circuits of the created Modbus devices -> their bus, the circuit is only the name of the device
@@ -188,10 +188,12 @@ class ModbusClaims:
         self.serial_ports: Dict[str, str] = {}
         # (line, slave-id) -> the device and its bus, the line is the serial port or (host, port) of TCP
         self.units: Dict[tuple, Tuple[str, str]] = {}
+        # (host, port) of owserver -> its OWFS bus, two buses found and created all its sensors twice
+        self.owservers: Dict[tuple, str] = {}
 
 
 def create_devices(evok_config: EvokConfig, hw_dict):
-    claims = ModbusClaims()
+    claims = BusClaims()
     for bus_name, bus_data in evok_config.get_comm_channels().items():
         # an error in the config of a bus does not stop creating the other buses
         try:
@@ -230,7 +232,7 @@ def retry_strategies(timeout: float, connect_timeout: float, retries: int = 1) -
     )
 
 
-def _create_bus(bus_name, bus_data: dict, hw_dict, claims: ModbusClaims):
+def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
     if not bus_data.get("enabled", True):
         logger.info(f"Skipping disabled bus '{bus_name}'")
         return
@@ -243,11 +245,21 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: ModbusClaims):
         interval = bus_data.get("interval", 60)
         scan_interval = bus_data.get("scan_interval", 300)
         owpower = bus_data.get("owpower", None)
+        host = bus_data.get("hostname", owdevice.OWSERVER_HOST)
+        port = bus_data.get("port", owdevice.OWSERVER_PORT)
+        if not isinstance(host, str) or not host:
+            raise EvokConfigError(f"hostname must be a non-empty string, not '{host}'")
+        if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
+            raise EvokConfigError(f"port must be an integer 1..65535, not '{port}'")
+        owserver = (host.lower(), port)
+        if owserver in claims.owservers:
+            raise EvokConfigError(f"owserver {host}:{port} is already used by bus '{claims.owservers[owserver]}'")
 
         circuit = bus_name
         bus = owdevice.OwBusDriver(circuit, interval=interval, scan_interval=scan_interval,
-                                   owpower_circuit=owpower)
+                                   owpower_circuit=owpower, host=host, port=port)
         Devices.register_device(OWBUS, bus)
+        claims.owservers[owserver] = bus_name
 
     elif bus_type == 'MODBUSTCP':
         host = bus_data.get("hostname", "127.0.0.1")
