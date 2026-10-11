@@ -68,6 +68,14 @@ headers = {"Authorization": "Bearer <token>"}
 print(requests.get("http://192.168.1.10:8080/json/do/1_01", headers=headers).json())
 ```
 
+## MQTT
+
+The [MQTT](./apis/mqtt.md) API does not use the token, the access is controlled by the broker. Set `username`
+and `password` of a user of the broker with an ACL for the topics of the prefix, use TLS for a broker
+on the network (`tls`, `ca_file`). A client which can publish to `<prefix>/+/+/set` controls the devices,
+`read_only: true` disables the commands. Evok logs a warning at the start if it accepts the commands without
+a user of the broker.
+
 ## Web applications
 
 A web page on another address than the API (e.g. a dashboard served by Node-RED on port 1880) cannot use

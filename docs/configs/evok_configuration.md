@@ -10,7 +10,7 @@ evok --config-dir ./my-config --alias-file ./alias.yaml
 
 ## API settings
 
-In this section you can configure address and port for API listening. These settings will be applied to protocols [REST](../apis/rest.md), [JSON](../apis/json.md), [BULK](../apis/bulk.md), [RPC](../apis/rpc.md), [Webhook](../apis/webhook.md), [WebSocket](../apis/websocket.md).
+In this section you can configure address and port for API listening. These settings will be applied to protocols [REST](../apis/rest.md), [JSON](../apis/json.md), [BULK](../apis/bulk.md), [RPC](../apis/rpc.md), [Webhook](../apis/webhook.md), [WebSocket](../apis/websocket.md). The [MQTT](../apis/mqtt.md) API connects to a broker, see its section.
 
 - `port` - port for API listening, needs to be changed in `etc/nginx/sites-available/evok` too
 - `address` - address of the interface for API listening, `127.0.0.1` if the parameter is missing,
@@ -42,6 +42,34 @@ In this section you can configure address and port for API listening. These sett
 - `complex_events` - Evok will send POST requests with the same data as WebSocket, rather than an empty GET request
 - `min_interval` - minimum time between two requests in seconds (default `1.0`). The changes in the meantime are merged
   into one request with the last state of each device, only one request is sent at a time
+
+### MQTT
+
+The [MQTT](../apis/mqtt.md) API, a client of a broker. Evok does not start with an invalid option.
+
+- `enabled` - enables the MQTT API (`true` / `false`, default `false`)
+- `hostname` - hostname of the broker (default `127.0.0.1`)
+- `port` - port of the broker (default `1883`, `8883` with TLS)
+- `username`, `password` - an optional user of the broker
+- `tls` - connects by TLS with the certificates of the system (`true` / `false`, default `false`)
+- `ca_file` - an optional file of the certificate authority of the broker, it enables TLS
+- `cert_file`, `key_file` - an optional certificate and key of the client, they enable TLS
+- `client_id` - client identifier (default `evok-<hostname of the unit>`), it must be unique on the broker
+- `prefix` - the first part of the topics (default `evok`), e.g. `evok/boiler-room` for more units on one broker
+- `qos` - QoS of the published states and the commands (`0`, `1`, `2`, default `0`)
+- `keepalive` - keepalive interval in seconds (default `60`), a lost connection is detected after 1.5 times it
+- `device_mask` - list of the published device types (default all), e.g. `["di", "ro", "sensor"]`
+- `read_only` - Evok does not receive the commands (`true` / `false`, default `false`)
+
+```yaml title="MQTT"
+apis:
+  mqtt:
+    enabled: true
+    hostname: 192.168.1.10
+    username: evok
+    password: secret
+    prefix: evok/boiler-room
+```
 
 ## Hardware configuration
 
