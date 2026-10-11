@@ -146,3 +146,17 @@ async def test_large_body_is_refused():
         assert response.code == 400                             # refused by the server before the handler
     finally:
         server.stop()
+
+
+async def test_group_query_of_the_buses(bulk, l0306):
+    """ #238: the buses had no full(), the bulk failed """
+    from types import SimpleNamespace
+    from evok import config
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU': {'type': 'MODBUSRTU', 'port': '/dev/null', 'devices': {'u1': {'slave-id': 1, 'model': 'L0306'}}},
+        'TCP': {'type': 'MODBUSTCP'},
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    code, reply = await bulk({'group_queries': [{'device_types': ['serial_bus', 'tcp_bus']}]})
+    assert code == 200
+    assert [(state['dev'], state['circuit'], state['devices']) for state in reply['group_queries'][0]] == \
+        [('serial_bus', 'RTU', ['u1']), ('tcp_bus', 'TCP', [])]

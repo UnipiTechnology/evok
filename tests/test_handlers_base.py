@@ -152,3 +152,41 @@ def test_alias_all_is_reserved():
     Devices['do']['1_01'] = FakeOutput('1_01')
     with pytest.raises(ValueError, match='reserved'):
         Devices.set_alias('all', Devices['do']['1_01'])
+
+
+@pytest.fixture
+def modbus_buses(l0306):
+    """ An RTU bus with two units and a TCP bus with one, created from the configuration """
+    from types import SimpleNamespace
+    from evok import config
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU': {'type': 'MODBUSRTU', 'port': '/dev/null', 'baudrate': 9600, 'parity': 'E', 'retries': 2,
+                'devices': {'u1': {'slave-id': 1, 'model': 'L0306'}, 'u2': {'slave-id': 2, 'model': 'L0306'}}},
+        'TCP': {'type': 'MODBUSTCP', 'hostname': '192.168.1.10', 'devices': {'t1': {'slave-id': 3, 'model': 'L0306'}}},
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+
+
+async def test_get_serial_bus(fetch, modbus_buses):
+    """ #238: the bus had no full(), GET was 500 """
+    code, reply = await fetch('/rest/serial_bus/RTU')
+    assert code == 200
+    assert reply == {'dev': 'serial_bus', 'circuit': 'RTU', 'port': '/dev/null', 'baudrate': 9600, 'parity': 'E',
+                     'stopbits': 1, 'timeout': 0.5, 'retries': 2, 'devices': ['u1', 'u2']}
+
+
+async def test_get_tcp_bus(fetch, modbus_buses):
+    code, reply = await fetch('/json/tcp_bus/all')
+    assert code == 200
+    assert reply == [{'dev': 'tcp_bus', 'circuit': 'TCP', 'hostname': '192.168.1.10', 'port': 502, 'timeout': 0.5,
+                      'connect_timeout': 1.0, 'retries': 1, 'devices': ['t1']}]
+
+
+async def test_bus_cannot_be_set(fetch, modbus_buses):
+    code, reply = await fetch('/rest/serial_bus/RTU', 'POST', urlencode({'baudrate': 19200}))
+    assert (code, reply['success']) == (400, False)
+    assert Devices.by_name('serial_bus', 'RTU').full()['baudrate'] == 9600
+
+
+def test_get_all_skips_the_buses(modbus_buses):
+    from evok.handlers_base import EvokWebHandlerBase
+    assert not {'serial_bus', 'tcp_bus'} & {state['dev'] for state in EvokWebHandlerBase._get_all(None)}
