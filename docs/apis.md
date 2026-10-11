@@ -15,6 +15,7 @@ With a `token` in the configuration all APIs require it, see [Security](./securi
 | [BULK](#bulk-doc)           | ✅                             | Automated            | client to Evok |
 | [Webhook](#webhook-doc)     | N/A                           | Listening to changes | Evok to client |
 | [RPC](#rpc-doc)             | ❌                             | Automated            | client to Evok |
+| [MQTT](#mqtt-doc)           | ❌                             | Integration by a broker | both ways   |
 
 ## REST ([doc](./apis/rest.md))
 
@@ -43,3 +44,7 @@ The pulses and the sequences of the outputs (RO, DO, LED) are set by the sequenc
 ## RPC ([doc](./apis/rpc.md))
 
 The RPC (Remote Procedure Call) API is used for invoking procedures, functions or methods across a network.
+
+## MQTT ([doc](./apis/mqtt.md))
+
+The MQTT API publishes the states of the devices to an MQTT broker and receives the commands from it. The states are retained, a new client gets the actual state of all devices at once. It is suitable for an integration by a broker, e.g. Home Assistant or Node-RED. Its access is controlled by the broker, not by the `token`.

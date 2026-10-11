@@ -59,6 +59,15 @@ apis:
     min_interval: 1.0
     # ^ Minimum time between two requests in seconds, the changes in the meantime are merged into one request
 
+  mqtt:
+    enabled: false
+    hostname: 127.0.0.1
+    # ^ The broker, e.g. a local mosquitto
+    prefix: evok
+    # ^ The topics <prefix>/<device>/<circuit> with the states, <prefix>/<device>/<circuit>/set for the commands
+    read_only: false
+    # ^ true: the commands are not received
+
 #   +------------------------+
 #   | Hardware Configuration |
 #   +------------------------+
