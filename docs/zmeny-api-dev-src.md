@@ -135,7 +135,7 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
 - **Sběrnice OWFS:** `hostname` a `port` owserveru (výchozí `127.0.0.1:4304`), každá sběrnice potřebuje vlastní
   owserver. Jméno 1-Wire čidla musí být jedinečné přes všechny sběrnice OWFS, duplicitní čidlo z konfigurace se
   nevytvoří, nalezené se přeskočí; dřív druhé čidlo v API nahradilo první. Druhá sběrnice při startu neselže, když
-  obě sběrnice najdou čidla stejné rodiny. — #230
+  obě sběrnice najdou čidla stejné rodiny. — `fa35a94`
 
 ## Běh a instalace
 
