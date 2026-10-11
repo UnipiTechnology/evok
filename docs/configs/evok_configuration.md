@@ -83,9 +83,12 @@ comm_channels:
         - `retries` - count of retries of a request after a failure of the port or a busy unit, an integer `>= 0`
           (Default value is `1`)
     - `OWFS` (1-Wire bus, the former name `OWBUS` is not supported)
-      The bus reads the sensors by `owserver` at `127.0.0.1:4304` (Debian package `owserver`). If owserver is not running,
+      The bus reads the sensors by `owserver` (Debian package `owserver`). If owserver is not running,
       Evok logs `cannot connect to owserver ..., is owserver running?` once and connects again every 10 s,
       the sensors are reported as lost until the connection.
+        - `hostname` - hostname of owserver (Default value is `127.0.0.1`)
+        - `port` - port of owserver (Default value is `4304`). Each OWFS bus needs its own owserver, the second bus
+          with the same `hostname` and `port` is not created and the error is logged.
         - `interval` - interval of values updating in seconds, a positive number (Default value is `60`)
         - `scan_interval` - interval of the search for new devices in seconds, `0` searches only after the connection
           to owserver and on request (`do_scan`) (Default value is `300`). A change by the API applies at once.
@@ -97,6 +100,9 @@ comm_channels:
   The name of a Modbus device (`MODBUSTCP`, `MODBUSRTU`) has to be unique over all buses, it is the circuit
   of the device and of all its IOs, e.g. `1` and `'1'` are the same name. A device with the name of an already
   created Modbus device is not created and the error is logged.
+  The name of a 1-Wire sensor has to be unique over all OWFS buses, also against the circuits of the found sensors
+  (the address without the dots, e.g. `28A1B2C3D4E5F67B`). A configured sensor with the name of an already created
+  sensor is not created and the error is logged, such a found sensor is skipped with a warning.
 - `enabled` - an optional parameter, the device is skipped if it is `false` (Default value is `true`)
 
 #### MODBUSTCP & MODBUSRTU
