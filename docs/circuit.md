@@ -19,6 +19,8 @@ The circuit is created automatically during initialization of Evok according to 
 | Temp sensor         | *temp*         | <1-Wire_address\>                                 | `2895DCD509000035`         | 
 | Non-volatile memory | *nvsave*       | <device_name\>                                    | `1`, `2`, `xS51`           |
 | Modbus slave        | *modbus_slave* | <device_name\>                                    | `1`, `2`, `IAQ`            |
+| Modbus RTU bus      | *serial_bus*   | <bus_name\>                                       | `RS485_1`                  |
+| Modbus TCP bus      | *tcp_bus*      | <bus_name\>                                       | `LOCAL_TCP`                |
 | Device info         | *device_info*  | <model_name\> (grouped) / <device_name\> (single) | `L533`, `S167`, `xS51`     |
 | Data point          | *data_point*   | <device_name\>_<register_address\>                | `IAQ_0`, `IAQ_6`, `IAQ_10` |
 | Modbus register     | *register*     | <device_name\>_<register_address\>                | `1_0`, `1_1`, `1_1000`     |
@@ -26,6 +28,8 @@ The circuit is created automatically during initialization of Evok according to 
 - *<device_name\>*: Name defined in [Evok configuration].
     - examples: `1`, `2`, `3`, `IAQ`, `xS51`, `xS18`.
     - note: [autogen](./configs/evok_configuration.md#autogen) generates device_name as a section number.
+- *<bus_name\>*: Name of the bus in `comm_channels` of [Evok configuration].
+    - examples: `RS485_1`, `LOCAL_TCP`.
 - *<model_name\>*: Name defined in device_info configuration section.
   - examples: `L523`, `S103`, `S167`.
 - *<number\>*: Sequence number (is based on the 'count' parameter in the [HW definition]).
