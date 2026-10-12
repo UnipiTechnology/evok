@@ -10,7 +10,7 @@ from tmodbus import (
     AsyncTcpTransport,
 )
 
-from . import owdevice
+from . import w1
 
 import yaml
 from .devices import Devices, Aliases
@@ -200,8 +200,8 @@ class BusClaims:
         self.serial_ports: Dict[str, str] = {}
         # (line, slave-id) -> the device and its bus, the line is the serial port or (host, port) of TCP
         self.units: Dict[tuple, Tuple[str, str]] = {}
-        # (host, port) of owserver -> its OWFS bus, two buses found and created all its sensors twice
-        self.owservers: Dict[tuple, str] = {}
+        # the 1-Wire master (None is the first one) -> its OWFS bus, two buses created all its sensors twice
+        self.w1_masters: Dict[Union[str, None], str] = {}
 
 
 def create_devices(evok_config: EvokConfig, hw_dict):
@@ -265,21 +265,24 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
         interval = bus_data.get("interval", 60)
         scan_interval = bus_data.get("scan_interval", 300)
         owpower = bus_data.get("owpower", None)
-        host = bus_data.get("hostname", owdevice.OWSERVER_HOST)
-        port = bus_data.get("port", owdevice.OWSERVER_PORT)
-        if not isinstance(host, str) or not host:
-            raise EvokConfigError(f"hostname must be a non-empty string, not '{host}'")
-        if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
-            raise EvokConfigError(f"port must be an integer 1..65535, not '{port}'")
-        owserver = (host.lower(), port)
-        if owserver in claims.owservers:
-            raise EvokConfigError(f"owserver {host}:{port} is already used by bus '{claims.owservers[owserver]}'")
+        for option in ("hostname", "port"):
+            if option in bus_data:
+                # owserver is not used, the bus is read by the kernel
+                raise EvokConfigError(f"'{option}' of an OWFS bus is not supported, use 'master' "
+                                      f"(the 1-Wire master of the kernel, e.g. w1_bus_master1)")
+        master = bus_data.get("master", None)
+        if master is not None and (not isinstance(master, str) or not master.startswith('w1_bus_master')):
+            raise EvokConfigError(f"master must be the name of a 1-Wire master of the kernel, "
+                                  f"e.g. w1_bus_master1, not '{master}'")
+        if master in claims.w1_masters:
+            raise EvokConfigError(f"1-Wire master {master or '(the first one)'} is already used by bus "
+                                  f"'{claims.w1_masters[master]}'")
 
         circuit = bus_name
-        bus = owdevice.OwBusDriver(circuit, interval=interval, scan_interval=scan_interval,
-                                   owpower_circuit=owpower, host=host, port=port)
+        bus = w1.OwBusDriver(circuit, interval=interval, scan_interval=scan_interval,
+                                   owpower_circuit=owpower, master=master)
         Devices.register_device(OWBUS, bus)
-        claims.owservers[owserver] = bus_name
+        claims.w1_masters[master] = bus_name
 
     elif bus_type == 'MODBUSTCP':
         host = bus_data.get("hostname", "127.0.0.1")
@@ -380,7 +383,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
                 interval = int(device_data.get("interval", 15))
 
                 # the sensor registers itself in the bus and in Devices
-                sensor = owdevice.MySensorFabric(address, ow_type, bus, interval=interval, circuit=str(device_name))
+                sensor = w1.MySensorFabric(address, ow_type, bus, interval=interval, circuit=str(device_name))
                 if sensor is None:
                     raise EvokConfigError(f"Unsupported type '{ow_type}' of the 1-Wire sensor")
 

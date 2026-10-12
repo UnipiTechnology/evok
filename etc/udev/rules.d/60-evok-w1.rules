@@ -1,0 +1,18 @@
+# Evok: the write access of the group evok to the 1-Wire masters of the kernel
+#
+# - w1_master_search: do_scan of an OWFS bus forces a search of the bus,
+#   without it Evok takes the devices of the last search of the kernel (every 10 s)
+# - therm_bulk_read: the thermometers of an OWFS bus are converted at once,
+#   without it each thermometer converts alone (750 ms each)
+#
+# therm_bulk_read is created by w1_therm with the first thermometer, before the event "add"
+# of the thermometer, and removed with the last one, the rule sets it at every thermometer.
+# Apply it to the present devices: udevadm trigger --subsystem-match=w1 --action=add
+
+ACTION=="add", SUBSYSTEM=="w1", KERNEL=="w1_bus_master*", \
+  RUN+="/usr/bin/chgrp evok /sys%p/w1_master_search", \
+  RUN+="/usr/bin/chmod g+w /sys%p/w1_master_search"
+
+# the families of w1_therm with the bulk read: DS18S20, DS1822, DS18B20, DS1825, DS28EA00
+ACTION=="add", SUBSYSTEM=="w1", KERNEL=="10-*|22-*|28-*|3b-*|42-*", \
+  RUN+="/bin/sh -c 'f=/sys%p/../therm_bulk_read; [ -e $$f ] && /usr/bin/chgrp evok $$f && /usr/bin/chmod g+w $$f'"

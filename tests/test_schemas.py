@@ -8,7 +8,7 @@ from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, Dat
 from evok.modbus.digital import DigitalInput, DigitalOutput, Relay, ULED
 from evok.modbus.scanner import ModbusScanner
 from evok.modbus.special import NvSave, OwPower, Watchdog
-from evok.owdevice import MySensor, OwBusDriver
+from evok.w1 import MySensor, OwBusDriver
 from evok.schemas import schemas, bulk_post_inp_schema, bulk_post_inp_example
 
 # the classes whose set() receives the validated request of each schema key

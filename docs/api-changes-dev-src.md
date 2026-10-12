@@ -43,7 +43,7 @@ the HW definitions. The incompatible changes come first. Every change names its 
   — `5f15f41`
 - `last_comm` of a unit is `null` before the first communication, before about 1.7e9 s. — `2f323f0`
 - **1-Wire sensors of the configuration:** no `lost: true` event right after the start or a reconnection to owserver,
-  a sensor is read after owserver locates it. A sensor which the search of the bus has not found is reported lost.
+  a sensor is read after the bus finds it. A sensor which the search of the bus has not found is reported lost.
   — `5fa3eca`
 
 ### Circuits by the HW definitions
@@ -145,14 +145,21 @@ An invalid value is an error: the unit or the feature is not created and the err
 - **1-Wire:** the type `DS2404` is not supported, it has no PIO and was always lost. The `address` of a sensor
   is found also without the CRC, the dots or in lower case. `scan_interval: 0` searches the bus only after
   the connection and on request, before once per hour; a changed `scan_interval` applies at once. — `4ecdf2f`
-- **OWFS buses:** `hostname` and `port` of owserver (`127.0.0.1:4304` by default), each bus needs its own owserver.
-  The name of a 1-Wire sensor must be unique over all OWFS buses, a duplicate configured sensor is not created,
-  a found one is skipped; before the second sensor replaced the first one in the API. The second bus does not fail
-  at its start when both buses locate sensors of the same family. — `fa35a94`
+- **OWFS buses:** the name of a 1-Wire sensor must be unique over all OWFS buses, a duplicate configured sensor
+  is not created, a found one is skipped; before the second sensor replaced the first one in the API. — `fa35a94`
+- **OWFS bus by the kernel:** the sensors are read by the 1-Wire subsystem of the kernel (`/sys/bus/w1`), owserver
+  and asyncowfs are not used. The option `master` (`w1_bus_master1`, the first one by default) instead of
+  `hostname` / `port`, the status of the bus has `master`. The address and the circuit of a found sensor stay
+  the same. The `value` of a DS2406 is the state of its channel flip-flops. With the udev rule
+  `etc/udev/rules.d/60-evok-w1.rules` `do_scan` forces a search and the thermometers are converted at once.
+  — #242
 
 ## Runtime and installation
 
 - Python 3.12, `tmodbus` instead of `pymodbus`. — `862d760`, `733871c`
+- 1-Wire by the kernel: the driver of the master (e.g. `ds2482`) and the modules of the sensors instead of
+  the package `owserver`; no dependency `asyncowfs` and `anyio`. The package should install the udev rule
+  `etc/udev/rules.d/60-evok-w1.rules` (group `evok`). — #242
 - The options `--config-dir` and `--alias-file` (variables `EVOK_CONFIG_DIR`, `EVOK_ALIAS_FILE`). Without
   `config.yaml` Evok exits with an error. — `af85489`
 

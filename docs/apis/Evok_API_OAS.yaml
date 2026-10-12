@@ -788,6 +788,7 @@ paths:
                     dev: owbus
                     circuit: OWBUS
                     bus: OWFS
+                    master: w1_bus_master1
                     scan_interval: 60
                     interval: 10
                     do_scan: false
@@ -797,6 +798,7 @@ paths:
                     - dev: owbus
                       circuit: OWBUS
                       bus: OWFS
+                      master: w1_bus_master1
                       scan_interval: 60
                       interval: 10
                       do_scan: false
@@ -814,6 +816,7 @@ paths:
                     dev: owbus
                     circuit: OWBUS
                     bus: OWFS
+                    master: w1_bus_master1
                     scan_interval: 60
                     interval: 10
                     do_scan: false
@@ -823,6 +826,7 @@ paths:
                     - dev: owbus
                       circuit: OWBUS
                       bus: OWFS
+                      master: w1_bus_master1
                       scan_interval: 60
                       interval: 10
                       do_scan: false
@@ -4120,6 +4124,11 @@ components:
                 id: b7ywovg84k036
               examples: [OWFS]
               description: Access method to the bus
+            master:
+              type: string
+              examples: [w1_bus_master1]
+              description: The 1-Wire master of the kernel used by the bus.
+              readOnly: true
         - $ref: '#/components/schemas/Owbus_params'
           x-stoplight:
             id: hfhhwrleyptly
@@ -4127,6 +4136,7 @@ components:
         - dev: owbus
           circuit: OWBUS
           bus: OWFS
+          master: w1_bus_master1
           scan_interval: 60
           interval: 10
           do_scan: false
