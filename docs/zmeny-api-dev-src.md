@@ -43,7 +43,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
   se čte až po nalezení na sběrnici. Čidlo, které hledání na sběrnici nenašlo, se hlásí jako ztracené. — `5fa3eca`
 - **RO, DO, LED:** bez `pulse_duration`, `timeout` (DO) a `pending`, pulz se nastavuje přes sequencer výstupu
   (`/rest/sequencer/<typ>_<okruh>`, `running` místo `pending`). Pulz zruší jakákoli změna výstupu kromě aliasu,
-  i `pwm_freq` DO. RPC metody `*_set_for_time` a `output_get` zůstávají. — #75
+  i `pwm_freq` DO. RPC metody `*_set_for_time` a `output_get` zůstávají. — `a85fb14`
 
 ### Okruhy podle HW definic
 
@@ -93,7 +93,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - **Sequencer** každého výstupu (RO, DO, LED), zařízení `sequencer` s okruhem `<typ>_<okruh>`
   (`/rest/sequencer/do_1_01`): pulz (`value`, `pulse_duration`), sekvence změn výstupu (`steps`, `final`) nebo
   `cancel`; stav obsahuje `running` a průběh, událost při startu a konci. RPC metoda `relay_set_for_time`.
-  — `e16a3bf`, #75
+  — `e16a3bf`, `7789635`, `a85fb14`
 - Odpověď na POST, bulk i WebSocket `set` obsahuje stav po zápisu a událost přijde hned. — `a3f4679`
 - **Nové události:** — `60e2287`, `08d9f56`, `62b37ef`, `891bd4a`
   - změna aliasu zařízení na Modbus jednotce,

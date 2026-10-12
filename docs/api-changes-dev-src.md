@@ -48,7 +48,7 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - **RO, DO, LED:** no `pulse_duration`, `timeout` (DO) and `pending`, a pulse is set by the sequencer of the output
   (`/rest/sequencer/<type>_<circuit>`, `running` instead of `pending`). Any change of the output except its alias
   cancels its pulse, also `pwm_freq` of a DO. The RPC methods `*_set_for_time` and `output_get` stay.
-  — #75
+  — `a85fb14`
 
 ### Circuits by the HW definitions
 
@@ -98,7 +98,7 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - **Sequencer** of each output (RO, DO, LED), the device `sequencer` with the circuit `<type>_<circuit>`
   (`/rest/sequencer/do_1_01`): a pulse (`value`, `pulse_duration`), a sequence of the changes of the output
   (`steps`, `final`) or `cancel`; its state has `running` and the progress, an event at the start and the end.
-  The RPC method `relay_set_for_time`. — `e16a3bf`, #75
+  The RPC method `relay_set_for_time`. — `e16a3bf`, `7789635`, `a85fb14`
 - The reply to POST, bulk and the WebSocket `set` has the state after the writes and the event comes at once.
   — `a3f4679`
 - **New events:** — `60e2287`, `08d9f56`, `62b37ef`, `891bd4a`
