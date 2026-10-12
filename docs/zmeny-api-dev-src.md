@@ -142,14 +142,14 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
   nepoužívají. Volba `master` (`w1_bus_master1`, výchozí je první) místo `hostname` / `port`, stav sběrnice
   obsahuje `master`. Adresa a okruh nalezeného čidla se nemění. `value` DS2406 je stav jeho klopných obvodů
   kanálů. S udev pravidlem `etc/udev/rules.d/60-evok-w1.rules` `do_scan` vynutí hledání a teploměry převádí
-  najednou. — #242
+  najednou. — `776b371`, `2bb5167`
 
 ## Běh a instalace
 
 - Python 3.12, `tmodbus` místo `pymodbus`. — `862d760`, `733871c`
 - 1-Wire přes jádro: ovladač masteru (např. `ds2482`) a moduly čidel místo balíčku `owserver`; bez závislostí
   `asyncowfs` a `anyio`. Balíček by měl instalovat udev pravidlo `etc/udev/rules.d/60-evok-w1.rules` (skupina
-  `evok`). — #242
+  `evok`). — `776b371`, `9790404`, `2bb5167`
 - Volby `--config-dir` a `--alias-file` (proměnné `EVOK_CONFIG_DIR`, `EVOK_ALIAS_FILE`). Bez `config.yaml` Evok
   skončí chybou. — `af85489`
 
