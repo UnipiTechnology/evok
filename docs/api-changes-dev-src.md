@@ -46,9 +46,9 @@ the HW definitions. The incompatible changes come first. Every change names its 
   a sensor is read after the bus finds it. A sensor which the search of the bus has not found is reported lost.
   — `5fa3eca`
 - **RO, DO, LED:** no `pulse_duration`, `timeout` (DO) and `pending`, a pulse is set by the sequencer of the output
-  (`/rest/sequencer/<type>_<circuit>`, `running` instead of `pending`). Any change of the output except its alias
-  cancels its pulse, also `pwm_freq` of a DO. The RPC methods `*_set_for_time` and `output_get` stay.
-  — `a85fb14`
+  (`/rest/sequencer/<type>_<circuit>`, `running` instead of `pending`). While it runs, a change of the output
+  except its alias is refused with 409 (RPC `-32002`), cancel it by the sequencer first. The RPC methods
+  `*_set_for_time` and `output_get` stay. — `a85fb14`, PR sequencer-review
 
 ### Circuits by the HW definitions
 
@@ -97,7 +97,7 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - Data points can be written by `writable`, `full()` returns it. — `eb4eda5`, `e792e17`
 - **Sequencer** of each output (RO, DO, LED), the device `sequencer` with the circuit `<type>_<circuit>`
   (`/rest/sequencer/do_1_01`): a pulse (`value`, `pulse_duration`), a sequence of the changes of the output
-  (`steps`, `final`) or `cancel`; its state has `running` and the progress, an event at the start and the end.
+  (`steps`, `final`) or `cancel`; its state has `running` and the progress, an event at the start, steps and end.
   The RPC method `relay_set_for_time`. — `e16a3bf`, `7789635`, `a85fb14`
 - The reply to POST, bulk and the WebSocket `set` has the state after the writes and the event comes at once.
   — `a3f4679`

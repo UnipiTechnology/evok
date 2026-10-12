@@ -1,8 +1,9 @@
 """ The sequencer of an output as a device of the API, its circuit is <devtype>_<circuit of the output>
 
     POST value with pulse_duration sets the value of the output for a pulse, steps (and final) run
-    a sequence of the changes of the output, cancel stops the running sequence. The state has the output
-    and the progress of its running sequence, an event is sent when a sequence starts and ends.
+    a sequence of the changes of the output, cancel stops the running sequence. While it runs, a change
+    of the output itself is refused. The state has the output and the progress of its running sequence,
+    an event is sent when a sequence starts, does a step and ends.
 """
 from ..devices import Devices, SEQUENCER, devents, to_bool, to_float
 from .sequencer import Sequence, Step, pulse_params, sequencer
@@ -31,10 +32,13 @@ def attach(output) -> 'SequencerDevice':
 
 
 async def start_pulse(output, value, pulse_duration) -> dict:
-    """ Set the value of the output for pulse_duration seconds, return the state of the output """
-    # set_devices() of the output cancels its running sequence, it is under the lock of its unit
+    """ Set the value of the output for pulse_duration seconds, return the state of the output;
+        the pulse replaces the running sequence of the output
+    """
     from ..modbus import set_devices
     kw, pulse = pulse_params(output, {'value': value, 'pulse_duration': pulse_duration})
+    # the value is written under the lock of the unit, after a step being written by the cancelled sequence
+    sequencer.cancel(output)
     state, = await set_devices([(output, kw)])
     sequencer.start(output, pulse)
     return state
@@ -70,24 +74,33 @@ class SequencerDevice:
         """ value with pulse_duration: a pulse of the output; steps and an optional final state: a sequence;
             cancel: stop the running sequence without its final state. One of them at once.
         """
-        if alias is not None:
-            Devices.set_alias(alias, self)
-        actions = [name for name, given in (('pulse_duration', pulse_duration is not None or value is not None),
-                                            ('steps', steps is not None),
-                                            ('cancel', cancel is not None and to_bool(cancel))) if given]
+        is_pulse = pulse_duration is not None or value is not None
+        is_steps = steps is not None
+        is_cancel = cancel is not None and to_bool(cancel)
+        actions = [name for name, given in (('pulse_duration', is_pulse), ('steps', is_steps),
+                                            ('cancel', is_cancel)) if given]
+        # the whole request is checked before any change, also of the alias
         if len(actions) > 1:
             raise ValueError(f"Sequencer {self.circuit}: set only one of {' and '.join(actions)}")
-        if final is not None and steps is None:
+        if final is not None and not is_steps:
             raise ValueError(f"Sequencer {self.circuit}: final requires steps")
-        if pulse_duration is not None or value is not None:
-            if pulse_duration is None:
-                raise ValueError(f"Sequencer {self.circuit}: value requires pulse_duration, "
-                                 f"set the value of the output itself")
+        if is_pulse and pulse_duration is None:
+            raise ValueError(f"Sequencer {self.circuit}: value requires pulse_duration, "
+                             f"set the value of the output itself")
+        sequence = self._sequence(steps, final) if is_steps else None
+        if is_pulse:
+            pulse_params(self.output, {'value': value, 'pulse_duration': pulse_duration})
+        if alias is not None:
+            Devices.set_alias(alias, self)
+        if is_pulse:
             await start_pulse(self.output, value, pulse_duration)
-        elif steps is not None:
-            sequencer.start(self.output, self._sequence(steps, final))
-        elif cancel is not None and to_bool(cancel):
+        elif is_steps:
+            sequencer.start(self.output, sequence)
+        elif is_cancel:
             sequencer.cancel(self.output)
+        elif alias is not None:
+            # the starts and the ends are sent by the sequencer
+            devents.status(self)
 
     def _sequence(self, steps, final) -> Sequence:
         """ The steps {"delay": seconds, <the params of the output>}, the params are checked by the schema

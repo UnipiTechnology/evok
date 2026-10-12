@@ -2,8 +2,9 @@
 
     A sequence is a list of steps, each one sets the params of set() of the device after its delay.
     At most one sequence runs for a device: a new one replaces it, a change of the device by the API
-    cancels it (set_devices()). finish_all() writes the final state of the running sequences on shutdown,
-    an output is not left in the state of a pulse.
+    is refused while it runs (set_devices()). finish_all() writes the final state of the running sequences
+    on shutdown, an output is not left in the state of a pulse; a sequence without a final state leaves
+    the device in its state.
 
     A step of a device of a Modbus unit is a change of the unit (Client.change): its state and event follow
     the write, it is written also on an unavailable unit. The sequence stays running until its step writes
@@ -65,14 +66,17 @@ class Running:
 
 
 class Sequencer:
-    """ The running sequences of the devices, the listeners are called when a sequence starts or ends """
+    """ The running sequences of the devices, the listeners are called when a sequence starts, does a step
+        and ends
+    """
 
     def __init__(self):
         self._running: dict[object, Running] = {}
+        self._writing: set[asyncio.Task] = set()    # the tasks writing a step, they are not cancelled
         self._listeners: list = []
 
     def subscribe(self, listener):
-        """ listener(device) is called when a sequence of the device starts or ends """
+        """ listener(device) is called when a sequence of the device starts, does a step or ends """
         self._listeners.append(listener)
 
     def _notify(self, device):
@@ -94,29 +98,39 @@ class Sequencer:
         entry = self._running.get(device)
         return None if entry is None else entry.sequence
 
+    def _stop(self, entry: Running):
+        """ Stop the task of the sequence; a task writing its step is not cancelled, the write would be
+            interrupted in the middle of a Modbus request, it ends after the write
+        """
+        if entry.task not in self._writing:
+            entry.task.cancel()
+
     def start(self, device, sequence: Sequence):
         """ Run the sequence of the device, it replaces the running one """
         entry = self._running.pop(device, None)
         if entry is not None:
-            entry.task.cancel()
+            self._stop(entry)
         self._running[device] = Running(asyncio.create_task(self._run(device, sequence)), sequence)
         self._notify(device)
 
     def cancel(self, device):
-        """ Stop the sequence of the device without its final state, e.g. a change by the API """
+        """ Stop the sequence of the device without its final state """
         entry = self._running.pop(device, None)
         if entry is not None:
-            entry.task.cancel()
+            self._stop(entry)
             self._notify(device)
 
     def cancel_all(self):
         for device in list(self._running):
             self.cancel(device)
 
+    def _current(self, device, task: asyncio.Task) -> bool:
+        entry = self._running.get(device)
+        return entry is not None and entry.task is task
+
     def _end(self, device, task: asyncio.Task) -> bool:
         """ Remove the sequence of the task if it is still the running one """
-        entry = self._running.get(device)
-        if entry is None or entry.task is not task:
+        if not self._current(device, task):
             return False
         del self._running[device]
         self._notify(device)
@@ -131,6 +145,11 @@ class Sequencer:
                 last = step_number == len(sequence.steps)
                 if not await self._apply(device, step.params, task, step_number, last):
                     return
+                if not last:
+                    if not self._current(device, task):
+                        # cancelled or replaced while it wrote the step
+                        return
+                    self._notify(device)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -152,7 +171,11 @@ class Sequencer:
                 if last:
                     # the state read after the write is not running
                     self._end(device, task)
-            await device.set(**params)
+                self._writing.add(task)
+            try:
+                await device.set(**params)
+            finally:
+                self._writing.discard(task)
             applied = True
 
         change = getattr(getattr(device, 'client', None), 'change', None)
@@ -165,19 +188,26 @@ class Sequencer:
         return applied
 
     async def finish_all(self, timeout: float = 5.0):
-        """ Stop the running sequences and write their final states, used on shutdown """
+        """ Stop the running sequences and write their final states, used on shutdown; the steps being
+            written are finished first. A sequence without a final state leaves the device in its state.
+        """
         entries = list(self._running.items())
         self._running.clear()
         for device, entry in entries:
-            entry.task.cancel()
+            self._stop(entry)
             self._notify(device)
         finals = [(device, entry.sequence) for device, entry in entries if entry.sequence.final is not None]
-        if not finals:
+        writing = list(self._writing)
+        if not finals and not writing:
             return
         logger.info(f"Finishing {len(finals)} running sequences")
+
+        async def finish():
+            if writing:
+                await asyncio.wait(writing)
+            await asyncio.gather(*(self._finish(device, sequence) for device, sequence in finals))
         try:
-            await asyncio.wait_for(asyncio.gather(*(self._finish(device, sequence) for device, sequence in finals)),
-                                   timeout)
+            await asyncio.wait_for(finish(), timeout)
         except TimeoutError:
             logger.error("Finishing of the running sequences timed out, some outputs may stay in their state")
 
