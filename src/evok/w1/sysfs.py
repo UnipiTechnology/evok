@@ -87,10 +87,45 @@ class W1Master:
     def device(self, name: str) -> 'W1Device':
         return W1Device(os.path.join(W1_DEVICES, name))
 
+    def _attribute(self, name):
+        return os.path.join(self.path, name)
+
+    def can_search(self) -> bool:
+        """ A search can be forced, w1_master_search is writable only by root without a udev rule """
+        return os.access(self._attribute('w1_master_search'), os.W_OK)
+
+    async def search(self):
+        """ Search the bus at once, the kernel wakes its search thread
+
+            The count of the searches is written back, -1 keeps the continual search of the kernel,
+            1 searches once if the search was disabled (0).
+        """
+        path = self._attribute('w1_master_search')
+        count = int(await asyncio.to_thread(_read_text, path))
+        await asyncio.to_thread(_write_text, path, f"{count or 1}\n")
+
+    def can_bulk_convert(self) -> bool:
+        """ A conversion of all thermometers can be triggered; therm_bulk_read exists only with a thermometer
+            of w1_therm on a master and it is writable only by root without a udev rule
+        """
+        return os.access(self._attribute('therm_bulk_read'), os.W_OK)
+
+    async def bulk_convert(self):
+        """ Convert the temperature of all thermometers at once, the write returns after the conversion;
+            the next read of a thermometer reads its value without another conversion
+        """
+        await asyncio.to_thread(_write_text, self._attribute('therm_bulk_read'), 'trigger\n')
+
 
 def _read_text(path) -> str:
     with open(path, 'rb') as file:
         return file.read().decode()
+
+
+def _write_text(path, text: str):
+    """ One write of the text, an attribute takes one write """
+    with open(path, 'wb', buffering=0) as file:
+        file.write(text.encode())
 
 
 def _read_byte(path) -> int:

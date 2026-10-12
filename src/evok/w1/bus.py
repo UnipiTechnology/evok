@@ -1,5 +1,6 @@
 """ The 1-Wire bus: the sensors found by the kernel, the poll of their values """
 import asyncio
+import logging
 import typing
 
 from ..devices import OWBUS, OWPOWER
@@ -11,6 +12,8 @@ from .sysfs import address_key
 from .sensors import SUPPORTED_DEVICES, DuplicateCircuitError, MySensorFabric, NotSupportedError, check_interval
 
 RECONNECT_DELAY = 10  # s, the next attempt to use the 1-Wire master after a failure
+SEARCH_WAIT = 1.0  # s, the wait for a forced search of the kernel, it takes a few ms for each device
+UDEV_RULE = 'the udev rule 60-evok-w1.rules'    # gives the group of Evok the write access to the master
 
 
 def leaf_error(error: BaseException) -> BaseException:
@@ -45,6 +48,9 @@ class OwBusDriver:
         self._wakeup = None     # the event waking up poll()
         self._scan_wakeup = None    # the event waking up scanning()
         self._scan_requested = False
+        self._forced_search = False     # do_scan() forces a search of the kernel
+        self._master: sysfs.W1Master | None = None
+        self._logged_once: set[str] = set()     # the keys of the messages logged once
         self._logged_error = None   # (type, text) of the logged failure, the same one is not logged again
         self._skipped = set()       # the address keys of the found sensors not created, logged once
 
@@ -171,9 +177,15 @@ class OwBusDriver:
         return next((x for x in self.mysensors if address_key(x.address) == key), None)
 
     def do_scan(self):
-        """ Read the sensors found by the kernel at once, the kernel searches the bus every 10 s """
+        """ Search the bus at once and take the found sensors, the kernel searches it also every 10 s """
         self._scan_requested = True
+        self._forced_search = True
         self._wake_scanning()
+
+    def _log_once(self, key, level, message):
+        if key not in self._logged_once:
+            self._logged_once.add(key)
+            logger.log(level, message)
 
     def _wake_scanning(self):
         if self._scan_wakeup is not None:
@@ -198,9 +210,28 @@ class OwBusDriver:
         while True:
             # a request during the scan scans again
             self._scan_requested = False
+            forced, self._forced_search = self._forced_search, False
+            if forced:
+                await self._search(master)
             # a failure of the master ends the bus, it is used again after RECONNECT_DELAY
             self._update(master, await master.slaves())
             await self._wait_for_scan()
+
+    async def _search(self, master: sysfs.W1Master):
+        """ Force a search of the kernel, without the write access the last search of the kernel is taken """
+        if not master.can_search():
+            self._log_once('search', logging.INFO,
+                           f"1-Wire bus {self.circuit}: do_scan takes the devices of the last search of the kernel "
+                           f"(every 10 s), a forced search needs the write access to "
+                           f"{master.name}/w1_master_search, see {UDEV_RULE}")
+            return
+        try:
+            await master.search()
+        except OSError as E:
+            self._log_once('search failed', logging.WARNING,
+                           f"1-Wire bus {self.circuit}: forced search failed: {type(E).__name__}: {E}")
+            return
+        await asyncio.sleep(SEARCH_WAIT)
 
     def _update(self, master: sysfs.W1Master, names: "typing.List[str]"):
         """ Assign the found devices to the sensors, create the found ones, a sensor not found is lost """
@@ -257,8 +288,42 @@ class OwBusDriver:
             if t1 < mysensor.time:
                 await self._sleep(mysensor.time - t1)
                 continue
+            if self._is_thermometer(mysensor):
+                # the thermometers due in the half of their interval are converted together
+                group = [x for x in located if self._is_thermometer(x) and x.time - t1 <= x.interval / 2]
+                if len(group) > 1 and await self._bulk_convert():
+                    for thermometer in group:
+                        await self.read_sensor(thermometer, t1)
+                        thermometer.time = asyncio.get_running_loop().time() + thermometer.calc_interval()
+                    continue
             await self.read_sensor(mysensor, t1)
             mysensor.time = asyncio.get_running_loop().time() + mysensor.calc_interval()
+
+    @staticmethod
+    def _is_thermometer(mysensor) -> bool:
+        return getattr(mysensor.sens, 'family', None) in sysfs.THERMOMETERS
+
+    async def _bulk_convert(self) -> bool:
+        """ Convert all thermometers of the bus at once, a conversion of each one takes 750 ms;
+            False without the write access or after a failure, the thermometers convert one by one
+        """
+        master = self._master
+        if master is None:
+            return False
+        if not master.can_bulk_convert():
+            self._log_once('bulk', logging.INFO,
+                           f"1-Wire bus {self.circuit}: the thermometers convert one by one, a conversion of all "
+                           f"at once needs the write access to {master.name}/therm_bulk_read, see {UDEV_RULE}")
+            return False
+        try:
+            async with self.bus_lock:
+                await master.bulk_convert()
+        except OSError as E:
+            self._log_once('bulk failed', logging.WARNING,
+                           f"1-Wire bus {self.circuit}: conversion of all thermometers failed, they convert "
+                           f"one by one: {type(E).__name__}: {E}")
+            return False
+        return True
 
     async def read_sensor(self, mysensor, now):
         """ Read the sensor, report a change of its values and its recovery or loss """
@@ -299,6 +364,7 @@ class OwBusDriver:
         """ Scan and poll the bus of the master, a missing master raises FileNotFoundError """
         self.bus_lock = asyncio.Lock()
         master = sysfs.W1Master(self.master)
+        self._master = master
         self.master_name = master.name
         self._log_connected()
         # a failure of the scan cancels the poll

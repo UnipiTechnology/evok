@@ -102,6 +102,14 @@ comm_channels:
         - `scan_interval` - interval in seconds of taking the devices found by the kernel, which searches the bus
           every 10 s; `0` takes them only after the start and on request (`do_scan`) (Default value is `300`).
           A change by the API applies at once.
+
+      With the write access to the master `do_scan` forces a search of the bus and the thermometers due
+      at the same time (in the half of their interval) are converted at once, before each one took 750 ms.
+      The attributes of the master are writable only by root, the udev rule
+      [`60-evok-w1.rules`](https://github.com/UnipiTechnology/evok/blob/dev-3.1/etc/udev/rules.d/60-evok-w1.rules)
+      gives the access to the group `evok`; copy it to `/etc/udev/rules.d/` and apply it by
+      `udevadm trigger --subsystem-match=w1 --action=add`. Without it `do_scan` takes the devices of the last
+      search of the kernel and each thermometer converts alone, Evok logs it once.
         - `owpower` - [Circuit](../circuit.md) of owpower device (for restarting bus; optional parameter)
 
 ### Device configuration
