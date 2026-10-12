@@ -275,6 +275,7 @@ DEVICE_INFO = "device_info"
 OWPOWER = "owpower"
 RUN = "run"
 NV_SAVE = "nv_save"
+SEQUENCER = "sequencer"
 
 # # corresponding device types names !! ORDER IS IMPORTANT
 num_to_devtype_name = {
@@ -298,6 +299,7 @@ num_to_devtype_name = {
     29: 'owpower',
     30: 'run',
     31: 'nv_save',
+    32: 'sequencer',
 }
 
 devtype_altnames = {

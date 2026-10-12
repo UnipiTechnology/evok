@@ -60,7 +60,7 @@ DO 1.01 will be set to HIGH.
     ```
 
 ```rs title="Output"
-{'success': True, 'result': {'dev': 'do', 'circuit': '1_01', 'value': 0, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}}
+{'success': True, 'result': {'dev': 'do', 'circuit': '1_01', 'value': 0, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}}
 ```
 
 !!! tip

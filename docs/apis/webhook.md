@@ -52,11 +52,11 @@ For more information see [Evok configuration](../configs/evok_configuration.md).
 WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
  * Running on http://127.0.0.1:8181
 Press CTRL+C to quit
-{'[{"dev": "do", "circuit": "1_03", "value": 0, "pending": false, "mode": "Simple", "modes": ["Simple", "PWM"], "pwm_freq": 4800.0, "pwm_duty": 0}]': ''}
+{'[{"dev": "do", "circuit": "1_03", "value": 0, "mode": "Simple", "modes": ["Simple", "PWM"], "pwm_freq": 4800.0, "pwm_duty": 0}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:54:58] "POST / HTTP/1.1" 200 -
-{'[{"dev": "ro", "circuit": "2_04", "value": 1, "pending": false, "mode": "Simple", "modes": ["Simple"]}]': ''}
+{'[{"dev": "ro", "circuit": "2_04", "value": 1, "mode": "Simple", "modes": ["Simple"]}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:55:02] "POST / HTTP/1.1" 200 -
-{'[{"dev": "ro", "circuit": "2_04", "value": 0, "pending": false, "mode": "Simple", "modes": ["Simple"]}]': ''}
+{'[{"dev": "ro", "circuit": "2_04", "value": 0, "mode": "Simple", "modes": ["Simple"]}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:55:02] "POST / HTTP/1.1" 200 -
 {'[{"dev": "ao", "circuit": "1_01", "mode": "Voltage", "modes": {"Voltage": {"unit": "V", "range": [0, 10]}, "Current": {"unit": "mA", "range": [0, 20]}, "Resistance": {"unit": "Ohm", "range": [0, 2000]}}, "unit": "V", "value": 8.301}]': ''}
 127.0.0.1 - - [12/Feb/2024 13:55:05] "POST / HTTP/1.1" 200 -

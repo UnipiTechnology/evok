@@ -36,6 +36,10 @@ The BULK API is designed to provide an efficient way for clients to update, crea
 
 The Webhook API provides a mechanism for pushing real-time updates to clients. Evok sends the changes to the specified hostname and port. A list of reflected devices can be defined. It is suitable for collecting real-time information about the application.
 
+## Sequencer ([doc](./apis/sequencer.md))
+
+The pulses and the sequences of the outputs (RO, DO, LED) are set by the sequencer of each output, a device of the type `sequencer` of the other APIs, e.g. `POST /rest/sequencer/do_1_01` with `value=1&pulse_duration=2`.
+
 ## RPC ([doc](./apis/rpc.md))
 
 The RPC (Remote Procedure Call) API is used for invoking procedures, functions or methods across a network.

@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import asyncio
-
 from ..devices import DI, DO, RO, LED, Devices, to_bool, to_float
-from ..log import logger
 from .base import IODevice
 from .client import Client, Accessor, AccessorBit, AccessorU16, AccessorU32
 from .iomode import DIMode, WithDIMode
@@ -16,9 +13,7 @@ class BinaryOutput(IODevice):
         The value is written to the coil, an output without a coil writes the bit of its holding register
         (read-modify-write under the lock of the unit), e.g. a unit which has no coils.
 
-        A value with pulse_duration is set for a single pulse: after pulse_duration seconds the opposite
-        of the value is written, the output is pending until then. The pulse is timed by Evok,
-        finish_pulses() ends the pending pulses on shutdown.
+        A pulse is a sequence of the sequencer of blocks, set by the sequencer device of the output.
     """
 
     def __init__(self, circuit, client: Client, coil: int | None, reg, mask, major_group=0):
@@ -26,8 +21,6 @@ class BinaryOutput(IODevice):
         self.coil = coil
         self.accessor = AccessorBit(reg, mask)
         self.value = None
-        self.pending_task: asyncio.Task | None = None
-        self.pulse_end_value: int | None = None
 
     def full(self):
         return self._with_alias(self._state())
@@ -37,7 +30,6 @@ class BinaryOutput(IODevice):
         return {'dev': self.devtype,
                 'circuit': self.circuit,
                 'value': self.value,
-                'pending': self.pending_task is not None,
                 }
 
     async def check_new_data(self):
@@ -45,21 +37,11 @@ class BinaryOutput(IODevice):
         self.value = self.accessor.read(self.client)
         return old_value != self.value
 
-    async def set(self, value=None, pulse_duration=None, alias=None):
-        """ Sets new on/off status. A new value disables the pending pulse
-
-            pulse_duration in seconds sets the opposite of value after the pulse, it requires value
-        """
-        parsed_value = None if value is None else int(to_bool(value))
-        pulse_duration = self._check_pulse(parsed_value, pulse_duration)
-        if parsed_value is not None:
-            self._cancel_pulse()
-            await self._write_value(parsed_value)
-
+    async def set(self, value=None, alias=None):
+        """ Sets new on/off status """
+        if value is not None:
+            await self._write_value(int(to_bool(value)))
         self.set_alias(alias)
-
-        if pulse_duration is not None:
-            self._start_pulse(parsed_value, pulse_duration)
 
     async def _write_value(self, value: int):
         """ Write the value to the coil, or to the bit of the register of an output without a coil """
@@ -67,71 +49,6 @@ class BinaryOutput(IODevice):
             await self.client.mb_client.write_single_coil(self.coil, value)
         else:
             await self.accessor.write_raw(self.client, value)
-
-    def _check_pulse(self, parsed_value, pulse_duration) -> float | None:
-        """ Return pulse_duration as a float, raise ValueError if it is invalid """
-        if pulse_duration is None:
-            return None
-        if parsed_value is None:
-            raise ValueError(f'{self.devtype.upper()} {self.circuit}: pulse_duration requires value')
-        pulse_duration = to_float(pulse_duration)
-        if pulse_duration <= 0:
-            raise ValueError(f'{self.devtype.upper()} {self.circuit}: pulse_duration {pulse_duration} must be positive')
-        return pulse_duration
-
-    def _cancel_pulse(self):
-        if self.pending_task is not None:
-            self.pending_task.cancel()
-            self.pending_task = None
-
-    def _start_pulse(self, parsed_value, pulse_duration):
-        """ Call after the value has been written """
-        async def timercallback():
-            await asyncio.sleep(pulse_duration)
-            await self._end_pulse(end_value, asyncio.current_task())
-
-        # a concurrent set() could start a pulse while this one awaited the writes
-        self._cancel_pulse()
-        end_value = self.pulse_end_value = 1 - parsed_value
-        self.pending_task = asyncio.create_task(timercallback())
-
-    async def _end_pulse(self, end_value, timer: asyncio.Task | None = None):
-        """ A change of the unit, its state and event follow the write; written also on an unavailable unit,
-            the output must not stay in the state of the pulse
-
-            The timer stays the pending pulse until it writes under the lock, a set() which got the lock
-            before it cancels it; the end of the pulse overwrote the newer value of the set().
-        """
-        async def operation():
-            if timer is not None:
-                if self.pending_task is not timer:
-                    return
-                self.pending_task = None
-            await self._write_value(end_value)
-        try:
-            await self.client.change(operation, check_available=False)
-        except Exception:
-            logger.exception(f"{self.devtype.upper()} {self.circuit}: end of the pulse failed")
-
-    async def finish_pulse(self):
-        """ End the pending pulse now, the output is not left in the state of the pulse """
-        if self.pending_task is None:
-            return
-        self._cancel_pulse()
-        await self._end_pulse(self.pulse_end_value)
-
-
-async def finish_pulses(timeout: float = 5.0):
-    """ End the pending pulses of all outputs, used on shutdown """
-    outputs = [dev for devtype in (DO, RO, LED) for dev in Devices.by_name(devtype)
-               if isinstance(dev, BinaryOutput) and dev.pending_task is not None]
-    if not outputs:
-        return
-    logger.info(f"Ending {len(outputs)} pending pulses")
-    try:
-        await asyncio.wait_for(asyncio.gather(*(dev.finish_pulse() for dev in outputs)), timeout)
-    except TimeoutError:
-        logger.error("Ending of the pending pulses timed out, some outputs may stay in the state of the pulse")
 
 
 class DigitalOutput(BinaryOutput):
@@ -170,22 +87,10 @@ class DigitalOutput(BinaryOutput):
 
         return await super().check_new_data() or is_change
 
-    async def set(self, value=None, pulse_duration=None, mode=None, pwm_freq=None, pwm_duty=None, alias=None,
-                  timeout=None):
-        """ Sets new on/off status. A new value or pwm_duty disables the pending pulse
-
-            pulse_duration in seconds sets the opposite of value after the pulse, it requires value,
-            timeout is its deprecated alias
-        """
-        if timeout is not None:
-            if pulse_duration is not None:
-                raise ValueError(f'DO {self.circuit}: timeout is a deprecated alias of pulse_duration, '
-                                 f'do not set both')
-            pulse_duration = timeout
-
-        # parse before any write, the pulse inverts the parsed value
+    async def set(self, value=None, mode=None, pwm_freq=None, pwm_duty=None, alias=None):
+        """ Sets new on/off status or the PWM """
+        # parse before any write
         parsed_value = None if value is None else int(to_bool(value))
-        pulse_duration = self._check_pulse(parsed_value, pulse_duration)
 
         if pwm_duty is not None:
             pwm_duty = to_float(pwm_duty)
@@ -204,10 +109,6 @@ class DigitalOutput(BinaryOutput):
             # No conflict in this case
             if not ((pwm_duty == 100 and parsed_value == 1) or (pwm_duty == 0 and parsed_value == 0)):
                 raise ValueError('Set value conflict: Cannot set both value and pwm_duty at once.')
-
-        # a rejected request keeps the pending pulse
-        if parsed_value is not None or pwm_duty is not None:
-            self._cancel_pulse()
 
         if pwm_freq is not None:
             # value or pwm_duty replaces the duty of this output
@@ -228,9 +129,6 @@ class DigitalOutput(BinaryOutput):
             await self.accessor_pwm_duty.write(self.client, self.pwm.duty_raw(pwm_duty))
 
         self.set_alias(alias)
-
-        if pulse_duration is not None:
-            self._start_pulse(parsed_value, pulse_duration)
 
     async def set_pwm_freq(self, freq: float, keep_duty=True):
         """ Set the frequency shared by the group, keep the duty cycle of all its outputs,

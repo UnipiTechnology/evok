@@ -6,6 +6,7 @@ import pytest
 from tmodbus.exceptions import RequestRetryFailedError
 from tmodbus import AsyncSmartTransport, AsyncTcpTransport
 
+from evok.blocks import sequencer, start_pulse
 from evok import devents
 from evok.devices import Devices, DI, DO, NV_SAVE
 from evok.errors import UnitCommunicationError, UnitUnavailable
@@ -205,7 +206,7 @@ async def test_pulse_ends_under_the_lock_also_on_unavailable_unit(units, events)
     client, = await units('1')
     coil_drives_register(client, 0, 1, 0b01)
     do = Devices.by_name(DO, '1_01')
-    await set_devices([(do, {'value': 1, 'pulse_duration': 0.01})])
+    await start_pulse(do, 1, 0.01)
     client.cache.scan_error = TimeoutError('no response')
     events.clear()
     await asyncio.sleep(0.05)
@@ -219,7 +220,7 @@ async def test_pulse_end_does_not_overwrite_newer_value(units):
     """
     client, = await units('1')
     do = Devices.by_name(DO, '1_01')
-    await set_devices([(do, {'value': 1, 'pulse_duration': 0.02})])
+    await start_pulse(do, 1, 0.02)
     await client.lock.acquire()                             # e.g. a scan
     newer = asyncio.create_task(set_devices([(do, {'value': 1})]))
     await asyncio.sleep(0.05)                               # the pulse ends and waits for the lock behind newer
@@ -227,7 +228,7 @@ async def test_pulse_end_does_not_overwrite_newer_value(units):
     await newer
     await asyncio.sleep(0.01)
     assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 1)]
-    assert do.pending_task is None
+    assert not sequencer.is_running(do)
 
 
 async def test_nv_save_is_changed_under_the_lock(units):

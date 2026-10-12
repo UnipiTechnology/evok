@@ -31,7 +31,8 @@ of the table below or as an object with their names. With a `token` in the confi
 | `sensor_set`          | `circuit`, `interval`                | state of the 1-Wire sensor                                            |
 
 A value of an output is a boolean, also `0`, `1` or a string `'true'`, `'on'`, `'1'`, `'false'`, `'off'`, `'0'`. The `circuit` can be also an alias.
-The param `timeout` of `output_set_for_time` is a deprecated alias of `pulse_duration`.
+The param `timeout` of `output_set_for_time` is a deprecated alias of `pulse_duration`. The pulses of RPC are set
+by the [sequencer](./sequencer.md) of the output, its state is not in the state of the output.
 
 ## Errors
 

@@ -5,10 +5,11 @@ import math
 import pytest
 
 from evok import devents
-from evok.devices import Devices, DI, DO, RO, AI, LED, WATCHDOG
+from evok.devices import Devices, DI, DO, RO, AI, LED, SEQUENCER, WATCHDOG
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
 from evok.modbus.builder import IOParser
-from evok.modbus.digital import BinaryOutput, DigitalInput, DigitalOutput, Relay, ULED, finish_pulses
+from evok.blocks import attach, sequencer
+from evok.modbus.digital import BinaryOutput, DigitalInput, DigitalOutput, Relay, ULED
 from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
 from evok.modbus.special import NvSave, OwPower
 from evok.modbus import set_devices
@@ -173,23 +174,36 @@ def test_do_pwm_requires_duty_register():
         DigitalOutput('x', None, 0, 0, 1, pwm=object())
 
 
-@pytest.mark.parametrize('name', ['pulse_duration', 'timeout'])
-async def test_do_pulse_reverts_value(unit, name):
-    # timeout is a deprecated alias of pulse_duration
+def sequencer_of(device):
+    """ The sequencer device of the output, created by the builder or here """
+    return Devices[SEQUENCER].get(f"{device.devtype}_{device.circuit}") or attach(device)
+
+
+async def pulse(device, **kw):
+    """ A pulse by the sequencer device of the output """
+    await set_devices([(sequencer_of(device), kw)])
+
+
+def running(device) -> bool:
+    return sequencer_of(device).full()['running']
+
+
+async def test_do_pulse_reverts_value(unit):
     client = await unit()
     do = dev(DO, '1_01')
-    await do.set(value=1, **{name: 0.01})
-    assert do.full()['pending'] is True
+    await pulse(do, value=1, pulse_duration=0.01)
+    assert running(do) is True
     await asyncio.sleep(0.05)
     assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0)]
-    assert do.pending_task is None
+    assert running(do) is False
 
 
-async def test_do_rejects_pulse_duration_with_timeout(unit):
+@pytest.mark.parametrize('kw', [{'value': 1, 'pulse_duration': 1}, {'value': 1, 'timeout': 1}])
+async def test_outputs_have_no_pulse_params(unit, kw):
+    """ The pulse is set by the sequencer device of the output """
     client = await unit()
-    do = dev(DO, '1_01')
-    with pytest.raises(ValueError):
-        await do.set(value=1, pulse_duration=1, timeout=1)
+    with pytest.raises(TypeError):
+        await set_devices([(dev(DO, '1_01'), kw)])
     assert client.mb_client.writes == []
 
 
@@ -226,7 +240,7 @@ async def test_do_rejects_invalid_value(unit, value):
 async def test_do_pulse_inverts_string_value(unit):
     client = await unit()
     do = dev(DO, '1_01')
-    await do.set(value='0', pulse_duration=0.01)
+    await pulse(do, value='0', pulse_duration=0.01)
     await asyncio.sleep(0.05)
     assert client.mb_client.writes == [('coil', 0, 0), ('coil', 0, 1)]
 
@@ -236,47 +250,53 @@ async def test_do_pulse_inverts_string_value(unit):
     {'pwm_duty': 50, 'pulse_duration': 1},
     {'value': 1, 'pulse_duration': 0}, {'value': 1, 'pulse_duration': -1},
     {'value': 1, 'pulse_duration': 'nan'}, {'value': 1, 'pulse_duration': float('inf')},
+    {'value': '2', 'pulse_duration': 1}, {'value': 1},     # without pulse_duration
 ])
 async def test_do_rejects_invalid_pulse(unit, kw):
     client = await unit()
-    with pytest.raises(ValueError):
-        await dev(DO, '1_01').set(**kw)
+    with pytest.raises((ValueError, TypeError)):
+        await pulse(dev(DO, '1_01'), **kw)
     assert client.mb_client.writes == []
+    assert not sequencer.is_running(dev(DO, '1_01'))
 
 
 @pytest.mark.parametrize('kw', [
-    {'alias': 'pulsed'}, {'pwm_freq': 100},                 # do not change the output
+    {'alias': 'pulsed'},                                    # does not change the output
     {'value': 1, 'pwm_duty': 50},                           # rejected
 ])
 async def test_do_pulse_is_kept(unit, kw):
     client = await unit()
     do = dev(DO, '1_01')
-    await do.set(value=1, pulse_duration=0.01)
+    await pulse(do, value=1, pulse_duration=0.01)
     try:
-        await do.set(**kw)
+        await set_devices([(do, kw)])
     except ValueError:
         pass
-    assert do.pending_task is not None
+    assert running(do) is True
     await asyncio.sleep(0.05)
     assert client.mb_client.writes[-1] == ('coil', 0, 0)
 
 
-async def test_do_new_value_cancels_pulse(unit):
+@pytest.mark.parametrize('kw', [{'value': 1}, {'pwm_duty': 50}, {'pwm_freq': 100}])
+async def test_do_change_cancels_pulse(unit, kw):
+    """ Any change of the output except its alias cancels the pulse, also pwm_freq """
     client = await unit()
     do = dev(DO, '1_01')
-    await do.set(value=1, pulse_duration=0.01)
-    await do.set(value=1)
+    await pulse(do, value=1, pulse_duration=0.01)
+    await set_devices([(do, kw)])
+    writes = list(client.mb_client.writes)
+    assert running(do) is False
     await asyncio.sleep(0.05)
-    assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 1)]
+    assert client.mb_client.writes == writes               # no end of the pulse
 
 
 async def test_do_concurrent_pulses_keep_the_last(unit):
     client = await unit()
     do = dev(DO, '1_01')
-    await asyncio.gather(do.set(value=1, pulse_duration=0.01), do.set(value=0, pulse_duration=0.01))
+    await asyncio.gather(pulse(do, value=1, pulse_duration=0.01), pulse(do, value=0, pulse_duration=0.01))
     await asyncio.sleep(0.05)
     assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0), ('coil', 0, 1)]
-    assert do.pending_task is None
+    assert running(do) is False
 
 
 @pytest.fixture
@@ -291,18 +311,18 @@ def relay(unit):
 
 async def test_ro_pulse(relay):
     client, ro = await relay()
-    await ro.set(value='1', pulse_duration=0.01)
-    assert ro.full()['pending'] is True
-    await ro.set(alias='pulsed_ro')                         # does not change the output
+    await pulse(ro, value='1', pulse_duration=0.01)
+    assert running(ro) is True
+    await set_devices([(ro, {'alias': 'pulsed_ro'})])       # does not change the output
     await asyncio.sleep(0.05)
     assert client.mb_client.writes == [('coil', ro.coil, 1), ('coil', ro.coil, 0)]
-    assert ro.full()['pending'] is False
+    assert running(ro) is False
 
 
 async def test_ro_new_value_cancels_pulse(relay):
     client, ro = await relay()
-    await ro.set(value=1, pulse_duration=0.01)
-    await ro.set(value=0)
+    await pulse(ro, value=1, pulse_duration=0.01)
+    await set_devices([(ro, {'value': 0})])
     await asyncio.sleep(0.05)
     assert client.mb_client.writes == [('coil', ro.coil, 1), ('coil', ro.coil, 0)]
 
@@ -313,7 +333,7 @@ async def test_ro_new_value_cancels_pulse(relay):
 async def test_ro_rejects_invalid_pulse(relay, kw):
     client, ro = await relay()
     with pytest.raises(ValueError):
-        await ro.set(**kw)
+        await pulse(ro, **kw)
     assert client.mb_client.writes == []
 
 
@@ -321,10 +341,16 @@ async def test_ro_without_coil_pulse_writes_the_register(unit):
     """ #124: the end of the pulse writes the bit of the register too """
     client = await unit({1: 0b1000})
     ro = Devices[RO]['9_01'] = Relay('9_01', client, None, 1, 0b0100)
-    await ro.set(value=1, pulse_duration=0.01)
+    await pulse(ro, value=1, pulse_duration=0.01)
     await asyncio.sleep(0.05)
     assert client.mb_client.writes == [('reg', 1, 0b1100), ('reg', 1, 0b1000)]
-    assert ro.pending_task is None
+    assert running(ro) is False
+
+
+def test_outputs_have_no_pulse():
+    """ The pulses are sequences of the sequencer of blocks """
+    for cls in (Relay, ULED, DigitalOutput):
+        assert not {'pulse_duration', 'timeout'} & set(cls.set.__code__.co_varnames)
 
 
 def test_outputs_share_the_base():
@@ -336,47 +362,46 @@ async def test_output_states(unit):
     await unit({1: 0b01})
     do, led = dev(DO, '1_01'), dev(LED, '1_01')
     Devices.set_alias('my_do', do)
-    assert list(do.full()) == ['dev', 'circuit', 'value', 'pending', 'mode', 'modes', 'pwm_freq', 'pwm_duty',
-                               'alias']
+    assert list(do.full()) == ['dev', 'circuit', 'value', 'mode', 'modes', 'pwm_freq', 'pwm_duty', 'alias']
     assert (do.full()['dev'], do.full()['value']) == ('do', 1)
-    assert led.full() == {'dev': 'led', 'circuit': '1_01', 'value': 0, 'pending': False}
+    assert led.full() == {'dev': 'led', 'circuit': '1_01', 'value': 0}
 
 
-async def test_finish_pulses_ends_pending_pulses(unit):
+async def test_finish_all_ends_running_pulses(unit):
     client = await unit()
     do, led = dev(DO, '1_01'), dev(LED, '1_02')
-    await do.set(value=1, pulse_duration=10)
-    await led.set(value='0', pulse_duration=10)
-    await finish_pulses()
+    await pulse(do, value=1, pulse_duration=10)
+    await pulse(led, value='0', pulse_duration=10)
+    await sequencer.finish_all()
     assert client.mb_client.writes[-2:] == [('coil', 0, 0), ('coil', 3001, 1)]
-    assert do.pending_task is None and led.pending_task is None
+    assert not sequencer.is_running(do) and not sequencer.is_running(led)
     await asyncio.sleep(0.01)
     assert len(client.mb_client.writes) == 4               # the timers are cancelled
 
 
-async def test_finish_pulses_times_out(unit, caplog):
+async def test_finish_all_times_out(unit, caplog):
     client = await unit()
     do = dev(DO, '1_01')
-    await do.set(value=1, pulse_duration=10)
+    await pulse(do, value=1, pulse_duration=10)
 
     async def hang(address, value):
         await asyncio.sleep(10)
     client.mb_client.write_single_coil = hang
-    await finish_pulses(timeout=0.01)
+    await sequencer.finish_all(timeout=0.01)
     assert 'timed out' in caplog.text
 
 
 async def test_do_pulse_end_error_is_logged(unit, caplog):
     client = await unit()
     do = dev(DO, '1_01')
-    await do.set(value=1, pulse_duration=0.01)
+    await pulse(do, value=1, pulse_duration=0.01)
 
     async def fail(address, value):
         raise ConnectionError('lost')
     client.mb_client.write_single_coil = fail
     await asyncio.sleep(0.05)
-    assert 'end of the pulse failed' in caplog.text
-    assert do.pending_task is None
+    assert 'DO 1_01: step 1 of the pulse failed' in caplog.text
+    assert running(do) is False
 
 
 # --- AnalogInput ------------------------------------------------------------
@@ -596,13 +621,13 @@ async def test_led(unit):
 async def test_led_pulse(unit):
     client = await unit()
     led = dev(LED, '1_02')
-    await led.set(value=1, pulse_duration=0.01)
-    assert led.full()['pending'] is True
+    await pulse(led, value=1, pulse_duration=0.01)
+    assert running(led) is True
     await asyncio.sleep(0.05)
     assert client.mb_client.writes == [('coil', 3001, 1), ('coil', 3001, 0)]
-    assert led.full()['pending'] is False
+    assert running(led) is False
     with pytest.raises(ValueError):
-        await led.set(pulse_duration=1)                     # without value
+        await pulse(led, pulse_duration=1)                  # without value
 
 
 # --- AnalogOutput -----------------------------------------------------------

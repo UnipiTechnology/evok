@@ -81,3 +81,12 @@ def clean_devices():
     clear()
     yield
     clear()
+
+
+@pytest.fixture(autouse=True)
+def clean_sequences():
+    """ The sequencer is global, a running sequence of a test would run in the next one """
+    from evok.blocks import sequencer
+    sequencer.cancel_all()
+    yield
+    sequencer.cancel_all()

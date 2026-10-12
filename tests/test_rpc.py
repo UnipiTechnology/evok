@@ -3,7 +3,8 @@ from types import SimpleNamespace
 import pytest
 from tornado_jsonrpc2.exceptions import InvalidParams, MethodNotFound
 
-from evok.devices import Devices, DO, RO, to_float
+from evok.blocks import sequencer
+from evok.devices import Devices, DO, RO
 from evok.rpc_handler import Handler, create_response
 
 
@@ -17,15 +18,12 @@ class FakeOutput:
     def full(self):
         return {'dev': self.devtype, 'circuit': self.circuit}
 
-    async def set(self, value=None, pulse_duration=None):
+    async def set(self, value=None):
         if value is not None and int(value) > 1:
             raise ValueError('Value out of range')
-        if pulse_duration is not None:
-            # as BinaryOutput._check_pulse() of an output, RPC passes pulse_duration to it
-            pulse_duration = to_float(pulse_duration)
-            if pulse_duration <= 0:
-                raise ValueError('pulse_duration must be positive')
-        self.values.append((value, pulse_duration))
+        # pulse_duration is split by set_devices(), the pulse is a sequence of the sequencer
+        pulse = sequencer.sequence(self)
+        self.values.append((value, None if pulse is None else pulse.steps[0].delay))
 
 
 @pytest.fixture
@@ -55,22 +53,29 @@ async def test_set_by_name(outputs):
     assert await call('output_set', {'circuit': '1_01', 'value': '1'}) == 1
 
 
+def pulse_duration(device):
+    pulse = sequencer.sequence(device)
+    return None if pulse is None else pulse.steps[0].delay
+
+
 async def test_output_set_for_time_string_pulse_duration(outputs):
     await call('output_set_for_time', ['1_01', 1, '5'])
-    assert outputs[0].values == [(1, 5.0)]
+    assert (outputs[0].values, pulse_duration(outputs[0])) == ([(1, None)], 5.0)
 
 
 async def test_relay_set_for_time(outputs):
     assert await call('relay_set_for_time', ['1_01', '1', '5']) == {'dev': 'ro', 'circuit': '1_01'}
+    assert pulse_duration(outputs[1]) == 5.0
     assert await call('relay_set_for_time', {'circuit': '1_01', 'value': 0, 'pulse_duration': 0.5})
-    assert outputs[1].values == [('1', 5.0), (0, 0.5)]
+    assert [value for value, _ in outputs[1].values] == ['1', 0]
+    assert pulse_duration(outputs[1]) == 0.5
 
 
 @pytest.mark.parametrize('name', ['pulse_duration', 'timeout'])
 async def test_output_set_for_time_by_name(outputs, name):
     # timeout is a deprecated alias of pulse_duration
     await call('output_set_for_time', {'circuit': '1_01', 'value': 1, name: 5})
-    assert outputs[0].values == [(1, 5.0)]
+    assert (outputs[0].values, pulse_duration(outputs[0])) == ([(1, None)], 5.0)
 
 
 @pytest.mark.parametrize('method, params', [

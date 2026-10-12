@@ -44,7 +44,7 @@ only the devices passing the filter are returned, the default filter returns DI,
 Sets the params of a device, the same params as in [REST](rest.md) are accepted and validated. The params can be passed
 
 - in `value` as the value of the device: `{"cmd": "set", "dev": "do", "circuit": "1_01", "value": 1}`
-- in `value` as an object: `{"cmd": "set", "dev": "do", "circuit": "1_01", "value": {"value": 1, "pulse_duration": 5}}`
+- in `value` as an object: `{"cmd": "set", "dev": "do", "circuit": "1_01", "value": {"value": 1, "alias": "pump"}}`
 - as other keys of the message: `{"cmd": "set", "dev": "di", "circuit": "1_01", "debounce": 50}`
 
 The `value` is always the param `value` of the device, e.g. the debounce of a DI must be set by `debounce`.
@@ -134,12 +134,12 @@ if __name__ == "__main__":
 
 ```text title="Output"
 WebSocket connection opened
-Received message: [{"dev": "do", "circuit": "1_01", "value": 1, "pending": false, "mode": "Simple", "modes": ["Simple", "PWM"], "pwm_freq": 4800.0, "pwm_duty": 0}]
-Received message: [{"dev": "do", "circuit": "1_04", "value": 1, "pending": false, "mode": "Simple", "modes": ["Simple", "PWM"], "pwm_freq": 4800.0, "pwm_duty": 0}]
+Received message: [{"dev": "do", "circuit": "1_01", "value": 1, "mode": "Simple", "modes": ["Simple", "PWM"], "pwm_freq": 4800.0, "pwm_duty": 0}]
+Received message: [{"dev": "do", "circuit": "1_04", "value": 1, "mode": "Simple", "modes": ["Simple", "PWM"], "pwm_freq": 4800.0, "pwm_duty": 0}]
 Received message: [{"dev": "ao", "circuit": "2_03", "mode": "Voltage", "modes": {"Voltage": {"unit": "V", "range": [0, 10]}}, "value": 5.9, "unit": "V", "range": [0, 10]}]
 Received message: [{"dev": "ao", "circuit": "2_04", "mode": "Voltage", "modes": {"Voltage": {"unit": "V", "range": [0, 10]}}, "value": 1.3, "unit": "V", "range": [0, 10]}]
-Received message: [{"dev": "do", "circuit": "1_01", "value": 0, "pending": false, "mode": "Simple", "modes": ["Simple", "PWM"], "pwm_freq": 4800.0, "pwm_duty": 0}]
-Received message: [{"dev": "do", "circuit": "1_04", "value": 0, "pending": false, "mode": "Simple", "modes": ["Simple", "PWM"], "pwm_freq": 4800.0, "pwm_duty": 0}]
+Received message: [{"dev": "do", "circuit": "1_01", "value": 0, "mode": "Simple", "modes": ["Simple", "PWM"], "pwm_freq": 4800.0, "pwm_duty": 0}]
+Received message: [{"dev": "do", "circuit": "1_04", "value": 0, "mode": "Simple", "modes": ["Simple", "PWM"], "pwm_freq": 4800.0, "pwm_duty": 0}]
 ...
 ```
 
