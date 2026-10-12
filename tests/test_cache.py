@@ -275,7 +275,8 @@ async def test_initial_scan_is_retried_after_an_error(caplog):
     mb.read_holding_registers = flaky
     slave = SimpleNamespace(cache=cache, circuit='1', populated=False, INITIAL_SCAN_INTERVAL=0, MAX_SCAN_INTERVAL=0,
                             scan_interval=10,
-                            parser=SimpleNamespace(populate=populated.set))
+                            parser=SimpleNamespace(populate=populated.set),
+                            _set_failing=lambda failing: None)
     task = asyncio.create_task(ModbusScanner._scan_loop(slave))
     await asyncio.wait_for(populated.wait(), 1)
     task.cancel()
@@ -309,10 +310,32 @@ async def test_initial_scan_logs_the_same_error_once(caplog):
     mb.read_holding_registers = flaky
     slave = SimpleNamespace(cache=cache, circuit='1', populated=False, INITIAL_SCAN_INTERVAL=0, MAX_SCAN_INTERVAL=0,
                             scan_interval=10,
-                            parser=SimpleNamespace(populate=populated.set))
+                            parser=SimpleNamespace(populate=populated.set),
+                            _set_failing=lambda failing: None)
     task = asyncio.create_task(ModbusScanner._scan_loop(slave))
     await asyncio.wait_for(populated.wait(), 1)
     task.cancel()
     # the connection error is logged once, another cause of the error is logged again
     assert caplog.text.count("Waiting for device '1'") == 2
     assert caplog.text.count('ModbusConnectionError') == 1
+
+
+async def test_failing_unit_is_marked_for_the_probes():
+    """ #210: the transport probes a unit which does not respond by one short request """
+    marks = []
+    results = [True, False, False, True]
+
+    async def scan_unit():
+        ok = results.pop(0) if results else True
+        cache.scan_error = None if ok else TimeoutError('no response')
+        return ok
+    cache = SimpleNamespace(scan_error=None)
+    slave = SimpleNamespace(cache=cache, circuit='1', populated=True, scan_enabled=True, scan_interval=0.001,
+                            MAX_SCAN_INTERVAL=0.001, _scan_unit=scan_unit, _set_failing=marks.append)
+    task = asyncio.create_task(ModbusScanner._scan_loop(slave))
+    for _ in range(100):
+        if not results:
+            break
+        await asyncio.sleep(0.002)
+    task.cancel()
+    assert marks == [True, False]                               # marked once, unmarked after the recovery

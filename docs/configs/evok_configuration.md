@@ -73,6 +73,8 @@ comm_channels:
         - `retries` - count of retries of a request after a lost connection or a busy unit, an integer `>= 0`
           (Default value is `1`). The bus waits for the retries, a unit which does not respond
           is scanned less often by Evok.
+        - `probe_timeout` - timeout in seconds of a request to a unit which does not respond, it is sent once
+          without the retries (Default value is `timeout`)
     - `MODBUSRTU`
         - `port` - path to the Modbus device, required. Only one bus can use a serial port (also by a symlink),
           the second bus is not created and the error is logged.
@@ -82,6 +84,11 @@ comm_channels:
         - `timeout` - timeout of a response in seconds (Default value is `0.5`)
         - `retries` - count of retries of a request after a failure of the port or a busy unit, an integer `>= 0`
           (Default value is `1`)
+        - `probe_timeout` - timeout in seconds of a request to a unit which does not respond, it is sent once
+          without the retries (Default value is `0.1`, at most `timeout`). The other units of the bus wait
+          for it, before a missing unit locked the bus for `(retries + 1) * timeout` at every attempt.
+          A longer value is needed if the response of the first register block takes longer at the baud rate,
+          e.g. 125 registers take about 0.15 s at 19200 Bd.
     - `OWFS` (1-Wire bus, the former name `OWBUS` is not supported)
       The bus reads the sensors by `owserver` (Debian package `owserver`). If owserver is not running,
       Evok logs `cannot connect to owserver ..., is owserver running?` once and connects again every 10 s,

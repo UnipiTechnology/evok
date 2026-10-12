@@ -130,6 +130,9 @@ An invalid value is an error: the unit or the feature is not created and the err
 - **Register blocks:** at most 125 registers, addresses up to 65535, no overlaps. — `2f323f0`, `9f9482c`
 - **Modbus devices:** the name must be unique over all buses. The second device with the same name is not
   created, before it replaced the first one in the API and its IOs were missing. — `d8acc38`
+- **Unit which does not respond:** it is probed by one request with `probe_timeout` of the bus (0.1 s on RTU)
+  without the retries, before every attempt locked the bus for `(retries + 1) * timeout` (1 s by default)
+  and the other units of the bus waited. — #210
 - **Modbus addresses:** a serial port can be used by one `MODBUSRTU` bus only, the `slave-id` must be unique on an RTU
   bus and on a TCP server (`hostname`, `port`) over all `MODBUSTCP` buses. The second bus or device is not created,
   before both read and wrote the same unit. — `dc7b1ee`

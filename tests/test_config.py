@@ -408,3 +408,81 @@ def test_bus_retries(bus_data, retries):
 def test_bus_retries_invalid(value):
     with pytest.raises(ValueError, match='retries'):
         config.bus_retries({'retries': value})
+
+
+class SlowTransport(FakeTransport):
+    """ A unit which does not respond, the request waits for the timeout of the transport """
+    def __init__(self):
+        super().__init__()
+        self.opened = True
+
+    async def send_and_receive(self, unit_id, pdu):
+        self.requests += 1
+        await asyncio.sleep(10)
+
+
+def bus_transport(base, probe_timeout=0.05, retries=1):
+    from evok.modbus.transport import BusTransport
+    return BusTransport(base, wait_between_requests=0.0, wait_after_connect=0.0, retry_on_device_busy=True,
+                        retry_on_device_failure=False, probe_timeout=probe_timeout,
+                        **config.retry_strategies(0.1, 0.1, retries))
+
+
+async def test_failing_unit_is_probed_by_one_short_request():
+    """ #210: every scan of a missing unit locked the bus for (retries + 1) * timeout """
+    base = SlowTransport()
+    transport = bus_transport(base)
+    transport.set_failing(1, True)
+    start = time.monotonic()
+    with pytest.raises(TimeoutError, match='No response to the probe after 0.05 seconds'):
+        await transport.send_and_receive(1, 'pdu')
+    assert time.monotonic() - start < 0.5
+    assert base.requests == 1                                  # no retry
+
+
+async def test_probe_waits_for_the_bus():
+    """ The probe timeout starts after the lock, a request of another unit does not make it fail """
+    base = FakeTransport(responses=['other', 'probe'])
+    base.opened = True
+    transport = bus_transport(base, probe_timeout=0.05)
+    transport.set_failing(2, True)
+    send = base.send_and_receive
+
+    async def slow_other(unit_id, pdu):
+        if unit_id == 1:
+            await asyncio.sleep(0.1)                           # longer than the probe timeout
+        return await send(unit_id, pdu)
+    base.send_and_receive = slow_other
+    assert await asyncio.gather(transport.send_and_receive(1, 'pdu'), transport.send_and_receive(2, 'pdu')) == \
+        ['other', 'probe']
+
+
+async def test_recovered_unit_uses_the_retries_again():
+    base = FakeTransport(responses=[ServerDeviceBusyError(6), 'response'])
+    base.opened = True
+    transport = bus_transport(base)
+    transport.set_failing(1, True)
+    transport.set_failing(1, False)
+    assert await transport.send_and_receive(1, 'pdu') == 'response'
+    assert base.requests == 2
+
+
+@pytest.mark.parametrize('bus, expected', [
+    ({'type': 'MODBUSRTU', 'port': '/dev/null'}, 0.1),
+    ({'type': 'MODBUSRTU', 'port': '/dev/null', 'timeout': 0.05}, 0.05),     # not longer than the timeout
+    ({'type': 'MODBUSRTU', 'port': '/dev/null', 'probe_timeout': 0.3}, 0.3),
+    ({'type': 'MODBUSTCP'}, 0.5),                                             # a gateway on the network
+    ({'type': 'MODBUSTCP', 'timeout': 2, 'probe_timeout': 1}, 1.0),
+])
+def test_probe_timeout(bus, expected):
+    create({'BUS': bus})
+    bus_device = (Devices[SERIALBUS] if bus['type'] == 'MODBUSRTU' else Devices[TCPBUS])['BUS']
+    assert bus_device.bus_driver.probe_timeout == expected
+    assert bus_device.full()['probe_timeout'] == expected
+
+
+@pytest.mark.parametrize('value', [0, -1, 'fast', True])
+def test_probe_timeout_invalid(caplog, value):
+    create({'BUS': {'type': 'MODBUSRTU', 'port': '/dev/null', 'probe_timeout': value}})
+    assert 'BUS' not in Devices[SERIALBUS]
+    assert 'probe_timeout must be a positive number' in caplog.text
