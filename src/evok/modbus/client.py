@@ -14,7 +14,7 @@ from tmodbus.utils.order_aware_struct import OrderAwareStruct
 
 from .cache import ModbusCacheMap
 from ..devices import devents
-from ..errors import UnitCommunicationError, UnitUnavailable
+from ..errors import UnitCommunicationError, UnitUnavailable, describe_error
 from ..log import logger
 
 UINT16 = struct.Struct(">H")
@@ -94,13 +94,12 @@ class Client:
         async with self.lock:
             if check_available and self.cache.scan_error is not None:
                 if self.periodic_scan or not await self.cache.do_scan(all_groups=True):
-                    raise UnitUnavailable(f"Unit {self.name} is not available: "
-                                          f"{type(self.cache.scan_error).__name__}: {self.cache.scan_error}")
+                    raise UnitUnavailable(f"Unit {self.name} is not available: {describe_error(self.cache.scan_error)}")
             try:
                 await operation()
             except (TModbusError, TimeoutError) as E:
                 # it was an internal error with a traceback, the unit did not respond or refused the request
-                raise UnitCommunicationError(f"Unit {self.name}: {type(E).__name__}: {E}") from E
+                raise UnitCommunicationError(f"Unit {self.name}: {describe_error(E)}") from E
             finally:
                 if read:
                     await self._scan(all_groups=True)
