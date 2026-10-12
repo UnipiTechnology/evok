@@ -105,7 +105,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - `GET /rest/serial_bus/{bus}` a `/rest/tcp_bus/{bus}` vrací konfiguraci Modbus sběrnice a její zařízení, dřív chybu
   500. Sběrnice jsou jen pro čtení a nejsou v `/rest/all`. — `b40a57c`
 - **MQTT API:** stavy zařízení se publikují na broker (retained), příkazy přichází přes
-  `<prefix>/<device>/<circuit>/set`, stav `online` / `offline` s poslední vůlí. — #139
+  `<prefix>/<device>/<circuit>/set`, stav `online` / `offline` s poslední vůlí. — `c8ff385`
 - **Konfigurace:** `apis.rpc.enabled`, webhook `min_interval`, u sběrnic `timeout`, `connect_timeout` a `retries`.
   — `f7ebda1`, `0044241`, `16463d5`, `a6ede44`
 - **Výstupy bez coilů:** RO, DO a LED bez `val_coil` zapisují svůj bit ve `val_reg` (holding registr), např. u jednotky
