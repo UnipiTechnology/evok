@@ -339,3 +339,48 @@ async def test_failing_unit_is_marked_for_the_probes():
         await asyncio.sleep(0.002)
     task.cancel()
     assert marks == [True, False]                               # marked once, unmarked after the recovery
+
+
+def missing_port(retries=True):
+    """ The error of tmodbus for a missing serial port, with the retries and of a probe without them """
+    error = ModbusConnectionError('')
+    error.__cause__ = FileNotFoundError(2, 'No such file or directory', '/dev/ttyNS0')
+    reconnect = ModbusConnectionError('Failed to reconnect after 1 attempts over 0.0004 seconds')
+    reconnect.__cause__ = RetryError(SimpleNamespace(exception=lambda: error))
+    return retry_failed(0.1, reconnect) if retries else reconnect
+
+
+def test_describe_error_names_the_root_cause():
+    """ A missing port was reported only as 'Failed to reconnect after 1 attempts' """
+    from evok.errors import describe_error
+    assert describe_error(missing_port()).endswith(
+        "(FileNotFoundError: [Errno 2] No such file or directory: '/dev/ttyNS0')")
+    assert describe_error(TimeoutError('Response timeout after 0.5 seconds')) == \
+        'TimeoutError: Response timeout after 0.5 seconds'
+    timeout = TimeoutError('No response to the probe after 0.1 seconds')
+    timeout.__cause__ = TimeoutError()                          # asyncio.wait_for(), without a text
+    timeout.__cause__.__cause__ = asyncio.CancelledError()
+    assert describe_error(timeout) == 'TimeoutError: No response to the probe after 0.1 seconds'
+
+
+async def test_waiting_for_a_missing_port_is_logged_once(caplog):
+    """ The first failure has the retries, the next probes not, the error was logged twice """
+    mb = FakeModbus()
+    cache = ModbusCacheMap(BLOCKS, mb)
+    populated = asyncio.Event()
+    failures = [missing_port(retries=False), missing_port(retries=False), missing_port()]
+    read = mb.read_holding_registers
+
+    async def flaky(*args, **kwargs):
+        if failures:
+            raise failures.pop()
+        return await read(*args, **kwargs)
+    mb.read_holding_registers = flaky
+    slave = SimpleNamespace(cache=cache, circuit='1', populated=False, INITIAL_SCAN_INTERVAL=0, MAX_SCAN_INTERVAL=0,
+                            scan_interval=10, parser=SimpleNamespace(populate=populated.set),
+                            _set_failing=lambda failing: None)
+    task = asyncio.create_task(ModbusScanner._scan_loop(slave))
+    await asyncio.wait_for(populated.wait(), 1)
+    task.cancel()
+    assert caplog.text.count("Waiting for device '1'") == 1
+    assert "No such file or directory: '/dev/ttyNS0'" in caplog.text
