@@ -14,8 +14,9 @@ from .log import logger
 registered_ws = {}
 
 # settings of the tornado.web.Application of the API: a connection lost without its close, e.g. a lost network,
-# is closed after the timeout of the ping, not after the timeout of TCP; the commands are short
-WEBSOCKET_SETTINGS = dict(websocket_ping_interval=10, websocket_ping_timeout=30, websocket_max_message_size=65536)
+# is closed after the timeout of the ping, not after the timeout of TCP; the commands are short.
+# The timeout cannot be longer than the interval, Tornado shortened the timeout 30 s to 10 s with a warning.
+WEBSOCKET_SETTINGS = dict(websocket_ping_interval=10, websocket_ping_timeout=10, websocket_max_message_size=65536)
 
 
 class WsHandler(TokenAuth, websocket.WebSocketHandler):

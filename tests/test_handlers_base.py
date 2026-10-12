@@ -171,14 +171,14 @@ async def test_get_serial_bus(fetch, modbus_buses):
     code, reply = await fetch('/rest/serial_bus/RTU')
     assert code == 200
     assert reply == {'dev': 'serial_bus', 'circuit': 'RTU', 'port': '/dev/null', 'baudrate': 9600, 'parity': 'E',
-                     'stopbits': 1, 'timeout': 0.5, 'retries': 2, 'devices': ['u1', 'u2']}
+                     'stopbits': 1, 'timeout': 0.5, 'retries': 2, 'probe_timeout': 0.1, 'devices': ['u1', 'u2']}
 
 
 async def test_get_tcp_bus(fetch, modbus_buses):
     code, reply = await fetch('/json/tcp_bus/all')
     assert code == 200
     assert reply == [{'dev': 'tcp_bus', 'circuit': 'TCP', 'hostname': '192.168.1.10', 'port': 502, 'timeout': 0.5,
-                      'connect_timeout': 1.0, 'retries': 1, 'devices': ['t1']}]
+                      'connect_timeout': 1.0, 'retries': 1, 'probe_timeout': 0.5, 'devices': ['t1']}]
 
 
 async def test_bus_cannot_be_set(fetch, modbus_buses):
