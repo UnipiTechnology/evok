@@ -9,7 +9,8 @@ import tornado.web
 
 from evok.devices import Devices, AI
 from evok.evok import LegacyJsonHandler, LegacyRestHandler
-from evok.owdevice import OwBusDriver, to_bool
+from evok.devices import to_bool
+from evok.w1 import OwBusDriver
 
 
 @pytest.fixture

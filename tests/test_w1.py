@@ -1,14 +1,15 @@
 import asyncio
 import json
 import logging
-from types import SimpleNamespace
 
 import anyio
 import pytest
 
-from evok import devents, owdevice, w1
+from evok import devents
 from evok.devices import Devices, SENSOR
-from evok.owdevice import DS18B20, DS2408, DS2438, OwBusDriver, MySensorFabric, address_key, leaf_error
+from evok.w1 import DS18B20, DS2408, DS2438, OwBusDriver, MySensorFabric, address_key
+from evok.w1 import bus as w1_bus, sysfs as w1_sysfs
+from evok.w1.bus import leaf_error
 
 
 @pytest.fixture
@@ -129,8 +130,7 @@ async def test_sensor_set_sends_status(bus, events):
 
 async def test_reconnect_after_failure(bus, events, monkeypatch, caplog):
     import asyncio
-    from evok import owdevice
-    monkeypatch.setattr(owdevice, 'RECONNECT_DELAY', 0)
+    monkeypatch.setattr(w1_bus, 'RECONNECT_DELAY', 0)
     sensor = DS18B20('28.000001', 'DS18B20', bus)
     sensor.sens = FakeSens(temperature=21.0)
     runs = []
@@ -250,15 +250,15 @@ async def settle_reads():
 ])
 def test_owfs_address_of_a_sysfs_name(name, address):
     """ The circuits of the found sensors stayed the same as with owserver """
-    assert w1.owfs_address(name) == address
+    assert w1_sysfs.owfs_address(name) == address
     assert address_key(name) == address_key(address)
-    assert w1.crc8(bytes.fromhex(address_key(address) + address[-2:])) == 0
+    assert w1_sysfs.crc8(bytes.fromhex(address_key(address) + address[-2:])) == 0
 
 
 @pytest.fixture
 def sysfs(tmp_path, monkeypatch):
     """ /sys/bus/w1/devices with the master w1_bus_master1 """
-    monkeypatch.setattr(w1, 'W1_DEVICES', str(tmp_path))
+    monkeypatch.setattr(w1_sysfs, 'W1_DEVICES', str(tmp_path))
     master = tmp_path / 'w1_bus_master1'
     master.mkdir()
 
@@ -282,20 +282,20 @@ def sysfs(tmp_path, monkeypatch):
 def test_masters(sysfs):
     for n in (10, 2):
         (sysfs.path / f'w1_bus_master{n}').mkdir()
-    assert w1.masters() == ['w1_bus_master1', 'w1_bus_master2', 'w1_bus_master10']
-    assert w1.W1Master().name == 'w1_bus_master1'
+    assert w1_sysfs.masters() == ['w1_bus_master1', 'w1_bus_master2', 'w1_bus_master10']
+    assert w1_sysfs.W1Master().name == 'w1_bus_master1'
     with pytest.raises(FileNotFoundError, match="1-Wire master 'w1_bus_master3' not found"):
-        w1.W1Master('w1_bus_master3')
+        w1_sysfs.W1Master('w1_bus_master3')
 
 
 def test_no_master(tmp_path, monkeypatch):
-    monkeypatch.setattr(w1, 'W1_DEVICES', str(tmp_path / 'missing'))
+    monkeypatch.setattr(w1_sysfs, 'W1_DEVICES', str(tmp_path / 'missing'))
     with pytest.raises(FileNotFoundError, match='no 1-Wire master'):
-        w1.W1Master()
+        w1_sysfs.W1Master()
 
 
 async def test_slaves(sysfs):
-    master = w1.W1Master()
+    master = w1_sysfs.W1Master()
     assert await master.slaves() == []                  # 'not found.'
     sysfs.slaves('28-00000925204e', '29-0000001b2c3d')
     assert await master.slaves() == ['28-00000925204e', '29-0000001b2c3d']
@@ -311,7 +311,7 @@ async def test_slaves(sysfs):
 ])
 async def test_device_values(sysfs, name, attributes, field, value):
     sysfs.device(name, **attributes)
-    assert await w1.W1Master().device(name).get(field) == pytest.approx(value)
+    assert await w1_sysfs.W1Master().device(name).get(field) == pytest.approx(value)
 
 
 @pytest.mark.parametrize('name, state, sensed', [
@@ -322,21 +322,21 @@ async def test_device_values(sysfs, name, attributes, field, value):
 ])
 async def test_device_sensed(sysfs, name, state, sensed):
     sysfs.device(name, state=state)
-    assert await w1.W1Master().device(name).get_sensed_all() == sensed
+    assert await w1_sysfs.W1Master().device(name).get_sensed_all() == sensed
 
 
 async def test_failed_read_raises(sysfs):
     """ A device which does not answer or a CRC error, the driver returns EIO; here a missing attribute """
     sysfs.device('28-00000925204e')
     with pytest.raises(OSError):
-        await w1.W1Master().device('28-00000925204e').get('temperature')
+        await w1_sysfs.W1Master().device('28-00000925204e').get('temperature')
 
 
 async def scan_once(bus, sysfs):
     """ One scan of the bus by scanning() """
     bus.bus_lock = anyio.Lock()
     await bus.set(scan_interval=0)
-    task = asyncio.create_task(bus.scanning(w1.W1Master()))
+    task = asyncio.create_task(bus.scanning(w1_sysfs.W1Master()))
     await settle_reads()
     return task
 
@@ -394,17 +394,17 @@ async def test_failed_scan_ends_the_bus(bus, sysfs):
     (sysfs.path / 'w1_bus_master1' / 'w1_master_slaves').unlink()
     bus.bus_lock = anyio.Lock()
     with pytest.raises(FileNotFoundError):
-        await bus.scanning(w1.W1Master())
+        await bus.scanning(w1_sysfs.W1Master())
 
 
 async def test_scan_interval_0_scans_only_on_request(bus, sysfs, monkeypatch):
     scans = []
-    slaves = w1.W1Master.slaves
+    slaves = w1_sysfs.W1Master.slaves
 
     async def counted(self):
         scans.append(None)
         return await slaves(self)
-    monkeypatch.setattr(w1.W1Master, 'slaves', counted)
+    monkeypatch.setattr(w1_sysfs.W1Master, 'slaves', counted)
     task = await scan_once(bus, sysfs)
     assert len(scans) == 1                              # after the start
     bus.do_scan()
@@ -454,7 +454,7 @@ def test_leaf_error():
 
 async def run_bus(bus, monkeypatch, run, runs):
     """ Run the bus until run() was called runs times """
-    monkeypatch.setattr(owdevice, 'RECONNECT_DELAY', 0)
+    monkeypatch.setattr(w1_bus, 'RECONNECT_DELAY', 0)
     calls = []
 
     async def counted():

@@ -10,7 +10,7 @@ from tmodbus import (
     AsyncTcpTransport,
 )
 
-from . import owdevice
+from . import w1
 
 import yaml
 from .devices import Devices, Aliases
@@ -279,7 +279,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
                                   f"'{claims.w1_masters[master]}'")
 
         circuit = bus_name
-        bus = owdevice.OwBusDriver(circuit, interval=interval, scan_interval=scan_interval,
+        bus = w1.OwBusDriver(circuit, interval=interval, scan_interval=scan_interval,
                                    owpower_circuit=owpower, master=master)
         Devices.register_device(OWBUS, bus)
         claims.w1_masters[master] = bus_name
@@ -383,7 +383,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
                 interval = int(device_data.get("interval", 15))
 
                 # the sensor registers itself in the bus and in Devices
-                sensor = owdevice.MySensorFabric(address, ow_type, bus, interval=interval, circuit=str(device_name))
+                sensor = w1.MySensorFabric(address, ow_type, bus, interval=interval, circuit=str(device_name))
                 if sensor is None:
                     raise EvokConfigError(f"Unsupported type '{ow_type}' of the 1-Wire sensor")
 
