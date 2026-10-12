@@ -214,21 +214,63 @@ async def test_pulse_ends_under_the_lock_also_on_unavailable_unit(units, events)
     assert do.value == 0 and events                         # read at once, not by the next scan
 
 
-async def test_pulse_end_does_not_overwrite_newer_value(units):
-    """ The timer of the pulse cleared pending_task before it got the lock, a set() waiting for the lock before it
-        did not cancel it and the end of the pulse overwrote the newer value
-    """
+async def test_pulse_end_does_not_overwrite_newer_pulse(units):
+    """ The end of the pulse waiting for the lock is cancelled by a new pulse, it did not overwrite its value """
     client, = await units('1')
     do = Devices.by_name(DO, '1_01')
     await start_pulse(do, 1, 0.02)
     await client.lock.acquire()                             # e.g. a scan
-    newer = asyncio.create_task(set_devices([(do, {'value': 1})]))
-    await asyncio.sleep(0.05)                               # the pulse ends and waits for the lock behind newer
+    await asyncio.sleep(0.05)                               # the pulse ends and waits for the lock
+    newer = asyncio.create_task(start_pulse(do, 1, 10))
+    await asyncio.sleep(0.01)
     client.lock.release()
     await newer
     await asyncio.sleep(0.01)
     assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 1)]
+    assert sequencer.is_running(do)
+
+
+async def slow_coil(client):
+    """ The writes of the coils wait for the returned event, the event of the started write is .started """
+    release, started = asyncio.Event(), asyncio.Event()
+    write = client.mb_client.write_single_coil
+
+    async def slow(address, value):
+        started.set()
+        await release.wait()
+        await write(address, value)
+    client.mb_client.write_single_coil = slow
+    release.started = started
+    return release
+
+
+async def test_cancel_does_not_interrupt_the_write_of_a_step(units):
+    """ The task of the step was cancelled in the middle of its Modbus request """
+    client, = await units('1')
+    do = Devices.by_name(DO, '1_01')
+    await start_pulse(do, 1, 0.01)
+    release = await slow_coil(client)
+    await asyncio.wait_for(release.started.wait(), 1)       # the end of the pulse is being written
+    sequencer.cancel(do)
+    release.set()
+    await asyncio.sleep(0.02)
+    assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0)]      # the write was finished
     assert not sequencer.is_running(do)
+
+
+async def test_finish_all_waits_for_the_write_of_a_step(units):
+    """ The last step left the running sequences before its write, finish_all() did not wait for it """
+    client, = await units('1')
+    do = Devices.by_name(DO, '1_01')
+    await start_pulse(do, 1, 0.01)
+    release = await slow_coil(client)
+    await asyncio.wait_for(release.started.wait(), 1)
+    finish = asyncio.create_task(sequencer.finish_all())
+    await asyncio.sleep(0.01)
+    assert not finish.done()                                # waits for the write
+    release.set()
+    await finish
+    assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0)]
 
 
 async def test_nv_save_is_changed_under_the_lock(units):

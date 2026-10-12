@@ -16,6 +16,13 @@ class ReadOnlyAccess(Exception):
     pass
 
 
+class SequenceRunning(Exception):
+    """ A change of an output while a sequence of its sequencer runs, HTTP 409; the sequence is cancelled
+        by its sequencer
+    """
+    pass
+
+
 class UnitCommunicationError(UnitUnavailable):
     """ A request of a change of the Modbus unit failed, the writes before it are done;
         reported as UnitUnavailable, it is not an error of the request nor of Evok

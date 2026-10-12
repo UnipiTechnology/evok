@@ -173,13 +173,17 @@ async def test_cancel_by_the_sequencer(unit):
     assert seq.full()['running'] is False
 
 
-async def test_change_of_the_output_cancels_its_sequence(unit, events):
+async def test_change_of_the_output_is_refused_while_its_sequence_runs(unit, events):
+    from evok.errors import SequenceRunning
     await unit()
     seq = Devices[SEQUENCER]['do_1_01']
     await set_devices([(seq, {'value': 1, 'pulse_duration': 1})])
+    with pytest.raises(SequenceRunning):
+        await set_devices([(seq.output, {'value': 0})])
+    assert seq.full()['running'] is True
+    await set_devices([(seq, {'cancel': True})])
     await set_devices([(seq.output, {'value': 0})])
-    assert seq.full()['running'] is False
-    assert events.count(seq) == 2
+    assert events.count(seq) == 2                           # the start and the cancel
 
 
 @pytest.mark.parametrize('kw, error', [
@@ -218,3 +222,60 @@ async def test_rpc_output_get_has_the_running_pulse(unit):
     handler = Handler.__new__(Handler)
     await handler.output_set_for_time('1_01', 1, 1)
     assert handler.output_get('1_01')[1] is True             # the fake unit does not map the coil to its register
+
+
+async def test_every_step_sends_an_event(unit, monkeypatch):
+    await unit()
+    seq = Devices[SEQUENCER]['led_1_01']
+    progress = []
+
+    def record(device, **kw):
+        if device is seq:
+            progress.append((device.full()['running'], device.full()['step']))
+    monkeypatch.setattr(devents, 'status', record)
+    await set_devices([(seq, {'steps': [{'value': 1}, {'delay': 0.01, 'value': 0}, {'delay': 0.01, 'value': 1}]})])
+    await asyncio.sleep(0.06)
+    assert progress == [(True, 0), (True, 1), (True, 2), (False, None)]
+
+
+async def test_rejected_request_does_not_change_the_alias(unit):
+    await unit()
+    seq = Devices[SEQUENCER]['do_1_01']
+    with pytest.raises(ValueError):
+        await set_devices([(seq, {'alias': 'pump', 'steps': []})])
+    with pytest.raises(ValueError):
+        await set_devices([(seq, {'alias': 'pump', 'value': 1, 'pulse_duration': 0})])
+    assert seq.alias == ''
+
+
+async def test_alias_of_the_sequencer_sends_an_event(unit, events):
+    await unit()
+    seq = Devices[SEQUENCER]['do_1_01']
+    await set_devices([(seq, {'alias': 'pump_pulse'})])
+    assert seq.full()['alias'] == 'pump_pulse' and events == [seq]
+    assert Devices.by_name(SEQUENCER, 'pump_pulse') is seq
+
+
+async def test_rpc_pending_is_only_a_pulse(unit):
+    from evok.rpc_handler import Handler
+    await unit()
+    handler = Handler.__new__(Handler)
+    await set_devices([(Devices[SEQUENCER]['do_1_01'], {'steps': [{'value': 1}, {'delay': 10, 'value': 0}]})])
+    assert handler.output_get('1_01')[1] is False
+
+
+async def test_rpc_change_during_a_pulse_is_refused(unit):
+    from types import SimpleNamespace
+    from evok.rpc_handler import Handler, SequenceRunningError, create_response
+    await unit()
+    await set_devices([(Devices[SEQUENCER]['do_1_01'], {'value': 1, 'pulse_duration': 10})])
+    with pytest.raises(SequenceRunningError) as error:
+        await create_response(SimpleNamespace(method='output_set', params=['1_01', 0]), Handler.__new__(Handler))
+    assert error.value.error_code == -32002
+
+
+async def test_rest_change_during_a_pulse_is_409(unit):
+    from evok.errors import SequenceRunning
+    from evok.handlers_base import client_error
+    errors, status = client_error(SequenceRunning('DO 1_01: a sequence runs'))
+    assert (errors, status) == ({'SequenceRunning': 'DO 1_01: a sequence runs'}, 409)

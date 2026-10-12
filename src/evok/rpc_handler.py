@@ -9,7 +9,7 @@ from .auth import WRITE, TokenAuth
 from .blocks import sequencer, start_pulse
 from .devices import SENSOR, OWBUS, DI, DO, RO, AI, AO
 from .devices import Devices, DeviceNotFound, to_bool
-from .errors import UnitUnavailable
+from .errors import SequenceRunning, UnitUnavailable
 from .log import logger
 from .modbus import set_devices
 
@@ -28,6 +28,12 @@ class ReadOnlyAccessError(InvalidParams):
     """ The read_token of the configuration allows only the methods which read, a subclass as UnitUnavailableError """
     error_code = -32001         # a server error defined by the implementation
     short_message = "Forbidden"
+
+
+class SequenceRunningError(InvalidParams):
+    """ A change of an output while a sequence of its sequencer runs, a subclass as UnitUnavailableError """
+    error_code = -32002         # a server error defined by the implementation
+    short_message = "Sequence running"
 
 
 async def create_response(request, backend):
@@ -60,6 +66,8 @@ async def create_response(request, backend):
         raise InvalidParams(str(e))
     except UnitUnavailable as e:
         raise UnitUnavailableError(str(e))
+    except SequenceRunning as e:
+        raise SequenceRunningError(str(e))
     except Exception as e:
         # tornado_jsonrpc2 returned the message of the error to the client and did not log it
         logger.exception(f"RPC {request.method}: {e}")
@@ -143,8 +151,9 @@ class Handler(TokenAuth, JSONRPCHandler):
 
     def output_get(self, circuit):
         relay = Devices.by_name(DO, circuit)
-        # pending is the running pulse of the sequencer of blocks
-        return relay.get()['value'], sequencer.is_running(relay)
+        # pending is the running pulse of the sequencer of blocks, not another sequence
+        sequence = sequencer.sequence(relay)
+        return relay.get()['value'], sequence is not None and sequence.name == 'pulse'
 
     async def output_set(self, circuit, value):
         relay = Devices.by_name(DO, circuit)

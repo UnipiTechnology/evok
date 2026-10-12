@@ -32,7 +32,8 @@ of the table below or as an object with their names. With a `token` in the confi
 
 A value of an output is a boolean, also `0`, `1` or a string `'true'`, `'on'`, `'1'`, `'false'`, `'off'`, `'0'`. The `circuit` can be also an alias.
 The param `timeout` of `output_set_for_time` is a deprecated alias of `pulse_duration`. The pulses of RPC are set
-by the [sequencer](./sequencer.md) of the output, its state is not in the state of the output.
+by the [sequencer](./sequencer.md) of the output, its state is not in the state of the output; `pending` of
+`output_get` is true during a pulse, not during another sequence.
 
 ## Errors
 
@@ -43,6 +44,7 @@ by the [sequencer](./sequencer.md) of the output, its state is not in the state 
 | `-32603` | Internal error, the details are in the log of Evok                                         |
 | `-32000` | Unit unavailable: the Modbus unit failed its last scan, or a request of the change failed |
 | `-32001` | Forbidden: the `read_token` allows only the methods which read                            |
+| `-32002` | Sequence running: the output cannot be changed while its sequencer runs a pulse or sequence |
 
 ```rs title="Example"
 {'jsonrpc': '2.0', 'id': 0, 'error': {'code': -32602, 'message': "Invalid params: Circuit or alias with name '9_99' not defined!"}}
