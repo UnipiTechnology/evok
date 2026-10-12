@@ -9,7 +9,7 @@ from .devices import OWBUS, DEVICE_INFO, SENSOR, MODBUS_SLAVE, \
     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
     REGISTER, DATA_POINT, NV_SAVE
 from .auth import TokenAuth
-from .errors import DeviceNotFound, ReadOnlyAccess, UnitUnavailable
+from .errors import DeviceNotFound, ReadOnlyAccess, SequenceRunning, UnitUnavailable
 from .log import logger
 from .modbus import set_devices
 from .schemas import schemas
@@ -17,7 +17,8 @@ from .schemas import schemas
 SCHEMA_VALIDATE = True
 
 # errors of a request, reported to the client, other errors are internal
-CLIENT_ERRORS = (ValueError, DeviceNotFound, ReadOnlyAccess, UnitUnavailable, jsonschema.ValidationError)
+CLIENT_ERRORS = (ValueError, DeviceNotFound, ReadOnlyAccess, UnitUnavailable, SequenceRunning,
+                 jsonschema.ValidationError)
 
 
 def check_params(dev_type, kw):
@@ -60,6 +61,8 @@ def client_error(error) -> tuple[dict, int]:
         status = 403
     elif isinstance(error, UnitUnavailable):
         status = 503
+    elif isinstance(error, SequenceRunning):
+        status = 409
     else:
         status = 400
     return {type(error).__name__: message}, status

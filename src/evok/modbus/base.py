@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from ..blocks import sequencer
 from ..devices import Devices
+from ..errors import SequenceRunning
 from .client import Client
 
 
@@ -56,8 +57,8 @@ async def set_devices(assignments: list[tuple], states: dict | None = None) -> l
         set() of a device on a Modbus unit runs under the lock of its unit, it must not call set_devices()
         or Client.change() of the same unit: the lock is not reentrant, it would wait for itself forever.
 
-        A change of a device other than its alias cancels its running sequence of the sequencer of blocks,
-        e.g. a pulse; a rejected change keeps it.
+        A change of a device other than its alias is refused by SequenceRunning while a sequence of the sequencer
+        of blocks runs for it, e.g. a pulse; it is cancelled by the sequencer device.
     """
     states = {} if states is None else states
     units: dict = {}
@@ -70,9 +71,11 @@ async def set_devices(assignments: list[tuple], states: dict | None = None) -> l
 
         async def operation():
             for index, device, kw in items:
+                # under the lock of the unit, as the steps of the sequence
+                if set(kw) - {'alias'} and sequencer.is_running(device):
+                    raise SequenceRunning(f"{str(device.devtype).upper()} {device.circuit}: a sequence of "
+                                          f"its sequencer {device.devtype}_{device.circuit} runs, cancel it there")
                 await device.set(**kw)
-                if set(kw) - {'alias'}:
-                    sequencer.cancel(device)
                 done.append((index, device))
         try:
             if isinstance(unit, Client):

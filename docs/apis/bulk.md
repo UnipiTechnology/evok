@@ -52,7 +52,8 @@ With the `read_token` a request with an assignment is refused with the status 40
 All assignments are checked before any device is set. An unknown device type, circuit or alias is reported
 with the status 404, invalid params with the status 400, and no device is set.
 
-An error while setting a device is reported with the status 400 (e.g. a value out of range), 503
+An error while setting a device is reported with the status 400 (e.g. a value out of range), 409
+(an output with a running sequence of its [sequencer](./sequencer.md)), 503
 (a Modbus unit which failed its last scan, none of its devices is set, or a failed request of a change
 of the unit) or 500. The response contains the results
 of the units set before the error and of the assignments of its unit done before it, the following units are not set.

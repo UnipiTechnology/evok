@@ -12,6 +12,7 @@ from evok.blocks import attach, sequencer
 from evok.modbus.digital import BinaryOutput, DigitalInput, DigitalOutput, Relay, ULED
 from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
 from evok.modbus.special import NvSave, OwPower
+from evok.errors import SequenceRunning
 from evok.modbus import set_devices
 
 from conftest import make_client, scan
@@ -260,34 +261,28 @@ async def test_do_rejects_invalid_pulse(unit, kw):
     assert not sequencer.is_running(dev(DO, '1_01'))
 
 
-@pytest.mark.parametrize('kw', [
-    {'alias': 'pulsed'},                                    # does not change the output
-    {'value': 1, 'pwm_duty': 50},                           # rejected
-])
-async def test_do_pulse_is_kept(unit, kw):
+async def test_do_alias_during_pulse(unit):
     client = await unit()
     do = dev(DO, '1_01')
     await pulse(do, value=1, pulse_duration=0.01)
-    try:
-        await set_devices([(do, kw)])
-    except ValueError:
-        pass
+    await set_devices([(do, {'alias': 'pulsed'})])          # does not change the output
     assert running(do) is True
     await asyncio.sleep(0.05)
-    assert client.mb_client.writes[-1] == ('coil', 0, 0)
+    assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0)]
 
 
-@pytest.mark.parametrize('kw', [{'value': 1}, {'pwm_duty': 50}, {'pwm_freq': 100}])
-async def test_do_change_cancels_pulse(unit, kw):
-    """ Any change of the output except its alias cancels the pulse, also pwm_freq """
+@pytest.mark.parametrize('kw', [{'value': 0}, {'pwm_duty': 50}, {'pwm_freq': 100}, {'mode': 'Simple'},
+                                {'value': 0, 'alias': 'x'}])
+async def test_do_change_during_pulse_is_refused(unit, kw):
+    """ A change of the output is refused while its sequencer runs a pulse, the pulse ends as set """
     client = await unit()
     do = dev(DO, '1_01')
     await pulse(do, value=1, pulse_duration=0.01)
-    await set_devices([(do, kw)])
-    writes = list(client.mb_client.writes)
-    assert running(do) is False
+    with pytest.raises(SequenceRunning, match='a sequence of its sequencer do_1_01 runs'):
+        await set_devices([(do, kw)])
+    assert running(do) is True and do.alias == ''
     await asyncio.sleep(0.05)
-    assert client.mb_client.writes == writes               # no end of the pulse
+    assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0)]
 
 
 async def test_do_concurrent_pulses_keep_the_last(unit):
@@ -319,12 +314,13 @@ async def test_ro_pulse(relay):
     assert running(ro) is False
 
 
-async def test_ro_new_value_cancels_pulse(relay):
+async def test_ro_cancelled_pulse_allows_a_change(relay):
     client, ro = await relay()
     await pulse(ro, value=1, pulse_duration=0.01)
-    await set_devices([(ro, {'value': 0})])
+    await pulse(ro, cancel=True)
+    await set_devices([(ro, {'value': 1})])
     await asyncio.sleep(0.05)
-    assert client.mb_client.writes == [('coil', ro.coil, 1), ('coil', ro.coil, 0)]
+    assert client.mb_client.writes == [('coil', ro.coil, 1), ('coil', ro.coil, 1)]     # no end of the pulse
 
 
 @pytest.mark.parametrize('kw', [

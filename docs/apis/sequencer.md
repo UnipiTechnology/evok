@@ -5,9 +5,12 @@ a device of the type `sequencer` with the circuit `<output type>_<output circuit
 or `led_1_02`. The output itself has only its value (and the PWM of a DO), the parameters `pulse_duration`,
 `timeout` and the state `pending` of the outputs were replaced by the sequencer.
 
-At most one pulse or sequence runs for an output: a new one replaces it, a change of the output itself
-(except its alias) cancels it. When Evok stops, it writes the final state of the running sequences,
-an output is not left in the state of a pulse. After a crash of Evok the output stays in its state.
+At most one pulse or sequence runs for an output, a new one replaces it. While it runs, a change of the output
+itself (except its alias) is refused: REST, JSON and bulk with the status `409` (`SequenceRunning`), the WebSocket
+with the same error, RPC with the code `-32002`; cancel the sequence by its sequencer first. When Evok stops,
+it writes the final state of the running pulses and sequences which have one (`final`), an output is not left
+in the state of a pulse; a sequence without `final` leaves the output in its state. After a crash of Evok
+the output stays in its state.
 
 ## State
 
@@ -20,8 +23,8 @@ an output is not left in the state of a pulse. After a crash of Evok the output 
 - `name` - `pulse` or `sequence`, `null` when nothing runs
 - `step` / `steps` - the number of the done steps and of all steps of the running sequence
 
-An event of the sequencer is sent when a pulse or a sequence starts and ends, the changes of the output
-are sent as its own events.
+An event of the sequencer is sent when a pulse or a sequence starts, does a step and ends, the changes
+of the output are sent as its own events.
 
 ## Pulse
 

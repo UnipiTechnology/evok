@@ -953,7 +953,7 @@ paths:
       description: >-
         One of: *value* with *pulse_duration* sets the value of the output for a pulse; *steps* (and *final*)
         run a sequence of changes of the output; *cancel* stops the running sequence without its final state.
-        A change of the output itself cancels its running sequence.
+        While a sequence runs, a change of the output itself is refused with 409.
       responses:
         '200':
           description: OK
@@ -2185,6 +2185,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: A sequence of the sequencer of the output runs, cancel it there first.
         '503':
           $ref: '#/components/responses/Unavailable'
       operationId: post-rest-relay-circuit
@@ -2402,6 +2404,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: A sequence of the sequencer of the output runs, cancel it there first.
         '503':
           $ref: '#/components/responses/Unavailable'
       operationId: post-rest-output-circuit
@@ -2547,6 +2551,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: A sequence of the sequencer of the output runs, cancel it there first.
         '503':
           $ref: '#/components/responses/Unavailable'
       operationId: post-rest-led-circuit
