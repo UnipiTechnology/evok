@@ -68,11 +68,6 @@ async def send(client, message):
 @pytest.mark.parametrize('message, expected', [
     ({'value': 1}, {'value': 1}),
     ({'value': '0'}, {'value': '0'}),
-    # the pulse is split by set_devices() and started by the sequencer
-    ({'value': {'value': 1, 'timeout': 5}}, {'value': 1}),
-    ({'value': 1, 'timeout': '2'}, {'value': 1}),
-    ({'value': {'value': 1, 'pulse_duration': 5}}, {'value': 1}),
-    ({'value': 1, 'pulse_duration': '2'}, {'value': 1}),
     ({'pwm_duty': 50}, {'pwm_duty': 50}),
 ])
 async def test_set(ws, message, expected):
@@ -90,6 +85,9 @@ async def test_value_is_not_the_first_param(ws):
 @pytest.mark.parametrize('message', [
     {'cmd': 'set', 'dev': 'do', 'circuit': '1_01', 'bogus': 1},
     {'cmd': 'set', 'dev': 'do', 'circuit': '1_01', 'value': [1]},
+    # the pulse is set by the sequencer device of the output
+    {'cmd': 'set', 'dev': 'do', 'circuit': '1_01', 'value': 1, 'pulse_duration': 2},
+    {'cmd': 'set', 'dev': 'do', 'circuit': '1_01', 'value': 1, 'timeout': 2},
     {'cmd': 'check_new_data', 'dev': 'do', 'circuit': '1_01'},
     {'cmd': 'set_alias', 'dev': 'do', 'circuit': '1_01', 'value': 'x'},
     {'cmd': '__class__', 'dev': 'do', 'circuit': '1_01'},

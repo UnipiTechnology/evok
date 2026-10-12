@@ -95,7 +95,7 @@ Allows you to add a relay output for the Modbus device.
 ### LED (user LED)
 
 Allows you to add the user LEDs of the Modbus device (ULED), their [circuits](../circuit.md) are
-`<device_name>_<number>`. An LED is set as a relay output, by `value` and an optional `pulse_duration`.
+`<device_name>_<number>`. An LED is set as a relay output, by `value`; a pulse by its [sequencer](../apis/sequencer.md).
 
 - `val_coil` - coil address of the first LED, the next LEDs follow, optional. Without it, the value is written
   to the bit of `val_reg`, which has to be a holding register.

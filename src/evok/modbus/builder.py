@@ -12,6 +12,7 @@ from .analog import AnalogInput, AnalogOutput, AnalogOutputBrain,\
 from ..devices import \
     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
     REGISTER, DATA_POINT, NV_SAVE, Devices
+from ..blocks import attach
 from ..log import logger
 from .client import Client
 from .pwm import HardPwmFrequency, SoftPwmFrequency
@@ -32,6 +33,11 @@ class IOParser:
             self.client.eventable_devices.append(device)
         self.client.devices.append(device)
         Devices.register_device(devtype, device)
+
+    def _register_output(self, devtype, device):
+        """ An output with its sequencer device for the pulses and the sequences """
+        self._register(devtype, device)
+        attach(device)
 
     def io_circuit(self, i, m_feature):
         """ Circuit of the IO, start_index numbers the IOs of a feature following another one """
@@ -68,7 +74,7 @@ class IOParser:
             board_val_reg = self.bit_reg(m_feature['val_reg'], i)
             _r = Relay(self.io_circuit(i, m_feature), self.client, self.output_coil(m_feature, i),
                        board_val_reg, 0x1 << (i % 16), major_group=self.circuit)
-            self._register(RO, _r)
+            self._register_output(RO, _r)
 
     def parse_feature_do(self, max_count, m_feature):
         """ A DO without the PWM registers is a simple output """
@@ -87,14 +93,14 @@ class IOParser:
                                self.output_coil(m_feature, i), self.bit_reg(m_feature['val_reg'], i),
                                0x1 << (i % 16),
                                major_group=self.circuit, modes=m_feature.get('modes'), **pwm_params)
-            self._register(DO, _r)
+            self._register_output(DO, _r)
 
     def parse_feature_led(self, max_count, m_feature):
         for i in range(max_count):
             board_val_reg = self.bit_reg(m_feature['val_reg'], i)
             _led = ULED(self.io_circuit(i, m_feature), self.client, self.output_coil(m_feature, i),
                         board_val_reg, 0x1 << (i % 16), major_group=self.circuit)
-            self._register(LED, _led)
+            self._register_output(LED, _led)
 
     def parse_feature_owpower(self, m_feature):
         _owpower = OwPower(f"{self.circuit}", self.client, m_feature['val_coil'], major_group=self.circuit)

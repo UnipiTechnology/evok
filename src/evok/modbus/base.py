@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from ..blocks import pulse_params, sequencer
+from ..blocks import sequencer
 from ..devices import Devices
 from .client import Client
 
@@ -56,8 +56,8 @@ async def set_devices(assignments: list[tuple], states: dict | None = None) -> l
         set() of a device on a Modbus unit runs under the lock of its unit, it must not call set_devices()
         or Client.change() of the same unit: the lock is not reentrant, it would wait for itself forever.
 
-        pulse_duration of an output starts a pulse by the sequencer of blocks after the value has been set,
-        another change of a device than its alias cancels its running sequence; a rejected change keeps it.
+        A change of a device other than its alias cancels its running sequence of the sequencer of blocks,
+        e.g. a pulse; a rejected change keeps it.
     """
     states = {} if states is None else states
     units: dict = {}
@@ -70,12 +70,8 @@ async def set_devices(assignments: list[tuple], states: dict | None = None) -> l
 
         async def operation():
             for index, device, kw in items:
-                # checked before the write of the device
-                kw, sequence = pulse_params(device, kw)
                 await device.set(**kw)
-                if sequence is not None:
-                    sequencer.start(device, sequence)
-                elif set(kw) - {'alias'}:
+                if set(kw) - {'alias'}:
                     sequencer.cancel(device)
                 done.append((index, device))
         try:

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from ..blocks import sequencer
 from ..devices import DI, DO, RO, LED, Devices, to_bool, to_float
 from .base import IODevice
 from .client import Client, Accessor, AccessorBit, AccessorU16, AccessorU32
@@ -14,8 +13,7 @@ class BinaryOutput(IODevice):
         The value is written to the coil, an output without a coil writes the bit of its holding register
         (read-modify-write under the lock of the unit), e.g. a unit which has no coils.
 
-        A pulse (pulse_duration of the API) is a sequence of the sequencer of blocks, the output is pending
-        while it runs.
+        A pulse is a sequence of the sequencer of blocks, set by the sequencer device of the output.
     """
 
     def __init__(self, circuit, client: Client, coil: int | None, reg, mask, major_group=0):
@@ -32,7 +30,6 @@ class BinaryOutput(IODevice):
         return {'dev': self.devtype,
                 'circuit': self.circuit,
                 'value': self.value,
-                'pending': sequencer.is_running(self),
                 }
 
     async def check_new_data(self):
