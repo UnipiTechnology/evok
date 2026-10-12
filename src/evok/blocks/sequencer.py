@@ -13,7 +13,7 @@
 import asyncio
 from dataclasses import dataclass
 
-from ..devices import DO, devents, to_bool, to_float
+from ..devices import devents, to_bool, to_float
 from ..log import logger
 
 
@@ -41,17 +41,11 @@ def _name(device) -> str:
 
 
 def pulse_params(device, kw: dict) -> tuple[dict, Sequence | None]:
-    """ Split pulse_duration from the params of set() of an output, the pulse of the value; timeout of a DO is
-        its deprecated alias. Raise ValueError if they are invalid, before any write.
+    """ Split pulse_duration from the params, the pulse of the value of the output.
+        Raise ValueError if they are invalid, before any write.
     """
     kw = dict(kw)
     duration = kw.pop('pulse_duration', None)
-    if getattr(device, 'devtype', None) == DO and 'timeout' in kw:
-        timeout = kw.pop('timeout')
-        if timeout is not None:
-            if duration is not None:
-                raise ValueError(f'{_name(device)}: timeout is a deprecated alias of pulse_duration, do not set both')
-            duration = timeout
     if duration is None:
         return kw, None
     if kw.get('value') is None:
@@ -63,35 +57,70 @@ def pulse_params(device, kw: dict) -> tuple[dict, Sequence | None]:
     return kw, pulse(int(to_bool(kw['value'])), duration)
 
 
+@dataclass
+class Running:
+    task: asyncio.Task
+    sequence: Sequence
+    step: int = 0       # the number of the done steps
+
+
 class Sequencer:
-    """ The running sequences of the devices """
+    """ The running sequences of the devices, the listeners are called when a sequence starts or ends """
 
     def __init__(self):
-        self._running: dict[object, tuple[asyncio.Task, Sequence]] = {}
+        self._running: dict[object, Running] = {}
+        self._listeners: list = []
+
+    def subscribe(self, listener):
+        """ listener(device) is called when a sequence of the device starts or ends """
+        self._listeners.append(listener)
+
+    def _notify(self, device):
+        for listener in self._listeners:
+            try:
+                listener(device)
+            except Exception:
+                logger.exception(f"{_name(device)}: listener of the sequencer failed")
 
     def is_running(self, device) -> bool:
         return device in self._running
 
+    def running(self, device) -> Running | None:
+        """ The running sequence of the device and its progress """
+        return self._running.get(device)
+
     def sequence(self, device) -> Sequence | None:
         """ The running sequence of the device """
         entry = self._running.get(device)
-        return None if entry is None else entry[1]
+        return None if entry is None else entry.sequence
 
     def start(self, device, sequence: Sequence):
         """ Run the sequence of the device, it replaces the running one """
-        self.cancel(device)
-        task = asyncio.create_task(self._run(device, sequence))
-        self._running[device] = (task, sequence)
+        entry = self._running.pop(device, None)
+        if entry is not None:
+            entry.task.cancel()
+        self._running[device] = Running(asyncio.create_task(self._run(device, sequence)), sequence)
+        self._notify(device)
 
     def cancel(self, device):
         """ Stop the sequence of the device without its final state, e.g. a change by the API """
         entry = self._running.pop(device, None)
         if entry is not None:
-            entry[0].cancel()
+            entry.task.cancel()
+            self._notify(device)
 
     def cancel_all(self):
         for device in list(self._running):
             self.cancel(device)
+
+    def _end(self, device, task: asyncio.Task) -> bool:
+        """ Remove the sequence of the task if it is still the running one """
+        entry = self._running.get(device)
+        if entry is None or entry.task is not task:
+            return False
+        del self._running[device]
+        self._notify(device)
+        return True
 
     async def _run(self, device, sequence: Sequence):
         task = asyncio.current_task()
@@ -99,18 +128,17 @@ class Sequencer:
         try:
             for step_number, step in enumerate(sequence.steps, 1):
                 await asyncio.sleep(step.delay)
-                if not await self._apply(device, step.params, task, last=step_number == len(sequence.steps)):
+                last = step_number == len(sequence.steps)
+                if not await self._apply(device, step.params, task, step_number, last):
                     return
         except asyncio.CancelledError:
             raise
         except Exception:
             logger.exception(f"{_name(device)}: step {step_number} of the {sequence.name} failed")
         finally:
-            entry = self._running.get(device)
-            if entry is not None and entry[0] is task:
-                del self._running[device]
+            self._end(device, task)
 
-    async def _apply(self, device, params: dict, task: asyncio.Task | None = None, last=False) -> bool:
+    async def _apply(self, device, params: dict, task: asyncio.Task | None = None, step_number=0, last=False) -> bool:
         """ Set the params of a step, False if the sequence was cancelled or replaced meanwhile """
         applied = False
 
@@ -118,11 +146,12 @@ class Sequencer:
             nonlocal applied
             if task is not None:
                 entry = self._running.get(device)
-                if entry is None or entry[0] is not task:
+                if entry is None or entry.task is not task:
                     return
+                entry.step = step_number
                 if last:
-                    # the state read after the write is not pending
-                    del self._running[device]
+                    # the state read after the write is not running
+                    self._end(device, task)
             await device.set(**params)
             applied = True
 
@@ -139,9 +168,10 @@ class Sequencer:
         """ Stop the running sequences and write their final states, used on shutdown """
         entries = list(self._running.items())
         self._running.clear()
-        for task, _ in (entry for _, entry in entries):
-            task.cancel()
-        finals = [(device, sequence) for device, (_, sequence) in entries if sequence.final is not None]
+        for device, entry in entries:
+            entry.task.cancel()
+            self._notify(device)
+        finals = [(device, entry.sequence) for device, entry in entries if entry.sequence.final is not None]
         if not finals:
             return
         logger.info(f"Finishing {len(finals)} running sequences")

@@ -19,6 +19,7 @@ The circuit is created automatically during initialization of Evok according to 
 | Temp sensor         | *temp*         | <1-Wire_address\>                                 | `2895DCD509000035`         | 
 | Non-volatile memory | *nvsave*       | <device_name\>                                    | `1`, `2`, `xS51`           |
 | Modbus slave        | *modbus_slave* | <device_name\>                                    | `1`, `2`, `IAQ`            |
+| Sequencer           | *sequencer*    | <output_type\>_<output_circuit\>                 | `do_1_01`, `led_xS51_02`   |
 | Modbus RTU bus      | *serial_bus*   | <bus_name\>                                       | `RS485_1`                  |
 | Modbus TCP bus      | *tcp_bus*      | <bus_name\>                                       | `LOCAL_TCP`                |
 | Device info         | *device_info*  | <model_name\> (grouped) / <device_name\> (single) | `L533`, `S167`, `xS51`     |

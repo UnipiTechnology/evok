@@ -6,6 +6,7 @@ from tornado_jsonrpc2 import JSONRPCHandler
 from tornado_jsonrpc2.exceptions import InternalError, InvalidParams, MethodNotFound
 
 from .auth import WRITE, TokenAuth
+from .blocks import sequencer, start_pulse
 from .devices import SENSOR, OWBUS, DI, DO, RO, AI, AO
 from .devices import Devices, DeviceNotFound, to_bool
 from .errors import UnitUnavailable
@@ -136,14 +137,14 @@ class Handler(TokenAuth, JSONRPCHandler):
         return value
 
     async def relay_set_for_time(self, circuit, value, pulse_duration):
+        """ A pulse by the sequencer of blocks """
         relay = Devices.by_name(RO, circuit)
-        state, = await set_devices([(relay, dict(value=value, pulse_duration=pulse_duration))])
-        return state
+        return await start_pulse(relay, value, pulse_duration)
 
     def output_get(self, circuit):
         relay = Devices.by_name(DO, circuit)
-        state = relay.get()
-        return state['value'], state['pending']
+        # pending is the running pulse of the sequencer of blocks
+        return relay.get()['value'], sequencer.is_running(relay)
 
     async def output_set(self, circuit, value):
         relay = Devices.by_name(DO, circuit)
@@ -158,9 +159,8 @@ class Handler(TokenAuth, JSONRPCHandler):
         if pulse_duration is None:
             pulse_duration = timeout
         relay = Devices.by_name(DO, circuit)
-        # pulse_duration is checked by set_devices(), a positive finite number
-        state, = await set_devices([(relay, dict(value=value, pulse_duration=pulse_duration))])
-        return state
+        # pulse_duration is checked by the sequencer of blocks, a positive finite number
+        return await start_pulse(relay, value, pulse_duration)
 
     # ---- Analog Input ----
     def ai_get(self, circuit):

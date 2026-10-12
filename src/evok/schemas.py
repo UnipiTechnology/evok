@@ -25,7 +25,6 @@ led_post_inp_schema = {
     "additionalProperties": False,
     "properties": {
         "value": {"type": ["boolean", "string", "number"]},
-        "pulse_duration": {"type": ["number", "string"], "minimum": 0},   # 0 is rejected by the device
         "alias": ALIAS
     },
 }
@@ -39,7 +38,6 @@ relay_post_inp_schema = {
     "additionalProperties": False,
     "properties": {
         "value": {"type": ["boolean", "string", 'number']},
-        "pulse_duration": {"type": ["number", "string"], "minimum": 0},   # 0 is rejected by the device
         "alias": ALIAS
     },
 }
@@ -54,8 +52,6 @@ do_post_inp_schema = {
     "properties": {
         "value": {"type": ["boolean", "string", 'number']},
         "mode": {"type": "string"},
-        "pulse_duration": {"type": ["number", "string"], "minimum": 0},   # 0 is rejected by the device
-        "timeout": {"type": ["number", "string"], "minimum": 0},          # deprecated alias of pulse_duration
         "pwm_freq": {"type": ["number", "string"], "minimum": 0},     # 0 is rejected by the device
         "pwm_duty": {"type": ["number", "string"], "minimum": 0, "maximum": 100},
         "alias": ALIAS
@@ -329,6 +325,24 @@ bulk_post_inp_example = {
 }
 
 
+sequencer_post_inp_schema = {
+    "$schema": SCHEMA,
+    "title": "Sequencer",
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "value": {"type": ["boolean", "string", "number"]},
+        "pulse_duration": {"type": ["number", "string"], "minimum": 0},   # 0 is rejected by the sequencer
+        # {"delay": seconds, <the params of the output>}, the params are checked by the schema of the output
+        "steps": {"type": "array", "items": {"type": "object"}},
+        "final": {"type": "object"},
+        "cancel": {"type": ["boolean", "string", "number"]},
+        "alias": ALIAS
+    },
+}
+
+sequencer_post_inp_example = {"value": 1, "pulse_duration": 2}
+
 schemas: dict[str, tuple[dict, dict]] = {
     'input': (di_post_inp_schema, di_post_inp_example),
     'output': (do_post_inp_schema, do_post_inp_example),
@@ -345,6 +359,7 @@ schemas: dict[str, tuple[dict, dict]] = {
     'owpower': (owpower_post_inp_schema, owpower_post_inp_example),
     'run': (run_post_inp_schema, run_post_inp_example),
     'nv_save': (nv_save_post_inp_schema, nv_save_post_inp_example),
+    'sequencer': (sequencer_post_inp_schema, sequencer_post_inp_example),
 }
 schemas['di'] = schemas['input']
 schemas['digitalinput'] = schemas['input']

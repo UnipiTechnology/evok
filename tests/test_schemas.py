@@ -3,7 +3,8 @@ import inspect
 import jsonschema
 import pytest
 
-from evok.devices import Aliases, devtype_of
+from evok.blocks import SequencerDevice
+from evok.devices import Aliases
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, Register
 from evok.modbus.digital import DigitalInput, DigitalOutput, Relay, ULED
 from evok.modbus.scanner import ModbusScanner
@@ -28,6 +29,7 @@ SET_CLASSES = {
     'owbus': [OwBusDriver],
     'modbus_slave': [ModbusScanner],
     'run': [Aliases],
+    'sequencer': [SequencerDevice],
 }
 
 
@@ -42,15 +44,11 @@ def test_every_schema_has_set_classes():
     assert set(schemas) == set(SET_CLASSES)
 
 
-# the params of a pulse are split by set_devices(), the pulse is a sequence of the sequencer of blocks
-PULSE_PARAMS = {'ro': {'pulse_duration'}, 'led': {'pulse_duration'}, 'do': {'pulse_duration', 'timeout'}}
-
-
 @pytest.mark.parametrize('dev', schemas)
 def test_schema_matches_set_params(dev):
     properties = set(schemas[dev][0]['properties'])
     for cls in SET_CLASSES[dev]:
-        assert properties == set_params(cls) | PULSE_PARAMS.get(devtype_of(dev), set()), cls.__name__
+        assert properties == set_params(cls), cls.__name__
 
 
 @pytest.mark.parametrize('kw', [
@@ -119,11 +117,20 @@ from evok.handlers_base import check_params
     ('register', {'value': '70000'}), ('register', {'value': '-1'}),          # the range of strings
     ('do', {'pwm_duty': '150'}), ('do', {'pwm_freq': '-5'}),
     ('di', {'counter': '4294967296'}), ('wd', {'timeout': '-1'}),
-    ('do', {'value': 1, 'pulse_duration': '-1'}), ('do', {'value': 1, 'timeout': 'inf'}),
-    ('di', {'debounce': '65536'}), ('ro', {'value': 1, 'pulse_duration': '-1'}), ('led', {'value': 1, 'pulse_duration': '-1'}),
+    ('di', {'debounce': '65536'}), ('sequencer', {'value': 1, 'pulse_duration': '-1'}),
 ])
 def test_check_params_rejects(dev, kw):
     with pytest.raises(ValueError):
+        check_params(dev, kw)
+
+
+@pytest.mark.parametrize('dev, kw', [
+    ('do', {'value': 1, 'pulse_duration': 1}), ('do', {'value': 1, 'timeout': 1}),
+    ('ro', {'value': 1, 'pulse_duration': 1}), ('led', {'value': 1, 'pulse_duration': 1}),
+])
+def test_outputs_have_no_pulse_params(dev, kw):
+    """ The pulse is set by the sequencer device of the output """
+    with pytest.raises(jsonschema.ValidationError):
         check_params(dev, kw)
 
 

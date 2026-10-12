@@ -132,7 +132,6 @@ paths:
                     - dev: do
                       circuit: '1_01'
                       value: 0
-                      pending: false
                       mode: Simple
                       modes:
                         - Simple
@@ -142,7 +141,6 @@ paths:
                     - dev: do
                       circuit: '1_02'
                       value: 0
-                      pending: false
                       mode: Simple
                       modes:
                         - Simple
@@ -152,7 +150,6 @@ paths:
                     - dev: do
                       circuit: '1_03'
                       value: 0
-                      pending: false
                       mode: Simple
                       modes:
                         - Simple
@@ -162,7 +159,6 @@ paths:
                     - dev: do
                       circuit: '1_04'
                       value: 0
-                      pending: false
                       mode: Simple
                       modes:
                         - Simple
@@ -900,6 +896,110 @@ paths:
         - Setter
       x-stoplight:
         id: pb226k2jw0w0t
+  '/{format}/sequencer/{circuit}':
+    get:
+      summary: Read the sequencer of an output
+      description: The running pulse or sequence of an output (RO, DO, LED). The circuit is the type and the circuit of the output, e.g. `do_1_01`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/Sequencer'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Sequencer'
+              examples:
+                pulse:
+                  value:
+                    dev: sequencer
+                    circuit: do_1_01
+                    output: {dev: do, circuit: '1_01'}
+                    running: true
+                    name: pulse
+                    step: 0
+                    steps: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: read-sequencer-object
+      tags:
+        - Sequencer
+        - Getter
+    parameters:
+      - schema:
+          type: string
+          examples: ['do_1_01']
+        name: circuit
+        in: path
+        required: true
+        description: The type and the circuit of the output (or "all"), e.g. `ro_2_01`, `led_1_02`.
+      - name: format
+        in: path
+        required: true
+        schema:
+          type: string
+          examples: [json]
+          enum:
+            - json
+            - rest
+          default: json
+        description: Content type - use "json" for application/json OR "rest" for text/html.
+    post:
+      summary: Start a pulse or a sequence of an output
+      description: >-
+        One of: *value* with *pulse_duration* sets the value of the output for a pulse; *steps* (and *final*)
+        run a sequence of changes of the output; *cancel* stops the running sequence without its final state.
+        A change of the output itself cancels its running sequence.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    $ref: '#/components/schemas/Status'
+                  result:
+                    $ref: '#/components/schemas/Sequencer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: The Modbus unit of the output is not available.
+      operationId: post-rest-sequencer-circuit
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Sequencer_params'
+            examples:
+              pulse:
+                value: {value: 1, pulse_duration: 2}
+              sequence:
+                value:
+                  steps:
+                    - {value: 1}
+                    - {delay: 0.5, value: 0}
+                    - {delay: 0.5, value: 1}
+                  final: {value: 0}
+              cancel:
+                value: {cancel: true}
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Sequencer_params'
+      tags:
+        - Sequencer
+        - Setter
   '/{format}/temp/{circuit}':
     get:
       summary: Read 1-Wire temperature sensor
@@ -3237,11 +3337,6 @@ components:
               examples: ['2_01', '2_02', '2_03', '2_04']
               description: Device circuit (or "all"). You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
               readOnly: true
-            pending:
-              type: boolean
-              examples: [false]
-              description: True during a pulse set by *pulse_duration*.
-              readOnly: true
         - $ref: '#/components/schemas/Relay_output_params'
           x-stoplight:
             id: 2b4dkqf8rzvj3
@@ -3266,12 +3361,6 @@ components:
             - string
             - boolean
           description: Parameter for relay switch.
-        pulse_duration:
-          type:
-            - number
-            - string
-          examples: [0.5, 5]
-          description: Duration of a single pulse in seconds, the output is set to the opposite of *value* after it. Requires *value*, the output is *pending* during the pulse. The pulse is timed by Evok, it is ended on shutdown, but not after a crash of Evok.
     Digital_output:
       title: Digital output
       allOf:
@@ -3295,11 +3384,6 @@ components:
                 - ["Simple", "PWM"]
               items:
                 type: string
-            pending:
-              type: boolean
-              examples: [false]
-              description: True during a pulse set by *pulse_duration*.
-              readOnly: true
         - $ref: '#/components/schemas/Digital_output_params'
           x-stoplight:
             id: 2b4dkqf321vj3
@@ -3344,18 +3428,6 @@ components:
             - string
             - boolean
           description: Parameter is mutually exclusive with *pwm_duty*
-        pulse_duration:
-          type:
-            - number
-            - string
-          examples: [0.5, 5]
-          description: Duration of a single pulse in seconds, the output is set to the opposite of *value* after it. Requires *value*, the output is *pending* during the pulse. The pulse is timed by Evok, it is ended on shutdown, but not after a crash of Evok.
-        timeout:
-          type:
-            - number
-            - string
-          deprecated: true
-          description: Deprecated alias of *pulse_duration*, cannot be used together with it.
         mode:
           readOnly: true
           enum:
@@ -3669,12 +3741,6 @@ components:
           x-stoplight:
             id: 5qx17mlwxozy2
           description: Actual value of single user LED.
-        pulse_duration:
-          type:
-            - number
-            - string
-          examples: [0.5, 5]
-          description: Duration of a single pulse in seconds, the LED is set to the opposite of *value* after it. Requires *value*, the LED is *pending* during the pulse. The pulse is timed by Evok, it is ended on shutdown, but not after a crash of Evok.
       examples:
         - dev: led
           circuit: 1_01
@@ -3700,11 +3766,6 @@ components:
               type: string
               examples: ['1_01', '1_02', '1_03']
               description: Device circuit (or "all"). You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
-              readOnly: true
-            pending:
-              type: boolean
-              examples: [false]
-              description: True during a pulse set by *pulse_duration*.
               readOnly: true
         - $ref: '#/components/schemas/Led_params'
           x-stoplight:
@@ -3971,6 +4032,70 @@ components:
           items:
             type: string
           description: Names of the Modbus devices of the bus.
+    Sequencer:
+      title: Sequencer of an output
+      description: The running pulse or sequence of an output, read-only.
+      type: object
+      properties:
+        dev:
+          type: string
+          examples: ['sequencer']
+          readOnly: true
+        circuit:
+          type: string
+          examples: ['do_1_01']
+          description: The type and the circuit of the output.
+          readOnly: true
+        output:
+          type: object
+          properties:
+            dev: {type: string, examples: [do]}
+            circuit: {type: string, examples: ['1_01']}
+          readOnly: true
+        running:
+          type: boolean
+          description: A pulse or a sequence is running, the former *pending* of the output.
+          readOnly: true
+        name:
+          type: [string, 'null']
+          enum: [pulse, sequence, null]
+          readOnly: true
+        step:
+          type: [integer, 'null']
+          description: The number of the done steps of the running sequence.
+          readOnly: true
+        steps:
+          type: [integer, 'null']
+          description: The number of the steps of the running sequence.
+          readOnly: true
+        alias:
+          type: string
+    Sequencer_params:
+      title: Parameters of the sequencer
+      type: object
+      properties:
+        value:
+          type: [integer, string, boolean]
+          description: The value of the output for the pulse, it requires *pulse_duration*.
+        pulse_duration:
+          type: [number, string]
+          examples: [0.5, 5]
+          description: Duration of the pulse in seconds, the output is set to the opposite of *value* after it.
+                       The pulse is timed by Evok, it is ended on shutdown, but not after a crash of Evok.
+        steps:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            description: '*delay* in seconds before the step (0 by default) and the parameters of the output, e.g. {"delay": 0.5, "value": 0}.'
+        final:
+          type: object
+          description: The parameters of the output written when the sequence is ended on shutdown.
+        cancel:
+          type: [boolean, string, integer]
+          description: Stop the running sequence without its final state.
+        alias:
+          type: string
     Owpower:
       title: 1-Wire power supply
       x-stoplight:
@@ -4584,6 +4709,8 @@ tags:
     description: Superclass of Device info.
   - name: Modbus slave
     description: Information about modbus slave (last_comm, modbus_spec, scan_interval, ...)
+  - name: Sequencer
+    description: Pulses and sequences of the outputs (RO, DO, LED) timed by Evok.
   - name: Modbus bus
     description: Configuration of a Modbus RTU or TCP bus and its Modbus devices, read-only.
   - name: Non-volatile memory

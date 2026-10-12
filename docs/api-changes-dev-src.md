@@ -45,6 +45,10 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - **1-Wire sensors of the configuration:** no `lost: true` event right after the start or a reconnection to owserver,
   a sensor is read after the bus finds it. A sensor which the search of the bus has not found is reported lost.
   — `5fa3eca`
+- **RO, DO, LED:** no `pulse_duration`, `timeout` (DO) and `pending`, a pulse is set by the sequencer of the output
+  (`/rest/sequencer/<type>_<circuit>`, `running` instead of `pending`). Any change of the output except its alias
+  cancels its pulse, also `pwm_freq` of a DO. The RPC methods `*_set_for_time` and `output_get` stay.
+  — #75
 
 ### Circuits by the HW definitions
 
@@ -91,9 +95,10 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - `POST /modbus_slave/{circuit}` with `scan_enabled` and the alias. `full()` returns `scan_enabled` and `scan_error`.
   — `2319b2b`, `96ba320`, `d1add77`
 - Data points can be written by `writable`, `full()` returns it. — `eb4eda5`, `e792e17`
-- `pulse_duration` and `pending` also for RO and LED, the RPC method `relay_set_for_time`. — `e16a3bf`
-- A pulse is a sequence of the sequencer of Evok (`evok.blocks`), any change of the output except its alias
-  cancels it, also `pwm_freq` of a DO. — PR blocks-sequencer
+- **Sequencer** of each output (RO, DO, LED), the device `sequencer` with the circuit `<type>_<circuit>`
+  (`/rest/sequencer/do_1_01`): a pulse (`value`, `pulse_duration`), a sequence of the changes of the output
+  (`steps`, `final`) or `cancel`; its state has `running` and the progress, an event at the start and the end.
+  The RPC method `relay_set_for_time`. — `e16a3bf`, #75
 - The reply to POST, bulk and the WebSocket `set` has the state after the writes and the event comes at once.
   — `a3f4679`
 - **New events:** — `60e2287`, `08d9f56`, `62b37ef`, `891bd4a`
@@ -113,7 +118,7 @@ the HW definitions. The incompatible changes come first. Every change names its 
 
 - `counter_mode` and `counter_modes` of a DI. `Disabled` only reports the counter as 0, the mode is not saved.
   — `a5d8065`
-- `timeout` of a DO is an alias of `pulse_duration`. — `e16a3bf`
+- The param `timeout` of the RPC method `output_set_for_time` is an alias of `pulse_duration`. — `e16a3bf`
 - `nv_sav_coil` of the WD feature is not used, the settings are saved by the NV_SAVE feature. — `f298e87`
 - `frequency` of a register block is a deprecated alias of `scan_divider`, a warning is logged, both in one block
   are an error. The value is a divider of the scans, not a frequency. — `d95f57a`
