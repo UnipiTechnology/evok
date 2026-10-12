@@ -1,37 +1,22 @@
 import asyncio
-import logging
 import math
+import typing
 
 from .devices import SENSOR, OWBUS, OWPOWER
 from .devices import devents, Devices, to_bool  # noqa: F401, to_bool is used also by tests
 from .log import logger
 from .modbus import set_devices
+from . import w1
+from .w1 import address_key  # noqa: F401, used also by tests
 
 import anyio
-from asyncowfs import OWFS
-from asyncowfs import event
 
 MAX_LOSTINTERVAL = 300  # 5 minutes
-RECONNECT_DELAY = 10  # s, the next connection to owserver after a failure
-OWSERVER_HOST = '127.0.0.1'
-OWSERVER_PORT = 4304
-STRUCT_TIMEOUT = 10  # s, the wait for the setup of the device class by another bus
-
-
-class _NoStartErrorFilter(logging.Filter):
-    """ asyncowfs logged 'Could not start 127.0.0.1:4304 CancelledError(...)' on every attempt to connect,
-        the bus logs the reason itself
-    """
-    def filter(self, record):
-        return not record.getMessage().startswith('Could not start')
-
-
-logging.getLogger('asyncowfs.service').addFilter(_NoStartErrorFilter())
+RECONNECT_DELAY = 10  # s, the next attempt to use the 1-Wire master after a failure
 
 
 def leaf_error(error: BaseException) -> BaseException:
-    """ The first error in the nested exception groups of anyio and the cause of an OSError,
-        e.g. ConnectionRefusedError of OSError('All connection attempts failed')
+    """ The first error in the nested exception groups of anyio and the cause of an OSError
     """
     while True:
         if isinstance(error, BaseExceptionGroup) and error.exceptions:
@@ -50,28 +35,8 @@ def check_interval(interval, name='interval', zero=False):
     return interval
 
 
-def address_key(address) -> str:
-    """ The family and the serial number of a 1-Wire address, without the dots and the CRC, in upper case
-
-        owserver names a device 28.A1B2C3D4E5F6.7B, an address of the configuration without the CRC,
-        without the dots or in lower case was never found
-    """
-    return str(address).replace('.', '').strip().upper()[:14]
-
-
 # the sensor types created by MySensorFabric, DS2404 has no PIO, its read always failed
 SUPPORTED_DEVICES = ["DS18S20", "DS18B20", "DS2438", "DS2408", "DS2406", "DS2413"]
-
-
-async def wait_for_struct(device, timeout=STRUCT_TIMEOUT):
-    """ Wait until the class of the asyncowfs device has its accessors (get_type)
-
-        The classes are shared by all OWFS buses by the family, the setup by one bus is in progress
-        (_did_setup None) and another bus located its device without the accessors, its bus failed.
-    """
-    with anyio.move_on_after(timeout):
-        while type(device)._did_setup is None:
-            await anyio.sleep(0.05)
 
 
 class NotSupportedError(ValueError):
@@ -195,21 +160,23 @@ class DS2438(MySensor):  # vdd + vad + thermometer
             ret['alias'] = self.alias
         return ret
 
-    async def read_attribute(self, sens, field):
-        if type(field) is list:
-            fname = '.'.join(field)
-            setattr(self, fname, await sens.get(*field))
-        else:
-            setattr(self, field, await sens.get(field))
-
     def _values(self):
         return {name: getattr(self, name, None) for name in self.FIELDS}
 
+    @staticmethod
+    def hih4000_humidity(vad, vdd, temperature) -> float | None:
+        """ The relative humidity of a HIH4000 at VAD, computed as by owfs """
+        if not vdd:
+            return None
+        return round((vad / vdd - 0.16) / (0.0062 * (1.0546 - 0.00216 * temperature)), 2)
+
     async def read_val_from_sens(self, sens) -> bool:
+        """ The reads of a device are serialized by the kernel, they are done one after another """
         old_values = self._values()
-        async with anyio.create_task_group() as tg:
-            for f in ('temperature', ['HIH4000', 'humidity'], 'VDD', 'VAD', 'vis'):
-                tg.start_soon(self.read_attribute, sens, f)
+        values = {field: await sens.get(field) for field in ('temperature', 'VDD', 'VAD', 'vis')}
+        values['HIH4000.humidity'] = self.hih4000_humidity(values['VAD'], values['VDD'], values['temperature'])
+        for field, value in values.items():
+            setattr(self, field, value)
         # the value used by get() and get_value() in RPC
         self.value = (getattr(self, 'VDD', None), getattr(self, 'VAD', None), getattr(self, 'temperature', None),
                       getattr(self, 'IAD', None))
@@ -260,10 +227,11 @@ def MySensorFabric(address, sensor_type, bus, interval=None, circuit=None):
 class OwBusDriver:
 
     def __init__(self, circuit, interval=60, scan_interval=300, major_group=1,
-                 owpower_circuit=None, host=OWSERVER_HOST, port=OWSERVER_PORT):
+                 owpower_circuit=None, master=None):
+        """ master is the name of the 1-Wire master of the kernel, the first one by default """
         self.bus_driver = self
-        self.host = host
-        self.port = port
+        self.master = master
+        self.master_name = master       # the used master, also the first one found
         self.devtype = OWBUS
         self.circuit = circuit
         self.major_group = major_group
@@ -272,18 +240,18 @@ class OwBusDriver:
         self.interval = check_interval(interval)
         self.scanned = set()
         self.mysensors = list()
-        self.ow = None
         self.owpower_circuit = owpower_circuit
         self._wakeup = None     # the event waking up poll()
         self._scan_wakeup = None    # the event waking up scanning()
         self._scan_requested = False
         self._logged_error = None   # (type, text) of the logged failure, the same one is not logged again
-        self._skipped = set()       # the address keys of the found sensors skipped for their circuit, warned once
+        self._skipped = set()       # the address keys of the found sensors not created, logged once
 
     def full(self):
         return {'dev': 'owbus',
                 'circuit': self.circuit,
                 'bus': 'OWFS',
+                'master': self.master_name,
                 'scan_interval': self.scan_interval,
                 'interval': self.interval,
                 'do_scan': False,
@@ -298,7 +266,7 @@ class OwBusDriver:
         self._run_task = asyncio.create_task(self.run_forever())
 
     async def run_forever(self):
-        """ Run the bus, connect to owserver again after a failure """
+        """ Run the bus, use the master again after a failure, e.g. its driver was not loaded """
         while True:
             try:
                 await self.run()
@@ -306,7 +274,7 @@ class OwBusDriver:
                 raise
             except Exception as E:
                 self._log_failure(E)
-            # the devices are located again after the connection
+            # the devices are located again by the next scan
             for mysensor in self.mysensors:
                 mysensor.sens = None
                 mysensor.set_lost()
@@ -316,22 +284,22 @@ class OwBusDriver:
         """ Log the reason of the failure once until the next connection, it was an ExceptionGroup of anyio """
         error = leaf_error(error)
         if isinstance(error, OSError):
-            message = (f"1-Wire bus {self.circuit}: cannot connect to owserver at {self.host}:{self.port}, "
-                       f"is owserver running? {type(error).__name__}: {error}")
+            message = (f"1-Wire bus {self.circuit}: cannot use the 1-Wire master, is its driver loaded "
+                       f"(e.g. ds2482)? {type(error).__name__}: {error}")
         else:
             message = f"1-Wire bus {self.circuit} failed: {type(error).__name__}: {error}"
         kind = (type(error), str(error))
         if kind != self._logged_error:
             self._logged_error = kind
-            logger.error(f"{message}; connecting again every {RECONNECT_DELAY} s, the next errors are not logged")
+            logger.error(f"{message}; trying again every {RECONNECT_DELAY} s, the next errors are not logged")
         else:
             logger.debug(message)
 
     def _log_connected(self):
-        """ The connection ends a failed connection, another failure of the bus repeats after every connection,
+        """ The master found ends a missing master, another failure of the bus repeats after every start,
             it is logged once
         """
-        message = f"1-Wire bus {self.circuit} connected to owserver at {self.host}:{self.port}"
+        message = f"1-Wire bus {self.circuit} uses the master {self.master_name}"
         if self._logged_error is None or issubclass(self._logged_error[0], OSError):
             self._logged_error = None
             logger.info(message)
@@ -398,7 +366,7 @@ class OwBusDriver:
         return next((x for x in self.mysensors if address_key(x.address) == key), None)
 
     def do_scan(self):
-        """ Search the bus at once """
+        """ Read the sensors found by the kernel at once, the kernel searches the bus every 10 s """
         self._scan_requested = True
         self._wake_scanning()
 
@@ -419,32 +387,39 @@ class OwBusDriver:
         else:
             raise NotSupportedError("1W reset is not supported on this device!")
 
-    # Running async tasks: scanning, poll, mon
-    async def scanning(self, server):
-        """ Search the bus after the connection, then every scan_interval, with 0 only on request """
+    # Running async tasks: scanning, poll
+    async def scanning(self, master: w1.W1Master):
+        """ Take the sensors found by the kernel after the start, then every scan_interval, with 0 only on request """
         while True:
             # a request during the scan scans again
             self._scan_requested = False
-            async with self.bus_lock:
-                try:
-                    await server.scan_now(polling=False)
-                except Exception as E:
-                    logger.error(f"1-Wire bus {self.circuit}: scan failed: {type(E).__name__}: {E}")
-                else:
-                    self._report_not_located(server.service)
+            # a failure of the master ends the bus, it is used again after RECONNECT_DELAY
+            self._update(master, await master.slaves())
             await self._wait_for_scan()
 
-    def _report_not_located(self, service):
-        """ A sensor of the configuration which the scan has not located is lost
-
-            The located devices are taken from asyncowfs, mon() gets their DeviceLocated by a queue
-            and may not have assigned them yet.
-        """
-        located = {address_key(dev.id) for dev in service.devices if dev.bus is not None}
+    def _update(self, master: w1.W1Master, names: "typing.List[str]"):
+        """ Assign the found devices to the sensors, create the found ones, a sensor not found is lost """
+        found = {address_key(name): name for name in names}
+        for key, name in found.items():
+            mysensor = self._find_sensor(key)
+            if mysensor is None:
+                mysensor = self._create_found(w1.owfs_address(name), w1.FAMILY_TYPES.get(int(name[:2], 16)))
+            elif mysensor.sens is None:
+                logger.info(f"Sensor {mysensor.circuit} found")
+            if mysensor is not None and mysensor.sens is None:
+                # read at once, poll() reports the recovery of a lost sensor
+                mysensor.sens = master.device(name)
+                mysensor.time = 0
+                self.wake()
         for mysensor in self.mysensors:
-            if mysensor.sens is None and not mysensor.lost and address_key(mysensor.address) not in located:
+            if address_key(mysensor.address) in found:
+                continue
+            if mysensor.sens is not None:
+                logger.info(f"Sensor {mysensor.circuit} ({mysensor.address}) disappeared")
+            elif not mysensor.lost:
                 logger.info(f"Sensor {mysensor.circuit} ({mysensor.address}) not found on the bus")
-                mysensor.set_lost()
+            mysensor.sens = None
+            mysensor.set_lost()
 
     async def _wait_for_scan(self):
         """ Wait for scan_interval or do_scan(), a change of scan_interval starts the wait again """
@@ -464,8 +439,8 @@ class OwBusDriver:
         """
 
         while True:
-            # a sensor without its asyncowfs device is not located yet or disappeared, its read failed
-            # and reported it lost at the start; mon() wakes poll() when it is located
+            # a sensor without its device is not found yet or disappeared, its read failed
+            # and reported it lost at the start; the scan wakes poll() when it is found
             located = [x for x in self.mysensors if x.sens is not None]
             if not located:
                 await self._sleep(self.interval)
@@ -495,52 +470,31 @@ class OwBusDriver:
         if changed or was_lost:
             devents.status(mysensor)
 
-    async def mon(self, ow):
-        async with ow.events as events:
-            async for msg in events:
-                logger.debug("%s", msg)
-                if isinstance(msg, event.DeviceLocated):
-                    await wait_for_struct(msg.device)
-                    sensor_type = await msg.device.get_type()
-                    address = msg.device.id
-                    mysensor = self._find_sensor(address)
-                    if mysensor is not None:
-                        logger.info(f"Sensor {mysensor.circuit} found")
-                    else:
-                        mysensor = self._create_found(address, sensor_type)
-                    if mysensor:
-                        # read at once, poll() reports the recovery of a lost sensor
-                        mysensor.sens = msg.device
-                        mysensor.time = 0
-                        self.wake()
-
-                elif isinstance(msg, event.DeviceNotFound):
-                    address = msg.device.id
-                    mysensor = self._find_sensor(address)
-                    if mysensor is not None:
-                        logger.info(f"Sensor {address} disappeared")
-                        mysensor.sens = None
-                        mysensor.set_lost()
-
     def _create_found(self, address, sensor_type):
-        """ Create a found sensor, a sensor with the circuit of a created one is skipped and warned once """
+        """ Create a found sensor; an unsupported one and one with the circuit of a created sensor
+            are skipped, logged once, the kernel lists them after every search
+        """
+        key = address_key(address)
+        if key in self._skipped:
+            return None
         try:
             mysensor = MySensorFabric(address, sensor_type, self, self.interval)
         except DuplicateCircuitError as E:
-            key = address_key(address)
-            if key not in self._skipped:
-                self._skipped.add(key)
-                logger.warning(f"{E}, the found sensor is skipped")
+            self._skipped.add(key)
+            logger.warning(f"{E}, the found sensor is skipped")
             return None
-        if mysensor is not None:
+        if mysensor is None:
+            self._skipped.add(key)
+        else:
             logger.info(f"New sensor {sensor_type} {address} found")
         return mysensor
 
     async def run(self):
+        """ Scan and poll the bus of the master, a missing master raises FileNotFoundError """
         self.bus_lock = anyio.Lock()
-        async with OWFS(initial_scan=False) as ow:
-            await ow.add_task(self.mon, ow)
-            server = await ow.add_server(self.host, self.port)
-            self._log_connected()
-            await ow.add_task(self.scanning, server)
+        master = w1.W1Master(self.master)
+        self.master_name = master.name
+        self._log_connected()
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self.scanning, master)
             await self.poll()

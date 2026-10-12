@@ -90,15 +90,18 @@ comm_channels:
           A longer value is needed if the response of the first register block takes longer at the baud rate,
           e.g. 125 registers take about 0.15 s at 19200 Bd.
     - `OWFS` (1-Wire bus, the former name `OWBUS` is not supported)
-      The bus reads the sensors by `owserver` (Debian package `owserver`). If owserver is not running,
-      Evok logs `cannot connect to owserver ..., is owserver running?` once and connects again every 10 s,
-      the sensors are reported as lost until the connection.
-        - `hostname` - hostname of owserver (Default value is `127.0.0.1`)
-        - `port` - port of owserver (Default value is `4304`). Each OWFS bus needs its own owserver, the second bus
-          with the same `hostname` and `port` is not created and the error is logged.
+      The bus reads the sensors by the 1-Wire subsystem of the kernel (`/sys/bus/w1/devices`), owserver is not used.
+      The 1-Wire master, e.g. the DS2482 on the I2C bus of the unit, is bound by the kernel (the device tree
+      or `echo ds2482 0x18 > /sys/bus/i2c/devices/i2c-N/new_device`), the sensors by the modules `w1_therm`,
+      `w1_ds2438`, `w1_ds2408`, `w1_ds2413` and `w1_ds2406`. Without the master Evok logs
+      `cannot use the 1-Wire master, is its driver loaded (e.g. ds2482)?` once and tries again every 10 s.
+        - `master` - the 1-Wire master of the kernel, e.g. `w1_bus_master1` (Default is the first one).
+          Each OWFS bus needs its own master, the second bus with the same master is not created
+          and the error is logged.
         - `interval` - interval of values updating in seconds, a positive number (Default value is `60`)
-        - `scan_interval` - interval of the search for new devices in seconds, `0` searches only after the connection
-          to owserver and on request (`do_scan`) (Default value is `300`). A change by the API applies at once.
+        - `scan_interval` - interval in seconds of taking the devices found by the kernel, which searches the bus
+          every 10 s; `0` takes them only after the start and on request (`do_scan`) (Default value is `300`).
+          A change by the API applies at once.
         - `owpower` - [Circuit](../circuit.md) of owpower device (for restarting bus; optional parameter)
 
 ### Device configuration
@@ -128,10 +131,12 @@ comm_channels:
 
 #### OWFS
 
-- `type` - 1-Wire sensor type, options: [`DS18B20`, `DS18S20`, `DS2438`, `DS2408`, `DS2406`, `DS2413`]
-- `address` - 1-Wire device address, the family and the serial number as listed by owserver, e.g. `28.A1B2C3D4E5F6`;
-  the CRC (`28.A1B2C3D4E5F6.7B`), the dots and the case are not significant. The sensor is read after owserver
-  locates it, a sensor which the search of the bus has not found is reported as `lost`.
+- `type` - 1-Wire sensor type, options: [`DS18B20`, `DS18S20`, `DS2438`, `DS2408`, `DS2406`, `DS2413`].
+  The `value` of a DS2406 is the state of its channel flip-flops, the kernel does not give the sensed levels.
+- `address` - 1-Wire device address, the family and the serial number as listed by owserver, e.g. `28.4E2025090000`;
+  the CRC (`28.4E2025090000.FF`), the dots and the case are not significant. The name of the device in sysfs
+  (`28-00000925204e`, the serial number in the reverse order) is the same address. The sensor is read after
+  the kernel finds it, a sensor which the search of the bus has not found is reported as `lost`.
 - `interval` - an optional parameter, interval of values updating in seconds (Default value is 15).
 
 !!! Note
@@ -197,7 +202,8 @@ You can force the creation of this file using this command:
  - The Bus is always named `LOCAL_TCP`.
  - A device_info section is generated to describe the device. This information is based on `unipiid`.
  - The device name is generated based on the `slave-id`. In standard Unipi controllers it is the same as the section number.
- - The OWFS section is generated only if the device supports 1-Wire and the `owserver` package is installed.
+ - The OWFS section is generated only if the device supports 1-Wire and the `owserver` package is installed
+   (Evok 3.1 does not use owserver, the bus is read by the kernel).
    - The `owpower` parameter is defined only if Unipi controller supports this feature.
 
 ```yaml title="Autogen example"
