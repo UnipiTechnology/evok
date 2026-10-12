@@ -48,7 +48,7 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - **RO, DO, LED:** no `pulse_duration`, `timeout` (DO) and `pending`, a pulse is set by the sequencer of the output
   (`/rest/sequencer/<type>_<circuit>`, `running` instead of `pending`). While it runs, a change of the output
   except its alias is refused with 409 (RPC `-32002`), cancel it by the sequencer first. The RPC methods
-  `*_set_for_time` and `output_get` stay. — `a85fb14`, PR sequencer-review
+  `*_set_for_time` and `output_get` stay. — `a85fb14`, `57492fe`
 
 ### Circuits by the HW definitions
 
