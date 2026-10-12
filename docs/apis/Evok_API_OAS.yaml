@@ -1365,6 +1365,7 @@ paths:
                     stopbits: 1
                     timeout: 0.5
                     retries: 1
+                    probe_timeout: 0.1
                     devices: ['xS51']
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -1418,6 +1419,7 @@ paths:
                     timeout: 0.5
                     connect_timeout: 1.0
                     retries: 1
+                    probe_timeout: 0.5
                     devices: ['1']
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -3920,6 +3922,9 @@ components:
         retries:
           type: integer
           description: Count of retries of a request.
+        probe_timeout:
+          type: number
+          description: Timeout of the request to a unit which does not respond in seconds, without the retries.
         devices:
           type: array
           items:
@@ -3954,6 +3959,9 @@ components:
         retries:
           type: integer
           description: Count of retries of a request.
+        probe_timeout:
+          type: number
+          description: Timeout of the request to a unit which does not respond in seconds, without the retries.
         devices:
           type: array
           items:

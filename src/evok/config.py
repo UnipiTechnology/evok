@@ -2,6 +2,7 @@ import os
 from typing import List, Dict, Tuple, Union
 
 from .modbus import ModbusScanner
+from .modbus.transport import BusTransport
 from tenacity import AsyncRetrying, retry_never, stop_after_attempt, stop_after_delay, wait_fixed
 from tmodbus import (
     AsyncRtuTransport,
@@ -221,6 +222,14 @@ def bus_retries(bus_data: dict) -> int:
     return retries
 
 
+def probe_timeout(bus_data: dict, default: float) -> float:
+    """ The option probe_timeout of a Modbus bus, the timeout of a request to a unit which does not respond """
+    value = bus_data.get("probe_timeout", default)
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not value > 0:
+        raise ValueError(f"probe_timeout must be a positive number, not '{value}'")
+    return float(value)
+
+
 def retry_strategies(timeout: float, connect_timeout: float, retries: int = 1) -> dict:
     """ Retries of AsyncSmartTransport, which fail fast
 
@@ -278,7 +287,9 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
         timeout = float(bus_data.get("timeout", 0.5))
         connect_timeout = float(bus_data.get("connect_timeout", 1.0))
         retries = bus_retries(bus_data)
-        bus_driver = AsyncSmartTransport(
+        # a gateway on the network may need the whole timeout
+        probe = probe_timeout(bus_data, timeout)
+        bus_driver = BusTransport(
             AsyncTcpTransport(
                 host,
                 port,
@@ -289,10 +300,11 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
             wait_after_connect=0.0,
             retry_on_device_busy=True,
             retry_on_device_failure=False,
+            probe_timeout=probe,
             **retry_strategies(timeout, connect_timeout, retries),
         )
         bus = TcpBusDevice(circuit=bus_name, bus_driver=bus_driver, hostname=host, port=port, timeout=timeout,
-                           connect_timeout=connect_timeout, retries=retries)
+                           connect_timeout=connect_timeout, retries=retries, probe_timeout=probe)
         # more buses may connect to one server, its units must differ
         line = ('tcp', str(host).lower(), port)
         Devices.register_device(TCPBUS, bus)
@@ -309,7 +321,9 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
         serial_stopbits = bus_data.get("stopbits", 1)
         timeout = float(bus_data.get("timeout", 0.5))
         retries = bus_retries(bus_data)
-        bus_driver = AsyncSmartTransport(
+        # a response on a serial line comes in a few ms, the units of the bus wait for the probe
+        probe = probe_timeout(bus_data, min(0.1, timeout))
+        bus_driver = BusTransport(
             AsyncRtuTransport(
                 serial_port,
                 timeout=timeout,
@@ -321,11 +335,12 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
             retry_on_device_busy=True,
             retry_on_device_failure=False,
             # the serial port is opened at once, its timeout is the response timeout
+            probe_timeout=probe,
             **retry_strategies(timeout, timeout, retries),
         )
         bus = SerialBusDevice(circuit=bus_name, bus_driver=bus_driver, port=serial_port, baudrate=serial_baud_rate,
                               parity=serial_parity, stopbits=serial_stopbits, timeout=timeout,
-                              retries=retries)
+                              retries=retries, probe_timeout=probe)
         Devices.register_device(SERIALBUS, bus)
         claims.serial_ports[line[1]] = bus_name
 

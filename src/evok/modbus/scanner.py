@@ -136,6 +136,12 @@ class ModbusScanner:
             self.logged_scan_error = None
         return res
 
+    def _set_failing(self, failing: bool):
+        """ A unit which does not respond is probed by one short request, the other units of the bus wait less """
+        set_failing = getattr(getattr(self.client.mb_client, 'transport', None), 'set_failing', None)
+        if set_failing is not None:
+            set_failing(self.modbus_address, failing)
+
     async def _scan_loop(self):
         """ Wait for the connected unit, a communication error is retried, it is logged once.
             Create its devices, then scan it periodically with scan_enabled.
@@ -149,6 +155,7 @@ class ModbusScanner:
             logged_error = None
             interval = self.INITIAL_SCAN_INTERVAL
             while not await self.cache.do_scan(initial=True):
+                self._set_failing(True)
                 error = self.cache.scan_error
                 if logged_error is None:
                     devents.status(self)
@@ -157,6 +164,7 @@ class ModbusScanner:
                     logged_error = error
                 await asyncio.sleep(interval)
                 interval = min(interval * 2, self.MAX_SCAN_INTERVAL)
+            self._set_failing(False)
             if logged_error is not None:
                 logger.info(f"Device '{self.circuit}' is connected")
                 devents.status(self)
@@ -180,12 +188,14 @@ class ModbusScanner:
             if await self._scan_unit():
                 if err:
                     err = False
+                    self._set_failing(False)
                     logger.info(f"Communication with device is back: '{self.circuit}'")
                     devents.status(self)
                 interval = self.scan_interval
             else:
                 if not err:
                     err = True
+                    self._set_failing(True)
                     logger.warning(f"Slowing down device: '{self.circuit}': {self.cache.scan_error!r}")
                     devents.status(self)
                 # exponential growth interval with limitation [s]
