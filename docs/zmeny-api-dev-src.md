@@ -88,6 +88,8 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
   — `2319b2b`, `96ba320`, `d1add77`
 - Datové body jde zapisovat přes `writable`, `full()` ho vrací. — `eb4eda5`, `e792e17`
 - `pulse_duration` a `pending` i u RO a LED, RPC metoda `relay_set_for_time`. — `e16a3bf`
+- Pulz je sekvence sequenceru Evoku (`evok.blocks`), zruší ho jakákoli změna výstupu kromě aliasu, i `pwm_freq` DO.
+  — PR blocks-sequencer
 - Odpověď na POST, bulk i WebSocket `set` obsahuje stav po zápisu a událost přijde hned. — `a3f4679`
 - **Nové události:** — `60e2287`, `08d9f56`, `62b37ef`, `891bd4a`
   - změna aliasu zařízení na Modbus jednotce,

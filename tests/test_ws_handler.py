@@ -68,10 +68,11 @@ async def send(client, message):
 @pytest.mark.parametrize('message, expected', [
     ({'value': 1}, {'value': 1}),
     ({'value': '0'}, {'value': '0'}),
-    ({'value': {'value': 1, 'timeout': 5}}, {'value': 1, 'timeout': 5}),
-    ({'value': 1, 'timeout': '2'}, {'value': 1, 'timeout': '2'}),
-    ({'value': {'value': 1, 'pulse_duration': 5}}, {'value': 1, 'pulse_duration': 5}),
-    ({'value': 1, 'pulse_duration': '2'}, {'value': 1, 'pulse_duration': '2'}),
+    # the pulse is split by set_devices() and started by the sequencer
+    ({'value': {'value': 1, 'timeout': 5}}, {'value': 1}),
+    ({'value': 1, 'timeout': '2'}, {'value': 1}),
+    ({'value': {'value': 1, 'pulse_duration': 5}}, {'value': 1}),
+    ({'value': 1, 'pulse_duration': '2'}, {'value': 1}),
     ({'pwm_duty': 50}, {'pwm_duty': 50}),
 ])
 async def test_set(ws, message, expected):

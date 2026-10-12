@@ -158,7 +158,7 @@ class Handler(TokenAuth, JSONRPCHandler):
         if pulse_duration is None:
             pulse_duration = timeout
         relay = Devices.by_name(DO, circuit)
-        # pulse_duration is checked by the output, a positive finite number
+        # pulse_duration is checked by set_devices(), a positive finite number
         state, = await set_devices([(relay, dict(value=value, pulse_duration=pulse_duration))])
         return state
 

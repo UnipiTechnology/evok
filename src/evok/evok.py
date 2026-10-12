@@ -17,12 +17,12 @@ from . import auth
 from . import config
 from . import rpc_handler
 from .auth import TokenAuth
+from .blocks import sequencer
 from .bulk_handler import JSONBulkHandler
 from .devices import MODBUS_SLAVE, RUN, OWBUS
 from .devices import Devices, devents, devtype_of
 from .handlers_base import EvokWebHandlerBase
 from .log import logger, read_log_tail
-from .modbus.digital import finish_pulses
 from .ws_handler import WEBSOCKET_SETTINGS, WsHandler, registered_ws
 
 logging.basicConfig(level=logging.WARNING)
@@ -367,7 +367,7 @@ async def main():
     # the writes ending the pulses do not wait for the scans, a failing unit does not log its errors
     await asyncio.gather(*(modbus_slave.stop_scanning() for modbus_slave in Devices.by_name(MODBUS_SLAVE)))
     # the pulses are timed by evok, do not leave the outputs in the state of a pulse
-    await finish_pulses()
+    await sequencer.finish_all()
 
 
 def run():
