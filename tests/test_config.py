@@ -9,7 +9,7 @@ from tmodbus.exceptions import CRCError, ModbusConnectionError, RequestRetryFail
 
 from evok import config
 from evok.devices import Devices, DEVICE_INFO, MODBUS_SLAVE, OWBUS, SENSOR, SERIALBUS, TCPBUS
-from evok.owdevice import DS18B20, OwBusDriver
+from evok.w1 import DS18B20, OwBusDriver
 
 
 @pytest.mark.parametrize('text', [
