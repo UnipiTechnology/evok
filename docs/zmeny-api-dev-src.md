@@ -44,7 +44,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - **RO, DO, LED:** bez `pulse_duration`, `timeout` (DO) a `pending`, pulz se nastavuje přes sequencer výstupu
   (`/rest/sequencer/<typ>_<okruh>`, `running` místo `pending`). Během něj se změna výstupu kromě aliasu odmítne
   s 409 (RPC `-32002`), nejdřív ho zrušte přes sequencer. RPC metody `*_set_for_time` a `output_get` zůstávají.
-  — `a85fb14`, PR sequencer-review
+  — `a85fb14`, `57492fe`
 
 ### Okruhy podle HW definic
 
