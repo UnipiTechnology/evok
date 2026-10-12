@@ -11,23 +11,18 @@ from tmodbus import (
 
 from .. import devents
 from ..devices import MODBUS_SLAVE, Devices, to_bool
+from ..errors import describe_error, root_cause
 from ..log import logger
 from .builder import IOParser
 from .cache import ModbusCacheMap
 from .client import Client
 
 
-def _error_kind(error: BaseException | None) -> tuple:
-    """ The types of the error and of its causes, the text of a tmodbus error has the duration of the attempts,
-        it differed in every scan, e.g. RequestRetryFailedError, RetryError, ModbusConnectionError, ...
+def _error_kind(error: BaseException | None) -> type | None:
+    """ The type of the root cause of the error, the errors around it differ by the retries: the first failure
+        of a unit is a RequestRetryFailedError of tmodbus, the next ones without the retries are not
     """
-    kind = []
-    while error is not None and len(kind) < 10:
-        kind.append(type(error))
-        # tenacity.RetryError has the error of the last attempt, not a cause
-        last_attempt = getattr(error, 'last_attempt', None)
-        error = last_attempt.exception() if last_attempt is not None else error.__cause__
-    return tuple(kind)
+    return None if error is None else type(root_cause(error))
 
 
 class ModbusScanner:
@@ -160,7 +155,7 @@ class ModbusScanner:
                 if logged_error is None:
                     devents.status(self)
                 if _error_kind(error) != _error_kind(logged_error):
-                    logger.warning(f"Waiting for device '{self.circuit}': {error!r}")
+                    logger.warning(f"Waiting for device '{self.circuit}': {describe_error(error)}")
                     logged_error = error
                 await asyncio.sleep(interval)
                 interval = min(interval * 2, self.MAX_SCAN_INTERVAL)
@@ -196,7 +191,7 @@ class ModbusScanner:
                 if not err:
                     err = True
                     self._set_failing(True)
-                    logger.warning(f"Slowing down device: '{self.circuit}': {self.cache.scan_error!r}")
+                    logger.warning(f"Slowing down device: '{self.circuit}': {describe_error(self.cache.scan_error)}")
                     devents.status(self)
                 # exponential growth interval with limitation [s]
                 interval = min(interval * 2, max(self.MAX_SCAN_INTERVAL, self.scan_interval))
@@ -212,7 +207,7 @@ class ModbusScanner:
                'scan_interval': self.scan_interval,
                'scan_enabled': self.scan_enabled,
                'last_comm': time.monotonic() - last_comm_time if last_comm_time is not None else None,
-               'scan_error': f"{type(scan_error).__name__}: {scan_error}" if scan_error is not None else None,
+               'scan_error': describe_error(scan_error) if scan_error is not None else None,
                }
         if self.alias != '':
             ret['alias'] = self.alias
