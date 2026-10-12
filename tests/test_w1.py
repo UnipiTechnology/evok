@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 
-import anyio
 import pytest
 
 from evok import devents
@@ -38,8 +37,8 @@ class FakeSens:
 
 async def read(bus, sensor):
     """ One read of the sensor by poll() """
-    bus.bus_lock = anyio.Lock()
-    await bus.read_sensor(sensor, anyio.current_time())
+    bus.bus_lock = asyncio.Lock()
+    await bus.read_sensor(sensor, asyncio.get_running_loop().time())
 
 
 @pytest.mark.parametrize('reads, expected', [
@@ -181,7 +180,7 @@ async def test_lost_and_recovered_sensor_is_reported(bus, monkeypatch):
 
 
 async def test_poll_wakes_up_for_a_new_sensor(bus, events):
-    bus.bus_lock = anyio.Lock()
+    bus.bus_lock = asyncio.Lock()
     first = DS18B20('28.000001', 'DS18B20', bus)
     first.sens = FakeSens(temperature=21.5)
     task = asyncio.create_task(bus.poll())
@@ -334,7 +333,7 @@ async def test_failed_read_raises(sysfs):
 
 async def scan_once(bus, sysfs):
     """ One scan of the bus by scanning() """
-    bus.bus_lock = anyio.Lock()
+    bus.bus_lock = asyncio.Lock()
     await bus.set(scan_interval=0)
     task = asyncio.create_task(bus.scanning(w1_sysfs.W1Master()))
     await settle_reads()
@@ -392,7 +391,7 @@ async def test_disappeared_sensor_is_lost_and_found_again(bus, sysfs, events, ca
 async def test_failed_scan_ends_the_bus(bus, sysfs):
     """ The master disappeared, e.g. its driver was removed; run_forever() uses it again later """
     (sysfs.path / 'w1_bus_master1' / 'w1_master_slaves').unlink()
-    bus.bus_lock = anyio.Lock()
+    bus.bus_lock = asyncio.Lock()
     with pytest.raises(FileNotFoundError):
         await bus.scanning(w1_sysfs.W1Master())
 
@@ -439,7 +438,7 @@ async def test_run_uses_the_master(bus, sysfs, caplog):
 
 
 def refused():
-    """ An OSError in the task groups of anyio """
+    """ An OSError in nested task groups """
     error = OSError('All connection attempts failed')
     error.__cause__ = ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 4304)")
     return ExceptionGroup('unhandled errors in a TaskGroup', [ExceptionGroup('unhandled errors in a TaskGroup',
@@ -517,7 +516,7 @@ async def test_configured_sensor_is_not_lost_before_it_is_located(bus, monkeypat
     """ #231: poll() read the sensor without its device at the start and reported it lost """
     states = []
     monkeypatch.setattr(devents, 'status', lambda device, **kw: states.append((device.circuit, device.lost)))
-    bus.bus_lock = anyio.Lock()
+    bus.bus_lock = asyncio.Lock()
     sensor = DS18B20('28.A1B2C3D4E5F6', 'DS18B20', bus, circuit='temp1')
     task = asyncio.create_task(bus.poll())
     await settle()
@@ -540,3 +539,11 @@ async def test_found_sensor_with_the_circuit_of_a_sensor_is_skipped(bus, caplog)
     assert caplog.text.count("has the same name as the sensor 28.000000000001 of bus 'OW2', "
                              "the found sensor is skipped") == 1
     assert bus._create_found('28.A1B2C3D4E5F7.7B', 'DS18B20').circuit == '28A1B2C3D4E5F77B'
+
+
+async def test_failed_scan_ends_run(bus, sysfs):
+    """ The task group cancels poll() after a failure of the scan, run_forever() starts the bus again """
+    (sysfs.path / 'w1_bus_master1' / 'w1_master_slaves').unlink()
+    with pytest.raises(ExceptionGroup) as error:
+        await asyncio.wait_for(bus.run(), 1)
+    assert type(leaf_error(error.value)) is FileNotFoundError
