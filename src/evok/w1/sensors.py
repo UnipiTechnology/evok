@@ -1,5 +1,5 @@
 """ The 1-Wire sensors, their values are read from the devices of the bus """
-import anyio
+import asyncio
 
 from ..devices import SENSOR
 from ..devices import devents, Devices
@@ -62,7 +62,7 @@ class MySensor(object):
     async def set(self, interval=None, alias=None):
         if interval is not None:
             self.interval = check_interval(interval)
-            self.time = anyio.current_time() + self.calc_interval()
+            self.time = asyncio.get_running_loop().time() + self.calc_interval()
             self.bus.wake()
         if alias is not None:
             Devices.set_alias(alias, self)

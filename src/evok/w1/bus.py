@@ -1,9 +1,6 @@
 """ The 1-Wire bus: the sensors found by the kernel, the poll of their values """
 import asyncio
-import math
 import typing
-
-import anyio
 
 from ..devices import OWBUS, OWPOWER
 from ..devices import devents, Devices, SENSOR, to_bool
@@ -17,7 +14,7 @@ RECONNECT_DELAY = 10  # s, the next attempt to use the 1-Wire master after a fai
 
 
 def leaf_error(error: BaseException) -> BaseException:
-    """ The first error in the nested exception groups of anyio and the cause of an OSError
+    """ The first error in the nested exception groups of a task group and the cause of an OSError
     """
     while True:
         if isinstance(error, BaseExceptionGroup) and error.exceptions:
@@ -85,7 +82,7 @@ class OwBusDriver:
             await asyncio.sleep(RECONNECT_DELAY)
 
     def _log_failure(self, error):
-        """ Log the reason of the failure once until the next connection, it was an ExceptionGroup of anyio """
+        """ Log the reason of the failure once until the next start, it was an ExceptionGroup of the task group """
         error = leaf_error(error)
         if isinstance(error, OSError):
             message = (f"1-Wire bus {self.circuit}: cannot use the 1-Wire master, is its driver loaded "
@@ -160,10 +157,14 @@ class OwBusDriver:
 
     async def _sleep(self, delay):
         """ Sleep until the delay passes or wake() is called """
-        self._wakeup = anyio.Event()
-        with anyio.move_on_after(delay):
-            await self._wakeup.wait()
-        self._wakeup = None
+        self._wakeup = asyncio.Event()
+        try:
+            async with asyncio.timeout(delay):
+                await self._wakeup.wait()
+        except TimeoutError:
+            pass
+        finally:
+            self._wakeup = None
 
     def _find_sensor(self, address):
         key = address_key(address)
@@ -228,14 +229,15 @@ class OwBusDriver:
     async def _wait_for_scan(self):
         """ Wait for scan_interval or do_scan(), a change of scan_interval starts the wait again """
         while not self._scan_requested:
-            self._scan_wakeup = anyio.Event()
+            self._scan_wakeup = asyncio.Event()
             try:
-                with anyio.move_on_after(self.scan_interval or math.inf) as scope:
+                # scan_interval 0 waits only for do_scan()
+                async with asyncio.timeout(self.scan_interval or None):
                     await self._scan_wakeup.wait()
+            except TimeoutError:
+                return
             finally:
                 self._scan_wakeup = None
-            if scope.cancelled_caught:
-                return
 
     async def poll(self):
         """
@@ -251,12 +253,12 @@ class OwBusDriver:
                 continue
             # Find sensor with min time (all se to 0 as default)
             mysensor = min(located, key=lambda x: x.time)
-            t1 = anyio.current_time()
+            t1 = asyncio.get_running_loop().time()
             if t1 < mysensor.time:
                 await self._sleep(mysensor.time - t1)
                 continue
             await self.read_sensor(mysensor, t1)
-            mysensor.time = anyio.current_time() + mysensor.calc_interval()
+            mysensor.time = asyncio.get_running_loop().time() + mysensor.calc_interval()
 
     async def read_sensor(self, mysensor, now):
         """ Read the sensor, report a change of its values and its recovery or loss """
@@ -295,10 +297,11 @@ class OwBusDriver:
 
     async def run(self):
         """ Scan and poll the bus of the master, a missing master raises FileNotFoundError """
-        self.bus_lock = anyio.Lock()
+        self.bus_lock = asyncio.Lock()
         master = sysfs.W1Master(self.master)
         self.master_name = master.name
         self._log_connected()
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(self.scanning, master)
+        # a failure of the scan cancels the poll
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(self.scanning(master))
             await self.poll()
