@@ -1,4 +1,5 @@
 import asyncio
+import os
 import json
 import logging
 
@@ -547,3 +548,117 @@ async def test_failed_scan_ends_run(bus, sysfs):
     with pytest.raises(ExceptionGroup) as error:
         await asyncio.wait_for(bus.run(), 1)
     assert type(leaf_error(error.value)) is FileNotFoundError
+
+
+# ---- the forced search and the bulk conversion ----
+
+@pytest.mark.parametrize('count, written', [('-1', '-1\n'), ('0', '1\n'), ('5', '5\n')])
+async def test_search_keeps_the_count_of_the_searches(sysfs, count, written):
+    """ The count is written back, -1 keeps the continual search of the kernel, it only wakes up """
+    search = sysfs.path / 'w1_bus_master1' / 'w1_master_search'
+    search.write_text(f"{count}\n")
+    master = w1_sysfs.W1Master()
+    assert master.can_search()
+    await master.search()
+    assert search.read_text() == written
+
+
+async def test_do_scan_forces_a_search(bus, sysfs, monkeypatch):
+    monkeypatch.setattr(w1_bus, 'SEARCH_WAIT', 0)
+    search = sysfs.path / 'w1_bus_master1' / 'w1_master_search'
+    search.write_text('-1\n')
+    writes = []
+    write_text = w1_sysfs._write_text
+    monkeypatch.setattr(w1_sysfs, '_write_text', lambda path, text: (writes.append(text), write_text(path, text)))
+    task = await scan_once(bus, sysfs)
+    assert writes == []                                 # not the scan after the start
+    sysfs.slaves('28-00000925204e')                     # found by the search
+    bus.do_scan()
+    await settle_reads()
+    task.cancel()
+    assert writes == ['-1\n']
+    assert [s.address for s in bus.mysensors] == ['28.4E2025090000.FF']
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason='root has the write access')
+async def test_do_scan_without_the_write_access(bus, sysfs, caplog):
+    """ The search of the kernel is taken, the missing access is logged once """
+    caplog.set_level(logging.INFO, logger='evok')
+    search = sysfs.path / 'w1_bus_master1' / 'w1_master_search'
+    search.write_text('-1\n')
+    search.chmod(0o444)
+    task = await scan_once(bus, sysfs)
+    sysfs.slaves('28-00000925204e')
+    for _ in range(2):
+        bus.do_scan()
+        await settle_reads()
+    task.cancel()
+    assert [s.address for s in bus.mysensors] == ['28.4E2025090000.FF']
+    assert caplog.text.count('a forced search needs the write access to w1_bus_master1/w1_master_search') == 1
+
+
+def thermometers(bus, sysfs, *names, interval=10):
+    """ Found thermometers due now """
+    for n, name in enumerate(names):
+        sysfs.device(name, temperature=20000 + n * 1000)
+    master = w1_sysfs.W1Master()
+    sensors = [DS18B20(w1_sysfs.owfs_address(name), 'DS18B20', bus, interval=interval) for name in names]
+    for sensor, name in zip(sensors, names):
+        sensor.sens = master.device(name)
+    bus._master = master
+    bus.bus_lock = asyncio.Lock()
+    return sensors
+
+
+async def poll_once(bus):
+    task = asyncio.create_task(bus.poll())
+    await settle_reads()
+    task.cancel()
+
+
+async def test_thermometers_are_converted_together(bus, sysfs, events, monkeypatch):
+    """ One conversion of all thermometers instead of 750 ms for each one """
+    bulk = sysfs.path / 'w1_bus_master1' / 'therm_bulk_read'
+    bulk.write_text('0\n')
+    writes = []
+    monkeypatch.setattr(w1_sysfs, '_write_text', lambda path, text: writes.append((os.path.basename(path), text)))
+    first, second = thermometers(bus, sysfs, '28-00000925204e', '28-000009251111')
+    second.time = asyncio.get_running_loop().time() + 4      # due in the half of its interval
+    await poll_once(bus)
+    assert writes == [('therm_bulk_read', 'trigger\n')]
+    assert (first.value, second.value) == (20.0, 21.0)
+
+
+async def test_one_thermometer_is_not_converted_together(bus, sysfs, monkeypatch):
+    (sysfs.path / 'w1_bus_master1' / 'therm_bulk_read').write_text('0\n')
+    writes = []
+    monkeypatch.setattr(w1_sysfs, '_write_text', lambda path, text: writes.append(text))
+    first, second = thermometers(bus, sysfs, '28-00000925204e', '28-000009251111')
+    second.time = asyncio.get_running_loop().time() + 6      # due later than in the half of its interval
+    await poll_once(bus)
+    assert writes == []
+    assert (first.value, second.value) == (20.0, None)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason='root has the write access')
+async def test_thermometers_without_the_bulk_access_convert_one_by_one(bus, sysfs, caplog):
+    caplog.set_level(logging.INFO, logger='evok')
+    bulk = sysfs.path / 'w1_bus_master1' / 'therm_bulk_read'
+    bulk.write_text('0\n')
+    bulk.chmod(0o444)
+    first, second = thermometers(bus, sysfs, '28-00000925204e', '28-000009251111')
+    await poll_once(bus)
+    assert (first.value, second.value) == (20.0, 21.0)
+    assert caplog.text.count('needs the write access to w1_bus_master1/therm_bulk_read') == 1
+
+
+async def test_failed_bulk_conversion_converts_one_by_one(bus, sysfs, monkeypatch, caplog):
+    (sysfs.path / 'w1_bus_master1' / 'therm_bulk_read').write_text('0\n')
+
+    def failed(path, text):
+        raise OSError(5, 'Input/output error')
+    monkeypatch.setattr(w1_sysfs, '_write_text', failed)
+    first, second = thermometers(bus, sysfs, '28-00000925204e', '28-000009251111')
+    await poll_once(bus)
+    assert (first.value, second.value) == (20.0, 21.0)
+    assert caplog.text.count('conversion of all thermometers failed') == 1

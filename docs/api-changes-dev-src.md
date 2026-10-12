@@ -150,13 +150,16 @@ An invalid value is an error: the unit or the feature is not created and the err
 - **OWFS bus by the kernel:** the sensors are read by the 1-Wire subsystem of the kernel (`/sys/bus/w1`), owserver
   and asyncowfs are not used. The option `master` (`w1_bus_master1`, the first one by default) instead of
   `hostname` / `port`, the status of the bus has `master`. The address and the circuit of a found sensor stay
-  the same. The `value` of a DS2406 is the state of its channel flip-flops. — #242
+  the same. The `value` of a DS2406 is the state of its channel flip-flops. With the udev rule
+  `etc/udev/rules.d/60-evok-w1.rules` `do_scan` forces a search and the thermometers are converted at once.
+  — #242
 
 ## Runtime and installation
 
 - Python 3.12, `tmodbus` instead of `pymodbus`. — `862d760`, `733871c`
 - 1-Wire by the kernel: the driver of the master (e.g. `ds2482`) and the modules of the sensors instead of
-  the package `owserver`; no dependency `asyncowfs`. — #242
+  the package `owserver`; no dependency `asyncowfs` and `anyio`. The package should install the udev rule
+  `etc/udev/rules.d/60-evok-w1.rules` (group `evok`). — #242
 - The options `--config-dir` and `--alias-file` (variables `EVOK_CONFIG_DIR`, `EVOK_ALIAS_FILE`). Without
   `config.yaml` Evok exits with an error. — `af85489`
 
