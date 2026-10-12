@@ -124,7 +124,7 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
 - **Modbus zařízení:** jméno musí být jedinečné přes všechny sběrnice. Druhé zařízení se stejným jménem se
   nevytvoří, dřív v API nahradilo první a chyběly jeho IO. — `d8acc38`
 - **Jednotka, která neodpovídá:** zkouší se jedním požadavkem s `probe_timeout` sběrnice (0,1 s na RTU) bez retries,
-  dřív každý pokus blokoval sběrnici na `(retries + 1) * timeout` (výchozí 1 s) a ostatní jednotky čekaly. — #210
+  dřív každý pokus blokoval sběrnici na `(retries + 1) * timeout` (výchozí 1 s) a ostatní jednotky čekaly. — `30cb46f`
 - **Modbus adresy:** sériový port může používat jen jedna sběrnice `MODBUSRTU`, `slave-id` musí být jedinečné na RTU
   sběrnici a na TCP serveru (`hostname`, `port`) přes všechny sběrnice `MODBUSTCP`. Druhá sběrnice nebo zařízení se
   nevytvoří, dřív obě četla a zapisovala stejnou jednotku. — `dc7b1ee`
