@@ -3,7 +3,7 @@ import inspect
 import jsonschema
 import pytest
 
-from evok.devices import Aliases
+from evok.devices import Aliases, devtype_of
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, Register
 from evok.modbus.digital import DigitalInput, DigitalOutput, Relay, ULED
 from evok.modbus.scanner import ModbusScanner
@@ -42,11 +42,15 @@ def test_every_schema_has_set_classes():
     assert set(schemas) == set(SET_CLASSES)
 
 
+# the params of a pulse are split by set_devices(), the pulse is a sequence of the sequencer of blocks
+PULSE_PARAMS = {'ro': {'pulse_duration'}, 'led': {'pulse_duration'}, 'do': {'pulse_duration', 'timeout'}}
+
+
 @pytest.mark.parametrize('dev', schemas)
 def test_schema_matches_set_params(dev):
     properties = set(schemas[dev][0]['properties'])
     for cls in SET_CLASSES[dev]:
-        assert properties == set_params(cls), cls.__name__
+        assert properties == set_params(cls) | PULSE_PARAMS.get(devtype_of(dev), set()), cls.__name__
 
 
 @pytest.mark.parametrize('kw', [

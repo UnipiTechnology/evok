@@ -227,7 +227,7 @@ async def test_pulse_end_does_not_overwrite_newer_value(units):
     await newer
     await asyncio.sleep(0.01)
     assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 1)]
-    assert do.pending_task is None
+    assert do.full()['pending'] is False
 
 
 async def test_nv_save_is_changed_under_the_lock(units):

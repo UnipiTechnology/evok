@@ -92,6 +92,8 @@ the HW definitions. The incompatible changes come first. Every change names its 
   — `2319b2b`, `96ba320`, `d1add77`
 - Data points can be written by `writable`, `full()` returns it. — `eb4eda5`, `e792e17`
 - `pulse_duration` and `pending` also for RO and LED, the RPC method `relay_set_for_time`. — `e16a3bf`
+- A pulse is a sequence of the sequencer of Evok (`evok.blocks`), any change of the output except its alias
+  cancels it, also `pwm_freq` of a DO. — PR blocks-sequencer
 - The reply to POST, bulk and the WebSocket `set` has the state after the writes and the event comes at once.
   — `a3f4679`
 - **New events:** — `60e2287`, `08d9f56`, `62b37ef`, `891bd4a`
