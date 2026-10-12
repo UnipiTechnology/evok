@@ -67,6 +67,8 @@ apis:
     # ^ The topics <prefix>/<device>/<circuit> with the states, <prefix>/<device>/<circuit>/set for the commands
     read_only: false
     # ^ true: the commands are not received
+    ha_discovery: false
+    # ^ true: the devices are announced to Home Assistant by the MQTT discovery
 
 #   +------------------------+
 #   | Hardware Configuration |

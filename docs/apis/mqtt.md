@@ -47,6 +47,33 @@ An error is published to `<prefix>/error`:
 
 With `read_only: true` Evok does not subscribe the commands.
 
+## Home Assistant
+
+With `ha_discovery: true` Evok announces its devices to Home Assistant by the
+[MQTT discovery](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery). Home Assistant with its MQTT
+integration on the same broker creates the entities, no configuration of Home Assistant is needed.
+
+| Evok                            | Home Assistant                                                    |
+|---------------------------------|-------------------------------------------------------------------|
+| `di`                            | `binary_sensor`                                                   |
+| `ro`, `do`, `led`               | `switch`, `binary_sensor` with `read_only`                        |
+| `ai`                            | `sensor` with the unit of the mode                                |
+| `ao`                            | `number` with the range of the mode, `sensor` with `read_only`    |
+| `data_point`                    | `sensor`, a writable one `number`                                 |
+| `sensor` DS18B20, DS18S20       | `sensor` of the temperature                                       |
+| `sensor` DS2438                 | `sensor` of the temperature, the humidity, VDD and VAD            |
+| `modbus_slave`                  | `binary_sensor` of the communication of the unit                  |
+
+- The entities of a Modbus unit or of a 1-Wire bus are one device of Home Assistant, e.g. `evok xS51`.
+  The name of an entity is the alias of the device, e.g. `pump`, or its type and circuit, e.g. `RO 1_01`.
+- The configs are published retained to `<ha_prefix>/<component>/<node>/<object_id>/config`
+  (`ha_prefix` is `homeassistant` by default, the node is the prefix of Evok, e.g. `evok`) before the first state
+  of each device, again when they change (an alias, the mode of an AO) and after each connection to the broker.
+- The entities are available while the status of Evok is `online`.
+- The switches and the numbers send the commands to `<prefix>/<device>/<circuit>/set`. A pulse
+  is set by the sequencer, e.g. by an MQTT action of an automation to `<prefix>/sequencer/ro_1_01/set`.
+- `device_mask` limits the announced devices too.
+
 ## Security
 
 The access is controlled by the broker: the user and the password of the configuration, an ACL of the broker

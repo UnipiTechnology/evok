@@ -7,6 +7,9 @@
     - <prefix>/<devtype>/<circuit>/set the params of set() as the body of REST, a plain value is {"value": ...}
     - <prefix>/error                   the error of a command in the format of REST, not retained
 
+    With ha_discovery the devices are announced to Home Assistant (mqtt_ha), the configs of the entities
+    are published before the states.
+
     The states are queued as for the WebSocket, the last state of each device is published. A command is
     validated by the schema of the device type and done by set_devices(), under the lock of a Modbus unit,
     the event of the changed devices follows. The access is controlled by the broker, read_only disables
@@ -22,6 +25,7 @@ from .devices import RUN, Devices, devtype_of, num_to_devtype_name
 from .handlers_base import CLIENT_ERRORS, check_params, client_error
 from .log import logger
 from .modbus import set_devices
+from .mqtt_ha import discovery
 from .ws_handler import registered_ws
 
 RECONNECT_DELAY = 5     # s, the next connection to the broker after a failure
@@ -77,6 +81,12 @@ class MqttSettings:
         if unknown:
             raise ValueError(f"unknown device types in 'device_mask': {sorted(unknown)}")
         self.read_only = _bool(conf.pop('read_only', False), 'read_only')
+        self.ha_discovery = _bool(conf.pop('ha_discovery', False), 'ha_discovery')
+        self.ha_prefix = conf.pop('ha_prefix', 'homeassistant')
+        if not isinstance(self.ha_prefix, str) or not self.ha_prefix or any(c in self.ha_prefix for c in '+#') \
+                or self.ha_prefix.startswith('/') or self.ha_prefix.endswith('/'):
+            raise ValueError(f"'ha_prefix' must be a topic without the wildcards and the leading or trailing '/', "
+                             f"not '{self.ha_prefix}'")
         if conf:
             raise ValueError(f"unknown options {sorted(conf)}")
 
@@ -102,6 +112,7 @@ class MqttHandler:
         self.settings = settings
         self.client_factory = client_factory
         self.pending: dict[tuple, dict] = {}    # the last state of each changed device not published yet
+        self.announced: dict[str, dict] = {}    # the published configs of Home Assistant by their topic
         self.wakeup = asyncio.Event()
         self.client = None                       # the connected client
         self.task: asyncio.Task | None = None
@@ -173,6 +184,8 @@ class MqttHandler:
         if not self.settings.read_only:
             await client.subscribe(f"{self.settings.prefix}/+/+/set", qos=self.settings.qos)
         self.pending.clear()
+        # the configs are published again after the connection, before the states
+        self.announced.clear()
         self._queue_all()
         publisher = asyncio.create_task(self._publish(client))
         try:
@@ -191,11 +204,21 @@ class MqttHandler:
                 key = next(iter(self.pending))
                 state = self.pending.pop(key)
                 try:
+                    if self.settings.ha_discovery:
+                        await self._announce(client, key, state)
                     await client.publish(self.topic(*key), json.dumps(state), qos=self.settings.qos, retain=True)
                 except aiomqtt.MqttError:
                     raise
                 except Exception as E:
                     logger.error(f"MQTT error in publishing {self.topic(*key)}: {E}")
+
+    async def _announce(self, client, key, state):
+        """ Publish the configs of Home Assistant of the device, a changed config again """
+        for topic, config in discovery(self.settings.prefix, self.settings.ha_prefix, *key, state,
+                                       read_only=self.settings.read_only):
+            if self.announced.get(topic) != config:
+                await client.publish(topic, json.dumps(config), qos=self.settings.qos, retain=True)
+                self.announced[topic] = config
 
     async def _command(self, client, message):
         """ <prefix>/<devtype>/<circuit>/set with the params of set(), an error is published to <prefix>/error """

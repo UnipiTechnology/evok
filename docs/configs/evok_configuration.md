@@ -60,6 +60,9 @@ The [MQTT](../apis/mqtt.md) API, a client of a broker. Evok does not start with 
 - `keepalive` - keepalive interval in seconds (default `60`), a lost connection is detected after 1.5 times it
 - `device_mask` - list of the published device types (default all), e.g. `["di", "ro", "sensor"]`
 - `read_only` - Evok does not receive the commands (`true` / `false`, default `false`)
+- `ha_discovery` - announces the devices to Home Assistant by the MQTT discovery (`true` / `false`, default `false`),
+  see [Home Assistant](../apis/mqtt.md#home-assistant)
+- `ha_prefix` - the discovery prefix of Home Assistant (default `homeassistant`)
 
 ```yaml title="MQTT"
 apis:
