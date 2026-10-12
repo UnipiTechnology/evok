@@ -23,6 +23,7 @@ from .devices import MODBUS_SLAVE, RUN, OWBUS
 from .devices import Devices, devents, devtype_of
 from .handlers_base import EvokWebHandlerBase
 from .log import logger, read_log_tail
+from .mqtt_handler import MqttHandler, MqttSettings
 from .ws_handler import WEBSOCKET_SETTINGS, WsHandler, registered_ws
 
 logging.basicConfig(level=logging.WARNING)
@@ -289,6 +290,13 @@ async def main():
                     + (", the read_token allows only reading" if evok_config.apis.get("read_token") else ""))
     else:
         logger.info("The API is not authenticated, set 'token' in 'apis' for an access from the network")
+    mqtt_config = evok_config.apis.get('mqtt') or {}
+    mqtt = None
+    if mqtt_config.get('enabled', False):
+        try:
+            mqtt = MqttHandler(MqttSettings(mqtt_config))
+        except ValueError as E:
+            sys.exit(f"evok: apis: mqtt: {E}")
 
     port_api = evok_config.apis.get("port", 8080)
 
@@ -332,6 +340,9 @@ async def main():
         wh = WhHandler(wh_address, wh_types, wh_complex, wh_interval)
         wh.open()
 
+    if mqtt is not None:
+        mqtt.open()
+
     # ---- prepare hardware according to config ----
     # notify websocket clients and the webhook about changes of devices
     devents.register_status_cb(status_cb)
@@ -368,6 +379,9 @@ async def main():
     await asyncio.gather(*(modbus_slave.stop_scanning() for modbus_slave in Devices.by_name(MODBUS_SLAVE)))
     # the pulses are timed by evok, do not leave the outputs in the state of a pulse
     await sequencer.finish_all()
+    if mqtt is not None:
+        # the states after the pulses and 'offline'
+        await mqtt.stop()
 
 
 def run():

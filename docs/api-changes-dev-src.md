@@ -109,6 +109,8 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - Deleting the alias of a device which is not connected by `POST /rest/run/alias` with `delete`. — `b7cebd6`
 - `GET /rest/serial_bus/{bus}` and `/rest/tcp_bus/{bus}` return the configuration of a Modbus bus and its devices,
   before a 500 error. The buses are read-only and not in `/rest/all`. — `b40a57c`
+- **MQTT API:** the states of the devices are published to a broker (retained), the commands are received
+  by `<prefix>/<device>/<circuit>/set`, the status `online` / `offline` with the last will. — #139
 - **Configuration:** `apis.rpc.enabled`, `min_interval` of the webhook, `timeout`, `connect_timeout` and `retries`
   of the buses. — `f7ebda1`, `0044241`, `16463d5`, `a6ede44`
 - **Outputs without coils:** RO, DO and LED without `val_coil` write their bit of `val_reg` (a holding register),
