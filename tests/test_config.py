@@ -55,29 +55,32 @@ def test_owfs_bus_with_sensors(caplog):
     assert "Missing 'address'" in caplog.text
 
 
-def test_owfs_bus_owserver_address():
-    create({'LOCAL': {'type': 'OWFS'}, 'REMOTE': {'type': 'OWFS', 'hostname': '192.168.1.10', 'port': 4305}})
-    assert [(b.host, b.port) for b in Devices[OWBUS].values()] == [('127.0.0.1', 4304), ('192.168.1.10', 4305)]
+def test_owfs_bus_master():
+    create({'FIRST': {'type': 'OWFS'}, 'SECOND': {'type': 'OWFS', 'master': 'w1_bus_master2'}})
+    assert [b.master for b in Devices[OWBUS].values()] == [None, 'w1_bus_master2']
 
 
-def test_owserver_used_by_two_owfs_buses(caplog):
-    """ Both buses found all sensors of owserver and created them twice """
+def test_w1_master_used_by_two_owfs_buses(caplog):
+    """ Both buses found all sensors of the master and created them twice """
     create({'OW1': {'type': 'OWFS'},
-            'OW2': {'type': 'OWFS', 'hostname': '127.0.0.1', 'devices': {'t': {'type': 'DS18B20', 'address': '28.01'}}},
-            'OW3': {'type': 'OWFS', 'port': 4305}})
+            'OW2': {'type': 'OWFS', 'devices': {'t': {'type': 'DS18B20', 'address': '28.01'}}},
+            'OW3': {'type': 'OWFS', 'master': 'w1_bus_master2'},
+            'OW4': {'type': 'OWFS', 'master': 'w1_bus_master2'}})
     assert list(Devices[OWBUS]) == ['OW1', 'OW3']
     assert list(Devices[SENSOR]) == []
-    assert "owserver 127.0.0.1:4304 is already used by bus 'OW1'" in caplog.text
+    assert "1-Wire master (the first one) is already used by bus 'OW1'" in caplog.text
+    assert "1-Wire master w1_bus_master2 is already used by bus 'OW3'" in caplog.text
 
 
 @pytest.mark.parametrize('bus, error', [
-    ({'hostname': ''}, 'hostname must be a non-empty string'),
-    ({'hostname': 10}, 'hostname must be a non-empty string'),
-    ({'port': 0}, 'port must be an integer 1..65535'),
-    ({'port': '4304'}, 'port must be an integer 1..65535'),
-    ({'port': True}, 'port must be an integer 1..65535'),
+    ({'master': ''}, 'master must be the name of a 1-Wire master of the kernel'),
+    ({'master': 'i2c-2'}, 'master must be the name of a 1-Wire master of the kernel'),
+    ({'master': 1}, 'master must be the name of a 1-Wire master of the kernel'),
+    ({'hostname': '127.0.0.1'}, "'hostname' of an OWFS bus is not supported, use 'master'"),
+    ({'port': 4304}, "'port' of an OWFS bus is not supported, use 'master'"),
 ])
-def test_owfs_bus_invalid_owserver_address(caplog, bus, error):
+def test_owfs_bus_invalid_master(caplog, bus, error):
+    """ owserver is not used, hostname and port of 3.1 before the kernel were refused """
     create({'OW': dict(bus, type='OWFS')})
     assert list(Devices[OWBUS]) == []
     assert error in caplog.text
@@ -86,8 +89,9 @@ def test_owfs_bus_invalid_owserver_address(caplog, bus, error):
 def test_owfs_sensor_name_collision_over_buses(caplog):
     """ The second sensor replaced the first one in Devices, it was polled but not reachable by the API """
     create({'OW1': {'type': 'OWFS', 'devices': {'temp': {'type': 'DS18B20', 'address': '28.01'}}},
-            'OW2': {'type': 'OWFS', 'port': 4305, 'devices': {'temp': {'type': 'DS18B20', 'address': '28.02'},
-                                                              'temp2': {'type': 'DS18B20', 'address': '28.03'}}}})
+            'OW2': {'type': 'OWFS', 'master': 'w1_bus_master2',
+                    'devices': {'temp': {'type': 'DS18B20', 'address': '28.02'},
+                                'temp2': {'type': 'DS18B20', 'address': '28.03'}}}})
     assert Devices[SENSOR]['temp'].address == '28.01'
     assert [s.circuit for s in Devices[OWBUS]['OW2'].mysensors] == ['temp2']
     assert ("1-Wire sensor 'temp' (28.02) of bus 'OW2' has the same name as the sensor 28.01 of bus 'OW1'"

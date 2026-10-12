@@ -40,7 +40,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - NaN a nekonečné hodnoty AI a datových bodů se vrací jako řetězce `'NaN'`, `'Infinity'`, `'-Infinity'`. — `5f15f41`
 - `last_comm` jednotky je `null` před první komunikací, dřív asi 1,7e9 s. — `2f323f0`
 - **1-Wire čidla z konfigurace:** žádná událost `lost: true` hned po startu nebo po novém připojení k owserveru, čidlo
-  se čte až po nalezení owserverem. Čidlo, které hledání na sběrnici nenašlo, se hlásí jako ztracené. — `5fa3eca`
+  se čte až po nalezení na sběrnici. Čidlo, které hledání na sběrnici nenašlo, se hlásí jako ztracené. — `5fa3eca`
 
 ### Okruhy podle HW definic
 
@@ -136,14 +136,18 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
 - **1-Wire:** typ `DS2404` není podporovaný, nemá PIO a byl vždy ztracený. `address` čidla se najde i bez CRC,
   teček nebo malými písmeny. `scan_interval: 0` prohledá sběrnici jen po připojení a na vyžádání, dřív jednou
   za hodinu; změněný `scan_interval` platí hned. — `4ecdf2f`
-- **Sběrnice OWFS:** `hostname` a `port` owserveru (výchozí `127.0.0.1:4304`), každá sběrnice potřebuje vlastní
-  owserver. Jméno 1-Wire čidla musí být jedinečné přes všechny sběrnice OWFS, duplicitní čidlo z konfigurace se
-  nevytvoří, nalezené se přeskočí; dřív druhé čidlo v API nahradilo první. Druhá sběrnice při startu neselže, když
-  obě sběrnice najdou čidla stejné rodiny. — `fa35a94`
+- **Sběrnice OWFS:** jméno 1-Wire čidla musí být jedinečné přes všechny sběrnice OWFS, duplicitní čidlo z konfigurace
+  se nevytvoří, nalezené se přeskočí; dřív druhé čidlo v API nahradilo první. — `fa35a94`
+- **Sběrnice OWFS přes jádro:** čidla čte 1-Wire subsystém jádra (`/sys/bus/w1`), owserver ani asyncowfs se
+  nepoužívají. Volba `master` (`w1_bus_master1`, výchozí je první) místo `hostname` / `port`, stav sběrnice
+  obsahuje `master`. Adresa a okruh nalezeného čidla se nemění. `value` DS2406 je stav jeho klopných obvodů
+  kanálů. — #242
 
 ## Běh a instalace
 
 - Python 3.12, `tmodbus` místo `pymodbus`. — `862d760`, `733871c`
+- 1-Wire přes jádro: ovladač masteru (např. `ds2482`) a moduly čidel místo balíčku `owserver`; bez závislosti
+  `asyncowfs`. — #242
 - Volby `--config-dir` a `--alias-file` (proměnné `EVOK_CONFIG_DIR`, `EVOK_ALIAS_FILE`). Bez `config.yaml` Evok
   skončí chybou. — `af85489`
 

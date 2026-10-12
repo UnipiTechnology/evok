@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import anyio
 import pytest
 
-from evok import devents
+from evok import devents, owdevice, w1
 from evok.devices import Devices, SENSOR
 from evok.owdevice import DS18B20, DS2408, DS2438, OwBusDriver, MySensorFabric, address_key, leaf_error
 
@@ -24,12 +24,12 @@ def bus():
 
 
 class FakeSens:
-    """ An asyncowfs device returning the given fields """
+    """ A device of the bus returning the given fields """
     def __init__(self, **fields):
         self.fields = fields
 
-    async def get(self, *field):
-        return self.fields['.'.join(field)]
+    async def get(self, field):
+        return self.fields[field]
 
     async def get_sensed_all(self):
         return self.fields['sensed_all']
@@ -57,7 +57,7 @@ async def test_ds18b20_power_on_reset(bus, events, reads, expected):
 
 async def test_ds2438_reports_changes(bus, events):
     sensor = DS2438('26.000001', 'DS2438', bus)
-    sensor.sens = FakeSens(**{'temperature': 21.0, 'HIH4000.humidity': 40.0, 'VDD': 5.0, 'VAD': 2.0, 'vis': 0.1})
+    sensor.sens = FakeSens(**{'temperature': 21.0, 'VDD': 5.0, 'VAD': 2.0, 'vis': 0.1})
     await read(bus, sensor)
     assert events == [sensor]
     assert sensor.get_value() == (5.0, 2.0, 21.0, None)
@@ -67,7 +67,8 @@ async def test_ds2438_reports_changes(bus, events):
     await read(bus, sensor)
     assert events == [sensor, sensor]
     assert sensor.full()['temp'] == 22.0
-    assert sensor.full()['humidity'] == 40.0
+    # HIH4000: (VAD / VDD - 0.16) / (0.0062 * (1.0546 - 0.00216 * T)), computed as by owfs
+    assert sensor.full()['humidity'] == 38.44
 
 
 @pytest.mark.parametrize('sensor_type', ['DS2408', 'DS2406', 'DS2413'])
@@ -137,7 +138,7 @@ async def test_reconnect_after_failure(bus, events, monkeypatch, caplog):
     async def run():
         runs.append(None)
         if len(runs) < 3:
-            raise ConnectionRefusedError('owserver is not running')
+            raise FileNotFoundError("1-Wire master 'w1_bus_master1' not found")
         await asyncio.Event().wait()
     monkeypatch.setattr(bus, 'run', run)
     bus.start_scanning()
@@ -149,7 +150,7 @@ async def test_reconnect_after_failure(bus, events, monkeypatch, caplog):
     assert len(runs) == 3
     assert (sensor.sens, sensor.lost) == (None, True)
     assert events == [sensor]                   # the loss is reported once
-    assert caplog.text.count('connecting again') == 1      # the same error is logged once
+    assert caplog.text.count('trying again') == 1          # the same error is logged once
 
 
 async def test_ds18b20_reports_only_changes(bus, events):
@@ -214,9 +215,10 @@ def test_list(bus):
     '28.A1B2C3D4E5F6',                  # without the CRC
     '28.a1b2c3d4e5f6',                  # lower case
     '28A1B2C3D4E5F67B',                 # without the dots
+    '28-f6e5d4c3b2a1',                  # the name in sysfs, the serial number reversed
 ])
 def test_configured_address_matches_the_id_of_owserver(bus, configured):
-    """ owserver names the device 28.A1B2C3D4E5F6.7B, the other forms were never found """
+    """ owserver named the device 28.A1B2C3D4E5F6.7B, the other forms were never found """
     sensor = DS18B20(configured, 'DS18B20', bus, circuit='temp1')
     assert bus._find_sensor('28.A1B2C3D4E5F6.7B') is sensor
     assert bus._find_sensor('28.A1B2C3D4E5F7.7B') is None
@@ -229,75 +231,215 @@ def test_ds2404_is_not_supported(bus):
     assert 'DS2404' not in bus.list()
 
 
-class FakeServer:
-    """ The server of asyncowfs, the scan locates the devices of found """
-    def __init__(self, found=()):
-        self.scans = 0
-        self.found = found
-        self.service = SimpleNamespace(devices=[])
-
-    async def scan_now(self, polling):
-        self.scans += 1
-        self.service.devices = [SimpleNamespace(id=address, bus='bus.0') for address in self.found]
-
-
 async def settle():
     for _ in range(10):
         await asyncio.sleep(0)
 
 
-async def test_scan_interval_0_scans_only_on_request(bus):
+async def settle_reads():
+    """ The reads of sysfs run in a thread """
+    for _ in range(10):
+        await asyncio.sleep(0.01)
+
+
+# ---- the 1-Wire subsystem of the kernel ----
+
+@pytest.mark.parametrize('name, address', [
+    ('28-00000925204e', '28.4E2025090000.FF'),          # the ROM 28 4e 20 25 09 00 00 ff of a DS18B20
+    ('10-000802b54c1a', '10.1A4CB5020800.8E'),
+])
+def test_owfs_address_of_a_sysfs_name(name, address):
+    """ The circuits of the found sensors stayed the same as with owserver """
+    assert w1.owfs_address(name) == address
+    assert address_key(name) == address_key(address)
+    assert w1.crc8(bytes.fromhex(address_key(address) + address[-2:])) == 0
+
+
+@pytest.fixture
+def sysfs(tmp_path, monkeypatch):
+    """ /sys/bus/w1/devices with the master w1_bus_master1 """
+    monkeypatch.setattr(w1, 'W1_DEVICES', str(tmp_path))
+    master = tmp_path / 'w1_bus_master1'
+    master.mkdir()
+
+    class Tree:
+        path = tmp_path
+
+        @staticmethod
+        def slaves(*names):
+            (master / 'w1_master_slaves').write_text(''.join(f"{name}\n" for name in names) or 'not found.\n')
+
+        @staticmethod
+        def device(name, **attributes):
+            (tmp_path / name).mkdir(exist_ok=True)
+            for attribute, value in attributes.items():
+                data = value if isinstance(value, bytes) else f"{value}\n".encode()
+                (tmp_path / name / attribute).write_bytes(data)
+    Tree.slaves()
+    return Tree
+
+
+def test_masters(sysfs):
+    for n in (10, 2):
+        (sysfs.path / f'w1_bus_master{n}').mkdir()
+    assert w1.masters() == ['w1_bus_master1', 'w1_bus_master2', 'w1_bus_master10']
+    assert w1.W1Master().name == 'w1_bus_master1'
+    with pytest.raises(FileNotFoundError, match="1-Wire master 'w1_bus_master3' not found"):
+        w1.W1Master('w1_bus_master3')
+
+
+def test_no_master(tmp_path, monkeypatch):
+    monkeypatch.setattr(w1, 'W1_DEVICES', str(tmp_path / 'missing'))
+    with pytest.raises(FileNotFoundError, match='no 1-Wire master'):
+        w1.W1Master()
+
+
+async def test_slaves(sysfs):
+    master = w1.W1Master()
+    assert await master.slaves() == []                  # 'not found.'
+    sysfs.slaves('28-00000925204e', '29-0000001b2c3d')
+    assert await master.slaves() == ['28-00000925204e', '29-0000001b2c3d']
+
+
+@pytest.mark.parametrize('name, attributes, field, value', [
+    ('28-00000925204e', {'temperature': 25062}, 'temperature', 25.062),
+    ('10-000802b54c1a', {'temperature': -1500}, 'temperature', -1.5),
+    ('26-000000a1b2c3', {'temperature': 5632}, 'temperature', 22.0),        # 1/256 C
+    ('26-000000a1b2c3', {'vdd': 500}, 'VDD', 5.0),                          # 10 mV
+    ('26-000000a1b2c3', {'vad': 213}, 'VAD', 2.13),
+    ('26-000000a1b2c3', {'iad': -41}, 'vis', -41 * 0.0002441),              # 0.2441 mV
+])
+async def test_device_values(sysfs, name, attributes, field, value):
+    sysfs.device(name, **attributes)
+    assert await w1.W1Master().device(name).get(field) == pytest.approx(value)
+
+
+@pytest.mark.parametrize('name, state, sensed', [
+    ('29-0000001b2c3d', b'\x05', [1, 0, 1, 0, 0, 0, 0, 0]),     # DS2408, the PIO logic state
+    ('3a-0000001b2c3d', b'\x84', [0, 1]),                       # DS2413, PIOB in bit 2
+    ('3a-0000001b2c3d', b'\x0f', [1, 1]),
+    ('12-0000001b2c3d', b'\x32', [0, 1]),                       # DS2406, the channel flip-flops
+])
+async def test_device_sensed(sysfs, name, state, sensed):
+    sysfs.device(name, state=state)
+    assert await w1.W1Master().device(name).get_sensed_all() == sensed
+
+
+async def test_failed_read_raises(sysfs):
+    """ A device which does not answer or a CRC error, the driver returns EIO; here a missing attribute """
+    sysfs.device('28-00000925204e')
+    with pytest.raises(OSError):
+        await w1.W1Master().device('28-00000925204e').get('temperature')
+
+
+async def scan_once(bus, sysfs):
+    """ One scan of the bus by scanning() """
     bus.bus_lock = anyio.Lock()
     await bus.set(scan_interval=0)
-    server = FakeServer()
-    task = asyncio.create_task(bus.scanning(server))
-    await settle()
-    assert server.scans == 1                            # after the connection
-    bus.do_scan()
-    await settle()
-    assert server.scans == 2
-    await bus.set(scan_interval=0, do_scan=True)
-    await settle()
+    task = asyncio.create_task(bus.scanning(w1.W1Master()))
+    await settle_reads()
+    return task
+
+
+async def test_scan_creates_the_found_sensors(bus, sysfs, caplog):
+    caplog.set_level(logging.INFO, logger='evok')
+    sysfs.slaves('28-00000925204e', '29-0000001b2c3d', '01-000012345678')
+    sysfs.device('28-00000925204e', temperature=25062)
+    task = await scan_once(bus, sysfs)
     task.cancel()
-    assert server.scans == 3
+    temp, gpio = bus.mysensors
+    assert (temp.address, temp.circuit, temp.type) == ('28.4E2025090000.FF', '284E2025090000FF', 'DS18B20')
+    assert (gpio.address, gpio.circuit, gpio.type) == ('29.3D2C1B000000.F1', '29.3D2C1B000000.F1', 'DS2408')
+    assert await temp.sens.get('temperature') == 25.062
+    assert caplog.text.count('Unsupported 1wire device None (01.785634120000') == 1
 
 
-async def test_changed_scan_interval_applies_at_once(bus, monkeypatch):
-    """ The wait of the previous interval was finished first, with 0 it was an hour """
+async def test_scan_assigns_a_configured_sensor_and_reports_a_missing_one(bus, sysfs, events, caplog):
+    caplog.set_level(logging.INFO, logger='evok')
+    configured = DS18B20('28-00000925204e', 'DS18B20', bus, circuit='boiler')
+    missing = DS18B20('28.000000000001', 'DS18B20', bus, circuit='missing')
+    sysfs.slaves('28-00000925204e')
+    task = await scan_once(bus, sysfs)
+    events.clear()
+    bus.do_scan()                                       # the next scan does not report it again
+    await settle_reads()
+    task.cancel()
+    assert (configured.sens.path, configured.lost) == (str(sysfs.path / '28-00000925204e'), False)
+    assert (missing.sens, missing.lost) == (None, True)
+    assert bus.mysensors == [configured, missing]       # no sensor of the found one
+    assert caplog.text.count('Sensor missing (28.000000000001) not found on the bus') == 1
+    assert events == []
+
+
+async def test_disappeared_sensor_is_lost_and_found_again(bus, sysfs, events, caplog):
+    caplog.set_level(logging.INFO, logger='evok')
+    sysfs.slaves('28-00000925204e')
+    task = await scan_once(bus, sysfs)
+    sensor, = bus.mysensors
+    sysfs.slaves()
+    bus.do_scan()
+    await settle_reads()
+    assert (sensor.sens, sensor.lost) == (None, True)
+    assert 'Sensor 284E2025090000FF (28.4E2025090000.FF) disappeared' in caplog.text
+    sysfs.slaves('28-00000925204e')
+    bus.do_scan()
+    await settle_reads()
+    task.cancel()
+    assert sensor.sens is not None and sensor.time == 0      # read at once, the read reports the recovery
+    assert 'Sensor 284E2025090000FF found' in caplog.text
+
+
+async def test_failed_scan_ends_the_bus(bus, sysfs):
+    """ The master disappeared, e.g. its driver was removed; run_forever() uses it again later """
+    (sysfs.path / 'w1_bus_master1' / 'w1_master_slaves').unlink()
     bus.bus_lock = anyio.Lock()
-    await bus.set(scan_interval=0)
-    server = FakeServer()
-    task = asyncio.create_task(bus.scanning(server))
-    await settle()
+    with pytest.raises(FileNotFoundError):
+        await bus.scanning(w1.W1Master())
+
+
+async def test_scan_interval_0_scans_only_on_request(bus, sysfs, monkeypatch):
+    scans = []
+    slaves = w1.W1Master.slaves
+
+    async def counted(self):
+        scans.append(None)
+        return await slaves(self)
+    monkeypatch.setattr(w1.W1Master, 'slaves', counted)
+    task = await scan_once(bus, sysfs)
+    assert len(scans) == 1                              # after the start
+    bus.do_scan()
+    await settle_reads()
+    assert len(scans) == 2
+    await bus.set(scan_interval=0, do_scan=True)
+    await settle_reads()
+    assert len(scans) == 3
     await bus.set(scan_interval=3600)
-    await settle()
-    assert server.scans == 1                            # the change does not scan
+    await settle_reads()
+    assert len(scans) == 3                              # the change does not scan
     bus.scan_interval = 0.01                            # check_interval allows whole seconds only
     bus._wake_scanning()
     await asyncio.sleep(0.05)
     task.cancel()
-    assert server.scans >= 2
+    assert len(scans) >= 4                              # the changed interval applies at once
 
 
-async def test_do_scan_during_a_scan_scans_again(bus):
-    bus.bus_lock = anyio.Lock()
-    await bus.set(scan_interval=0)
-    server = FakeServer()
-    scan_now = server.scan_now
-
-    async def slow_scan(polling):
-        if server.scans == 0:
-            bus.do_scan()                               # a request during the first scan
-        await scan_now(polling)
-    server.scan_now = slow_scan
-    task = asyncio.create_task(bus.scanning(server))
-    await settle()
+async def test_run_uses_the_master(bus, sysfs, caplog):
+    caplog.set_level(logging.INFO, logger='evok')
+    sysfs.slaves('28-00000925204e')
+    sysfs.device('28-00000925204e', temperature=21500)
+    task = asyncio.create_task(bus.run())
+    for _ in range(100):
+        if bus.mysensors and bus.mysensors[0].value is not None:
+            break
+        await asyncio.sleep(0.01)
     task.cancel()
-    assert server.scans == 2
+    assert bus.mysensors[0].value == 21.5
+    assert bus.full()['master'] == 'w1_bus_master1'
+    assert '1-Wire bus OW uses the master w1_bus_master1' in caplog.text
 
 
 def refused():
-    """ The error of OWFS without owserver, an OSError of anyio caused by ConnectionRefusedError in task groups """
+    """ An OSError in the task groups of anyio """
     error = OSError('All connection attempts failed')
     error.__cause__ = ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 4304)")
     return ExceptionGroup('unhandled errors in a TaskGroup', [ExceptionGroup('unhandled errors in a TaskGroup',
@@ -312,7 +454,6 @@ def test_leaf_error():
 
 async def run_bus(bus, monkeypatch, run, runs):
     """ Run the bus until run() was called runs times """
-    from evok import owdevice
     monkeypatch.setattr(owdevice, 'RECONNECT_DELAY', 0)
     calls = []
 
@@ -331,31 +472,36 @@ async def run_bus(bus, monkeypatch, run, runs):
     assert len(calls) > runs
 
 
-async def test_owserver_not_running_is_logged_once(bus, monkeypatch, caplog):
-    """ The ExceptionGroup of anyio did not say that owserver is not running, it was logged every 10 s """
+def missing_master():
+    return ExceptionGroup('unhandled errors in a TaskGroup',
+                          [FileNotFoundError("1-Wire master 'w1_bus_master1' not found in /sys/bus/w1/devices")])
+
+
+async def test_missing_master_is_logged_once(bus, monkeypatch, caplog):
     async def run(n):
-        raise refused()
+        raise missing_master()
     await run_bus(bus, monkeypatch, run, 3)
     errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1
-    assert 'cannot connect to owserver at 127.0.0.1:4304, is owserver running? ConnectionRefusedError' in errors[0]
+    assert ("1-Wire bus OW: cannot use the 1-Wire master, is its driver loaded (e.g. ds2482)? "
+            "FileNotFoundError: 1-Wire master 'w1_bus_master1' not found") in errors[0]
     assert 'ExceptionGroup' not in caplog.text
 
 
-async def test_connection_after_owserver_failure_is_logged(bus, monkeypatch, caplog):
+async def test_master_after_a_failure_is_logged(bus, monkeypatch, caplog):
     caplog.set_level(logging.INFO, logger='evok')
 
     async def run(n):
         if n == 3:
-            bus._log_connected()                # owserver is running, then it stops
-        raise refused()
+            bus._log_connected()                # the master is found, then it fails again
+        raise missing_master()
     await run_bus(bus, monkeypatch, run, 4)
     messages = [r.getMessage() for r in caplog.records if r.levelno >= logging.INFO]
-    assert ['connected' in m for m in messages] == [False, True, False]   # the next failure is logged again
+    assert ['uses the master' in m for m in messages] == [False, True, False]   # the next failure is logged again
 
 
-async def test_failure_after_every_connection_is_logged_once(bus, monkeypatch, caplog):
-    """ A failure after the connection reset the logged error, it was logged after every connection """
+async def test_failure_after_every_start_is_logged_once(bus, monkeypatch, caplog):
+    """ A failure after the start reset the logged error, it was logged after every start """
     caplog.set_level(logging.INFO, logger='evok')
 
     async def run(n):
@@ -364,20 +510,11 @@ async def test_failure_after_every_connection_is_logged_once(bus, monkeypatch, c
     await run_bus(bus, monkeypatch, run, 3)
     messages = [r.getMessage() for r in caplog.records if r.levelno >= logging.INFO]
     assert len(messages) == 2
-    assert 'connected' in messages[0] and 'ValueError: a bug' in messages[1]
-
-
-def test_start_error_of_asyncowfs_is_not_logged(caplog):
-    """ asyncowfs logged 'Could not start 127.0.0.1:4304 CancelledError(...)' on every attempt """
-    log = logging.getLogger('asyncowfs.service')
-    log.error("Could not start %s:%s %s", '127.0.0.1', 4304, "CancelledError('Cancelled via cancel scope')")
-    log.error("Unprocessed: %s", 'event')
-    assert 'Could not start' not in caplog.text
-    assert 'Unprocessed: event' in caplog.text
+    assert 'uses the master' in messages[0] and 'ValueError: a bug' in messages[1]
 
 
 async def test_configured_sensor_is_not_lost_before_it_is_located(bus, monkeypatch):
-    """ #231: poll() read the sensor without its asyncowfs device at the start and reported it lost """
+    """ #231: poll() read the sensor without its device at the start and reported it lost """
     states = []
     monkeypatch.setattr(devents, 'status', lambda device, **kw: states.append((device.circuit, device.lost)))
     bus.bus_lock = anyio.Lock()
@@ -385,50 +522,16 @@ async def test_configured_sensor_is_not_lost_before_it_is_located(bus, monkeypat
     task = asyncio.create_task(bus.poll())
     await settle()
     assert (sensor.lost, states) == (False, [])          # not read without sens
-    sensor.sens = FakeSens(temperature=21.5)             # located by mon()
+    sensor.sens = FakeSens(temperature=21.5)             # found by the scan
     bus.wake()
     await settle()
     task.cancel()
     assert (sensor.value, sensor.lost, states) == (21.5, False, [('temp1', False)])
 
 
-async def test_configured_sensor_not_located_by_the_scan_is_lost(bus, events, caplog):
-    caplog.set_level(logging.INFO)
-    bus.bus_lock = anyio.Lock()
-    await bus.set(scan_interval=0)
-    events.clear()                                       # the change of the bus
-    found = DS18B20('28.A1B2C3D4E5F6', 'DS18B20', bus, circuit='found')
-    missing = DS18B20('28.000000000001', 'DS18B20', bus, circuit='missing')
-    # DeviceLocated of found is still in the queue of mon(), its sens is not assigned
-    task = asyncio.create_task(bus.scanning(FakeServer(found=['28.A1B2C3D4E5F6.7B'])))
-    await settle()
-    bus.do_scan()                                        # the next scan does not report it again
-    await settle()
-    task.cancel()
-    assert (found.lost, missing.lost) == (False, True)
-    assert events == [missing]
-    assert caplog.text.count('Sensor missing (28.000000000001) not found on the bus') == 1
-
-
-async def test_failed_scan_does_not_report_sensors_lost(bus, events):
-    bus.bus_lock = anyio.Lock()
-    await bus.set(scan_interval=0)
-    events.clear()
-    sensor = DS18B20('28.000000000001', 'DS18B20', bus)
-    server = FakeServer()
-
-    async def failed_scan(polling):
-        raise OSError('owserver closed the connection')
-    server.scan_now = failed_scan
-    task = asyncio.create_task(bus.scanning(server))
-    await settle()
-    task.cancel()
-    assert (sensor.lost, events) == (False, [])
-
-
 async def test_found_sensor_with_the_circuit_of_a_sensor_is_skipped(bus, caplog):
     """ #230: a configured sensor named by the circuit of a found one, the found one replaced it """
-    other = OwBusDriver('OW2', port=4305)
+    other = OwBusDriver('OW2', master='w1_bus_master2')
     configured = DS18B20('28.000000000001', 'DS18B20', other, circuit='28A1B2C3D4E5F67B')
     assert bus._create_found('28.A1B2C3D4E5F6.7B', 'DS18B20') is None
     assert bus._create_found('28.A1B2C3D4E5F6.7B', 'DS18B20') is None     # the next scan
@@ -437,35 +540,3 @@ async def test_found_sensor_with_the_circuit_of_a_sensor_is_skipped(bus, caplog)
     assert caplog.text.count("has the same name as the sensor 28.000000000001 of bus 'OW2', "
                              "the found sensor is skipped") == 1
     assert bus._create_found('28.A1B2C3D4E5F7.7B', 'DS18B20').circuit == '28A1B2C3D4E5F77B'
-
-
-async def test_owserver_address_of_the_bus(bus, monkeypatch, caplog):
-    remote = OwBusDriver('REMOTE', host='192.168.1.10', port=4305)
-
-    async def run(n):
-        raise refused()
-    await run_bus(remote, monkeypatch, run, 1)
-    assert 'cannot connect to owserver at 192.168.1.10:4305' in caplog.text
-
-
-async def test_located_device_waits_for_the_struct_set_up_by_another_bus():
-    """ The device classes of asyncowfs are shared, the setup by the first bus was in progress and
-        get_type() of the device of the second bus failed, the bus failed
-    """
-    from evok.owdevice import wait_for_struct
-
-    class Device_28:
-        _did_setup = None                       # set up by another bus
-    device = Device_28()
-
-    async def finish_setup():
-        await asyncio.sleep(0.1)
-        Device_28._did_setup = True
-    task = asyncio.create_task(finish_setup())
-    await wait_for_struct(device)
-    assert Device_28._did_setup is True
-    await task
-    Device_28._did_setup = None
-    with anyio.move_on_after(1) as scope:
-        await wait_for_struct(device, timeout=0.1)   # a failed setup does not wait forever
-    assert not scope.cancelled_caught
