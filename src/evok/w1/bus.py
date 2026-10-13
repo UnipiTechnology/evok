@@ -5,11 +5,12 @@ import typing
 
 from ..devices import OWBUS, OWPOWER
 from ..devices import devents, Devices, SENSOR, to_bool
-from ..log import logger
 from ..modbus import set_devices
 from . import sysfs
 from .sysfs import address_key
 from .sensors import SUPPORTED_DEVICES, DuplicateCircuitError, MySensorFabric, NotSupportedError, check_interval
+
+logger = logging.getLogger(__name__)
 
 RECONNECT_DELAY = 10  # s, the next attempt to use the 1-Wire master after a failure
 SEARCH_WAIT = 1.0  # s, the wait for a forced search of the kernel, it takes a few ms for each device

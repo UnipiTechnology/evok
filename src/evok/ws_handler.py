@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 from tornado import websocket
 
@@ -8,7 +9,8 @@ from .devices import DI, RO, AI, AO, SENSOR
 from .devices import Devices, devtype_of, num_to_devtype_name
 from .handlers_base import CLIENT_ERRORS, check_params, client_error
 from .modbus import set_devices
-from .log import logger
+
+logger = logging.getLogger(__name__)
 
 # clients notified by status_cb() in evok.py, websocket clients and the webhook
 registered_ws = {}

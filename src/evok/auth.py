@@ -14,10 +14,12 @@ import base64
 import binascii
 import hmac
 import json
+import logging
 from urllib.parse import urlparse
 
 from .errors import ReadOnlyAccess
-from .log import logger
+
+logger = logging.getLogger(__name__)
 
 WRITE, READ = 'write', 'read'       # the access of a request
 

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import asyncio
+import logging
 
 from ..devices import OWPOWER, WATCHDOG, NV_SAVE, to_bool
-from ..log import logger
 from .base import IODevice
 from .client import Client, AccessorU16
+
+logger = logging.getLogger(__name__)
 
 
 class OwPower(IODevice):

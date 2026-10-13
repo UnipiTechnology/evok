@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import asyncio
+import logging
 
 from tmodbus import (
     AsyncModbusClient,
@@ -11,10 +12,11 @@ from tmodbus import (
 from .. import devents
 from ..devices import MODBUS_SLAVE, Devices, to_bool
 from ..errors import describe_error, root_cause
-from ..log import logger
 from .builder import IOParser
 from .cache import ModbusCacheMap
 from .client import Client
+
+logger = logging.getLogger(__name__)
 
 
 def _error_kind(error: BaseException | None) -> type | None:

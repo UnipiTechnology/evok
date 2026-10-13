@@ -1,5 +1,6 @@
 import functools
 import inspect
+import logging
 from typing import Awaitable, Optional
 
 from tornado_jsonrpc2 import JSONRPCHandler
@@ -10,8 +11,9 @@ from .blocks import sequencer, start_pulse
 from .devices import SENSOR, OWBUS, DI, DO, RO, AI, AO
 from .devices import Devices, DeviceNotFound, to_bool
 from .errors import SequenceRunning, UnitUnavailable
-from .log import logger
 from .modbus import set_devices
+
+logger = logging.getLogger(__name__)
 
 
 class UnitUnavailableError(InvalidParams):
