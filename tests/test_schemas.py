@@ -4,7 +4,8 @@ import jsonschema
 import pytest
 
 from evok.blocks import SequencerDevice
-from evok.devices import Aliases
+from evok.devices import Aliases, to_bool, to_float
+from evok.handlers_base import check_params
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, Register
 from evok.modbus.digital import ULED, DigitalInput, DigitalOutput, Relay
 from evok.modbus.scanner import ModbusScanner
@@ -105,10 +106,6 @@ def test_bulk_schema_accepts(request_body):
 def test_bulk_schema_rejects(request_body):
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(instance=request_body, schema=bulk_post_inp_schema)
-
-
-from evok.devices import to_bool, to_float
-from evok.handlers_base import check_params
 
 
 @pytest.mark.parametrize('dev, kw', [

@@ -58,9 +58,13 @@ line-length = 120               # as .flake8
 target-version = "py312"
 
 [tool.ruff.lint]
-# pyflakes, the swallowed exceptions, the style and the modernization;
+# pycodestyle, pyflakes, bugbear, the async and the blind exceptions, the style and the modernization;
 # the default rules of ruff change between its versions
-select = ["F", "S110", "I", "UP", "C408", "EXE", "TRY401", "RUF013", "C400", "C402", "RUF010", "PLC0206", "RUF022", "PIE790", "C404", "PLR1730"]
+select = [
+    "E", "F", "W", "I", "UP", "B", "RUF", "ASYNC", "BLE", "SIM", "C4", "S110", "EXE", "TRY401", "PGH004",
+    "PLC0206", "PIE790", "PLR1730",
+]
+ignore = ["SIM102", "RUF012", "B023", "ASYNC109"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["evok"]

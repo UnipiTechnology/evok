@@ -15,7 +15,7 @@ async def make_iomode(mode_value, regmode=0, modes=MODES):
 
 
 async def test_update_reports_change_once():
-    client, iomode = await make_iomode(1)
+    _client, iomode = await make_iomode(1)
     assert (iomode.mode, iomode.unit, iomode.range) == (None, None, None)
     assert iomode.update()
     assert (iomode.mode, iomode.mode_value, iomode.unit, iomode.range) == ('Current', 1, 'mA', [0, 20])
@@ -23,7 +23,7 @@ async def test_update_reports_change_once():
 
 
 async def test_undefined_mode_value():
-    client, iomode = await make_iomode(7)
+    _client, iomode = await make_iomode(7)
     assert iomode.update()
     assert (iomode.mode, iomode.mode_value, iomode.data) == (None, 7, {})
 
@@ -94,7 +94,7 @@ async def make_dimode(holding, bitmask=0b10, modes=('Simple', 'DirectSwitch')):
 
 
 async def test_dimode_update_reports_change_once():
-    client, dimode = await make_dimode({0: 0b10, 1: 0, 2: 0b10})
+    _client, dimode = await make_dimode({0: 0b10, 1: 0, 2: 0b10})
     assert dimode.update()
     assert (dimode.mode, dimode.ds_mode) == ('DirectSwitch', 'Toggle')
     assert not dimode.update()

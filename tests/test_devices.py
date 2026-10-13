@@ -892,8 +892,8 @@ async def test_ow_temperature_valid_mask():
     assert t.is_valid is False
     await client.cache.do_scan(initial=True)
     assert await t.check_new_data()
-    assert without_comm(t.full()) == {'dev': 'data_point', 'circuit': 'x', 'value': 21.5, 'writable': False, 'unit': 'C',
-                        'valid': True}
+    assert without_comm(t.full()) == {'dev': 'data_point', 'circuit': 'x', 'value': 21.5, 'writable': False,
+                                      'unit': 'C', 'valid': True}
     # only the validity changes
     client.mb_client.holding[2] = 0b01
     await client.cache.do_scan()
@@ -933,7 +933,7 @@ async def test_data_point_input_register():
 
 
 async def test_data_point_not_scanned():
-    client, dp = make_dp([5])
+    _client, dp = make_dp([5])
     await dp.check_new_data()
     assert dp.value is None
 

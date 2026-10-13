@@ -12,7 +12,7 @@ async def make_pwm(cls, holding):
 
 async def test_hard_update_and_duty():
     # cycle 48000, prescale 10 -> 100 Hz
-    client, pwm = await make_pwm(HardPwmFrequency, {0: 47999, 1: 9})
+    _client, pwm = await make_pwm(HardPwmFrequency, {0: 47999, 1: 9})
     assert pwm.update()
     assert pwm.freq == 100.0
     assert not pwm.update()
@@ -69,7 +69,7 @@ async def test_write_of_registers_not_adjacent():
 
 @pytest.mark.parametrize('preset, prescale, freq', [(0, 5, 1000), (1, 5, 100), (2, 4, 200.0)])
 async def test_soft_update(preset, prescale, freq):
-    client, pwm = await make_pwm(SoftPwmFrequency, {0: preset, 1: prescale})
+    _client, pwm = await make_pwm(SoftPwmFrequency, {0: preset, 1: prescale})
     assert pwm.update()
     assert pwm.freq == freq
 

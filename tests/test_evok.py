@@ -61,4 +61,3 @@ async def test_load_all_methods(method, code):
         f"http://127.0.0.1:{port}/rest/all", method=method, body='' if method == 'POST' else None, raise_error=False)
     server.stop()
     assert response.code == code
-

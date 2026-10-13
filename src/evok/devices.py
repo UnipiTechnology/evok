@@ -193,18 +193,13 @@ class DeviceList(dict):
         except KeyError:
             return super().__getitem__(self.altnames[key])
 
-    def _devdict(self, devtype):
-        """ Devices of a type, the type can be an altname """
-        try:
-            return self[devtype]
-        except KeyError:
-            raise DeviceNotFound(f"Invalid device type '{devtype}'")
-
     def by_name(self, devtype, circuit=None, major_group=None):
         """ The device of a type (or its altname) with a circuit or an alias,
             without a circuit all devices of the type, optionally of a major_group
         """
-        devdict = self._devdict(devtype)
+        devdict = super().get(self.altnames.get(devtype, devtype))
+        if devdict is None:
+            raise DeviceNotFound(f"Invalid device type '{devtype}'")
         if circuit is None:
             if major_group is not None:
                 return [dev for dev in devdict.values() if dev.major_group == major_group]
@@ -232,7 +227,7 @@ class DeviceList(dict):
                 self.aliases.add(alias, device)
                 device.alias = alias
                 logger.info(f"Set alias {alias} to {devtype_name}[{device.circuit}]")
-            except Exception as E:
+            except Exception as E:  # noqa: BLE001
                 logger.warning(f"Error on setting saved alias: {E}")
 
         devents.config(device)
@@ -321,6 +316,7 @@ devtype_altnames = {
 def devtype_of(name: str) -> str:
     """ Device type of a name, also of 'dev' in full() which is not always the device type (e.g. 'wd') """
     return devtype_altnames.get(name, name)
+
 
 Devices = DeviceList(devtype_altnames)
 for _key in num_to_devtype_name.values():

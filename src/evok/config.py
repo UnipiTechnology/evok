@@ -279,7 +279,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
 
         circuit = bus_name
         bus = w1.OwBusDriver(circuit, interval=interval, scan_interval=scan_interval,
-                                   owpower_circuit=owpower, master=master)
+                             owpower_circuit=owpower, master=master)
         Devices.register_device(OWBUS, bus)
         claims.w1_masters[master] = bus_name
 

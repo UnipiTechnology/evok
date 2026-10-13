@@ -79,7 +79,7 @@ class OwBusDriver:
                 await self.run()
             except asyncio.CancelledError:
                 raise
-            except Exception as E:
+            except Exception as E:  # noqa: BLE001
                 self._log_failure(E)
             # the devices are located again by the next scan
             for mysensor in self.mysensors:
@@ -330,7 +330,7 @@ class OwBusDriver:
         try:
             async with self.bus_lock:
                 changed = await mysensor.read_val_from_sens(mysensor.sens)
-        except Exception as E:
+        except Exception as E:  # noqa: BLE001
             if not mysensor.lost:  # Catch the edge
                 logger.debug(f"Sensor {mysensor.circuit} is lost: {type(E).__name__}: {E}")
                 mysensor.set_lost()

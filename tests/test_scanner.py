@@ -1,8 +1,9 @@
 import asyncio
 import time
+from itertools import pairwise
 
 import pytest
-from conftest import FakeModbus
+from conftest import FakeModbus, wait_until
 from tmodbus import AsyncRtuTransport, AsyncSmartTransport, AsyncTcpTransport
 from tmodbus.exceptions import RequestRetryFailedError
 
@@ -75,7 +76,7 @@ async def test_devices_are_created_without_scan_enabled(l0306):
 
 async def test_last_comm_does_not_follow_the_clock_of_the_system(l0306, monkeypatch):
     """ A jump of the clock, e.g. by NTP after the start, made last_comm huge or negative """
-    scanner, mb = make_scanner(l0306)
+    scanner, _mb = make_scanner(l0306)
     assert await scanner.cache.do_scan(initial=True)
     monkeypatch.setattr(time, 'time', lambda: 0.0)          # the clock jumped back to 1970
     assert 0 <= scanner.full()['last_comm'] < 1
@@ -98,7 +99,7 @@ async def test_scan_error_is_reported(l0306):
 
 
 async def test_unexpected_error_of_scan_task_is_logged(l0306, caplog):
-    scanner, mb = make_scanner(l0306)
+    scanner, _mb = make_scanner(l0306)
 
     def broken():
         raise RuntimeError('bug')
@@ -113,7 +114,7 @@ async def test_unexpected_error_of_scan_task_is_logged(l0306, caplog):
 
 async def test_started_again_scan_does_not_create_devices_again(l0306):
     """ Without scan_enabled the task is done after the first scan, a new start registered the devices twice """
-    scanner, mb = make_scanner(l0306, scan_enabled=False)
+    scanner, _mb = make_scanner(l0306, scan_enabled=False)
     scanner.start_scanning()
     await asyncio.wait_for(scanner.scan_task, 1)
 
@@ -127,7 +128,7 @@ async def test_started_again_scan_does_not_create_devices_again(l0306):
 
 async def test_unexpected_error_of_scan_is_reported(l0306):
     """ Only the communication errors were reported by full(), the scan_error of a failing scan was null """
-    scanner, mb = make_scanner(l0306)
+    scanner, _mb = make_scanner(l0306)
     assert await scanner.cache.do_scan(initial=True)
 
     async def broken():
@@ -139,7 +140,7 @@ async def test_unexpected_error_of_scan_is_reported(l0306):
 
 async def test_repeated_unexpected_error_of_scan_is_logged_once(l0306, caplog):
     """ The traceback of the same error was logged on every scan """
-    scanner, mb = make_scanner(l0306)
+    scanner, _mb = make_scanner(l0306)
     assert await scanner.cache.do_scan(initial=True)
     do_scan = scanner.client.do_scan
 
@@ -159,7 +160,7 @@ async def test_repeated_unexpected_error_of_scan_is_logged_once(l0306, caplog):
 
 async def test_scan_interval_is_period_of_scans(l0306):
     """ The pause after a scan was the interval, a scan of 30 ms at 20 Hz was repeated every 80 ms """
-    scanner, mb = make_scanner(l0306, scan_freq=20)
+    scanner, _mb = make_scanner(l0306, scan_freq=20)
     scanner.populated = True
     scans = []
 
@@ -176,7 +177,7 @@ async def test_scan_interval_is_period_of_scans(l0306):
 
 async def test_long_scan_is_not_caught_up(l0306):
     """ A scan longer than the interval is followed by the next one, without a burst of the missed ones """
-    scanner, mb = make_scanner(l0306, scan_freq=20)
+    scanner, _mb = make_scanner(l0306, scan_freq=20)
     scanner.populated = True
     scans = []
 
@@ -193,7 +194,7 @@ async def test_long_scan_is_not_caught_up(l0306):
 
 async def test_stop_scanning_waits_for_scan(l0306):
     """ stop_scanning() was never called, the units were scanned during the shutdown """
-    scanner, mb = make_scanner(l0306)
+    scanner, _mb = make_scanner(l0306)
     scanner.populated = True
     scanning = asyncio.Event()
 
@@ -210,7 +211,7 @@ async def test_stop_scanning_waits_for_scan(l0306):
 
 
 async def test_stop_scanning_after_error_of_scan_task(l0306, caplog):
-    scanner, mb = make_scanner(l0306)
+    scanner, _mb = make_scanner(l0306)
 
     def broken():
         raise RuntimeError('bug')
@@ -222,10 +223,9 @@ async def test_stop_scanning_after_error_of_scan_task(l0306, caplog):
 
 
 async def test_set_disables_and_enables_scan(l0306):
-    scanner, mb = make_scanner(l0306)
+    scanner, _mb = make_scanner(l0306)
     scanner.start_scanning()
-    while not scanner.populated:
-        await asyncio.sleep(0.01)
+    await wait_until(lambda: scanner.populated)
     scans = []
     do_scan = scanner.client.do_scan
 
@@ -262,7 +262,7 @@ async def test_set_scan_enabled_false_before_first_scan_creates_devices(l0306):
 
 async def test_set_scan_enabled_restarts_stopped_scan(l0306, caplog):
     """ A scan stopped by an unexpected error was started again only by a restart of Evok """
-    scanner, mb = make_scanner(l0306)
+    scanner, _mb = make_scanner(l0306)
     populate = scanner.parser.populate
 
     def broken():
@@ -272,14 +272,13 @@ async def test_set_scan_enabled_restarts_stopped_scan(l0306, caplog):
     await asyncio.wait([scanner.scan_task])
     scanner.parser.populate = populate
     await scanner.set(scan_enabled=True)
-    while not scanner.populated:
-        await asyncio.sleep(0.01)
+    await wait_until(lambda: scanner.populated)
     assert sorted(Devices[DI]) == ['1_01', '1_02', '1_03', '1_04']
     await scanner.stop_scanning()
 
 
 async def test_set_alias(l0306):
-    scanner, mb = make_scanner(l0306)
+    scanner, _mb = make_scanner(l0306)
     Devices.register_device(MODBUS_SLAVE, scanner)
     await scanner.set(alias='unit_1')
     assert scanner.full()['alias'] == 'unit_1'
@@ -287,14 +286,14 @@ async def test_set_alias(l0306):
 
 
 async def test_set_invalid_alias_does_not_change_scan(l0306):
-    scanner, mb = make_scanner(l0306, scan_enabled=False)
+    scanner, _mb = make_scanner(l0306, scan_enabled=False)
     with pytest.raises(ValueError):
         await scanner.set(scan_enabled=True, alias='no spaces')
     assert scanner.scan_enabled is False and scanner.scan_task is None
 
 
 async def test_set_invalid_scan_enabled(l0306):
-    scanner, mb = make_scanner(l0306)
+    scanner, _mb = make_scanner(l0306)
     with pytest.raises(ValueError):
         await scanner.set(scan_enabled='maybe')
     assert scanner.scan_enabled is True
@@ -304,7 +303,7 @@ async def test_set_sends_status(l0306, monkeypatch):
     """ The change was sent as a config event, which has no receiver """
     events = []
     monkeypatch.setattr(devents, 'status', lambda device, **kw: events.append(device))
-    scanner, mb = make_scanner(l0306, scan_enabled=False)
+    scanner, _mb = make_scanner(l0306, scan_enabled=False)
     Devices.register_device(MODBUS_SLAVE, scanner)
     await scanner.set(alias='unit_1')
     await scanner.set(scan_enabled=False)
@@ -333,7 +332,7 @@ async def test_missing_unit_is_retried_slower(l0306):
     scanner.scan_enabled = False
     scanner.start_scanning()
     await asyncio.wait_for(scanner.scan_task, 2)
-    gaps = [later - earlier for earlier, later in zip(attempts, attempts[1:])]
+    gaps = [later - earlier for earlier, later in pairwise(attempts)]
     # doubled up to MAX_SCAN_INTERVAL, a sleep is never shorter, the bound above is loose for a slow machine
     assert gaps[1] >= 0.02 and min(gaps[2:]) >= 0.04 and max(gaps) < 0.5
 
@@ -349,8 +348,7 @@ async def test_lost_and_restored_unit_is_sent(l0306, monkeypatch):
     await asyncio.sleep(0.05)
     assert events == [scanner]                              # once, not by every retry
     mb.connected = True
-    while not scanner.populated:
-        await asyncio.sleep(0.01)
+    await wait_until(lambda: scanner.populated)
     assert events[1] is scanner                             # connected
     events.clear()
     mb.connected = False

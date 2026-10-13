@@ -211,7 +211,7 @@ class MqttHandler:
                     await client.publish(self.topic(*key), json.dumps(state), qos=self.settings.qos, retain=True)
                 except aiomqtt.MqttError:
                     raise
-                except Exception as E:
+                except Exception as E:  # noqa: BLE001
                     logger.error(f"MQTT error in publishing {self.topic(*key)}: {E}")
 
     async def _announce(self, client, key, state):

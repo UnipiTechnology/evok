@@ -98,7 +98,7 @@ class WhHandler:
                         await self.http_client.fetch(self.url, method="POST",
                                                      headers={"Content-Type": "application/json"},
                                                      body=json.dumps(states))
-                except Exception as E:
+                except Exception as E:  # noqa: BLE001
                     # the states are not sent again, the next change is sent
                     logger.error(f"WhHandler error in request to {self.url}: {E}")
         finally:
@@ -154,7 +154,7 @@ class LogHandler(TokenAuth, tornado.web.RequestHandler):
         try:
             lines = int(self.get_argument('lines', str(self.DEFAULT_LINES)))
         except ValueError:
-            raise tornado.web.HTTPError(400, 'Invalid number of lines')
+            raise tornado.web.HTTPError(400, 'Invalid number of lines') from None
         lines = max(1, min(lines, self.MAX_LINES))
         text = await asyncio.to_thread(read_log_tail, self.log_file, lines)
         self.set_header('Content-Type', 'text/plain; charset=utf-8')
@@ -241,7 +241,7 @@ async def main():
 
     config_path = args.config_dir.rstrip('/') or '/'
     alias_file = args.alias_file
-    if not os.path.isfile(os.path.join(config_path, 'config.yaml')):
+    if not os.path.isfile(os.path.join(config_path, 'config.yaml')):  # noqa: ASYNC240
         sys.exit(f"evok: config file '{os.path.join(config_path, 'config.yaml')}' not found "
                  "(use --config-dir or EVOK_CONFIG_DIR)")
     evok_config = config.EvokConfig(config_path)

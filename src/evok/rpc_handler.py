@@ -56,7 +56,7 @@ async def create_response(request, backend):
     try:
         inspect.signature(method).bind(*args, **kwargs)
     except TypeError as e:
-        raise InvalidParams(str(e))
+        raise InvalidParams(str(e)) from e
 
     try:
         result = method(*args, **kwargs)
@@ -64,11 +64,11 @@ async def create_response(request, backend):
             result = await result
         return result
     except (DeviceNotFound, ValueError) as e:
-        raise InvalidParams(str(e))
+        raise InvalidParams(str(e)) from None
     except UnitUnavailable as e:
-        raise UnitUnavailableError(str(e))
+        raise UnitUnavailableError(str(e)) from None
     except SequenceRunning as e:
-        raise SequenceRunningError(str(e))
+        raise SequenceRunningError(str(e)) from None
     except Exception:
         # tornado_jsonrpc2 returned the message of the error to the client and did not log it
         logger.exception(f"RPC {request.method}")

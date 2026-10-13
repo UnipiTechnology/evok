@@ -66,7 +66,8 @@ async def test_group_queries(bulk, devices, query, expected):
 
 
 async def test_group_assignment_by_group(bulk, devices):
-    code, reply = await bulk({'group_assignments': [{'device_type': 'do', 'group': 2, 'assigned_values': {'value': 1}}]})
+    code, _reply = await bulk({'group_assignments': [
+        {'device_type': 'do', 'group': 2, 'assigned_values': {'value': 1}}]})
     assert code == 200
     assert (devices[DO]['1_01'].calls, devices[DO]['2_01'].calls) == ([], [{'value': 1}])
 
@@ -108,7 +109,7 @@ async def test_altnames_are_merged(bulk, devices):
 
 
 async def test_unknown_type_in_query(bulk, devices):
-    code, reply = await bulk({'group_queries': [{'device_types': ['do', 'foo']}]})
+    code, _reply = await bulk({'group_queries': [{'device_types': ['do', 'foo']}]})
     assert code == 404
 
 
@@ -116,7 +117,8 @@ async def test_device_circuits_with_alias(bulk, devices):
     Devices.set_alias('pump', devices[DO]['2_01'])
     code, reply = await bulk({
         'group_queries': [{'device_types': ['do'], 'device_circuits': ['pump']}],
-        'group_assignments': [{'device_type': 'do', 'device_circuits': ['pump', '1_01'], 'assigned_values': {'value': 1}}],
+        'group_assignments': [
+            {'device_type': 'do', 'device_circuits': ['pump', '1_01'], 'assigned_values': {'value': 1}}],
     })
     assert code == 200
     assert [state['circuit'] for state in reply['group_queries'][0]] == ['2_01']

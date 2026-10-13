@@ -224,7 +224,8 @@ async def test_read_token_reads(server, read_token, path):
 async def test_read_token_cannot_change(server, read_token, path, body):
     response = await fetch(server, path, 'POST', body, READ)
     assert response.code == 403
-    assert json.loads(response.body) == {'success': False, 'errors': {'ReadOnlyAccess': 'The token allows only reading'}}
+    assert json.loads(response.body) == {'success': False,
+                                         'errors': {'ReadOnlyAccess': 'The token allows only reading'}}
     assert (await fetch(server, path, 'POST', body, WRITE)).code == 404     # the token for changes, no device
 
 

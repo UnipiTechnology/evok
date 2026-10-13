@@ -81,7 +81,7 @@ class IOParser:
         elif m_feature.get('pwm_reg') and m_feature.get('pwm_preset_reg') and m_feature.get('pwm_cpres_reg'):
             pwm = SoftPwmFrequency(self.client, m_feature['pwm_preset_reg'], m_feature['pwm_cpres_reg'])
         elif any(key in m_feature for key in ('pwm_reg', 'pwm_ps_reg', 'pwm_c_reg', 'pwm_preset_reg',
-                                               'pwm_cpres_reg')) or 'PWM' in m_feature.get('modes', []):
+                                              'pwm_cpres_reg')) or 'PWM' in m_feature.get('modes', []):
             raise ValueError(f"Incomplete PWM registers of feature {m_feature['type']}")
         else:
             pwm = None
@@ -217,5 +217,5 @@ class IOParser:
         for m_feature in self.hw_features:
             try:
                 self.parse_feature(m_feature)
-            except Exception as E:
+            except Exception as E:  # noqa: BLE001
                 logger.error(f"Invalid feature {m_feature.get('type')} at board {self.circuit}: {E!r}")

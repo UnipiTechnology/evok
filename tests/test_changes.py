@@ -93,7 +93,7 @@ async def test_unit_without_periodic_scan_is_read_before_it_is_refused(units):
     client.periodic_scan = False
     do = Devices.by_name(DO, '1_01')
     client.cache.scan_error = TimeoutError('no response')
-    state, = await set_devices([(do, {'value': 1})])        # the unit responds again
+    _state, = await set_devices([(do, {'value': 1})])        # the unit responds again
     assert client.cache.scan_error is None and client.mb_client.writes == [('coil', 0, 1)]
     client.mb_client.connected = False
     client.cache.scan_error = TimeoutError('no response')
@@ -189,7 +189,7 @@ async def test_units_are_changed_one_after_another(units):
 
 
 async def test_error_keeps_the_states_done_before_it(units):
-    client1, client2, client3 = await units('1', '2', '3')
+    _client1, _client2, client3 = await units('1', '2', '3')
     assignments = [(Devices.by_name(DO, '1_01'), {'value': 1}),
                    (Devices.by_name(DO, '2_01'), {'value': 1}),
                    (Devices.by_name(DO, '2_02'), {'pwm_duty': 150}),     # fails in set()
@@ -401,4 +401,3 @@ async def test_lost_unit_sends_all_its_devices_once(units, events):
     assert await client.do_scan()
     recovered, = [proxy.changeset for proxy in events]
     assert len(recovered) == len(lost) and di.full()['comm'] == 'ok'
-

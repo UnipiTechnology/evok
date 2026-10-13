@@ -135,7 +135,6 @@ def test_none_alias_resets_to_empty_string(devices):
     assert 'kitchen' not in devices.aliases
 
 
-
 @pytest.mark.parametrize('find', [
     lambda: Devices.by_name('foo'),
     lambda: Devices.by_name('foo', '1_01'),

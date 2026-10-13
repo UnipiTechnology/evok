@@ -6,6 +6,7 @@ import tornado.httpserver
 import tornado.testing
 import tornado.web
 import tornado.websocket
+from conftest import wait_until
 
 from evok.devices import DI, DO, Devices
 from evok.ws_handler import WsHandler, registered_ws
@@ -61,8 +62,6 @@ async def send(client, message):
     while (reply := json.loads(await asyncio.wait_for(client.read_message(), 1))) != Devices[DO]['1_01'].full():
         replies.append(reply)
     return replies
-
-
 
 
 @pytest.mark.parametrize('message, expected', [
@@ -207,7 +206,7 @@ class Changing:
 
 async def test_events_of_slow_client_are_merged(handlers):
     """ Every event was written at once, the messages of a slow client were buffered without a limit """
-    client, handler = handlers
+    _client, handler = handlers
     sent, release = [], asyncio.Event()
 
     async def slow_write(message):
@@ -219,15 +218,14 @@ async def test_events_of_slow_client_are_merged(handlers):
         await asyncio.sleep(0)
     handler.on_event(Devices[DI]['1_01'])
     release.set()
-    while handler.send_task is not None:
-        await asyncio.sleep(0)
+    await wait_until(lambda: handler.send_task is None, 0)
     # the first state is sent at once, the next ones while it is sent are merged, the last state of each device
     assert sent == [[{'dev': 'do', 'circuit': '1_01', 'value': 1}],
                     [{'dev': 'do', 'circuit': '1_01', 'value': 3}, {'dev': 'di', 'circuit': '1_01'}]]
 
 
 async def test_event_of_closed_client_is_dropped(handlers, caplog):
-    client, handler = handlers
+    _client, handler = handlers
 
     async def closed(message):
         raise tornado.websocket.WebSocketClosedError()

@@ -53,9 +53,9 @@ async def test_get_register_before_scan_raises():
 async def test_get_unknown_register_raises():
     cache = ModbusCacheMap(BLOCKS, FakeModbus())
     await cache.do_scan(initial=True)
-    with pytest.raises(EUnknownRegister, match='holding registers 5..5 are not'):
+    with pytest.raises(EUnknownRegister, match=r'holding registers 5\.\.5 are not'):
         cache.get_register(5, 1)
-    with pytest.raises(EUnknownRegister, match='input registers 0..0 are not'):
+    with pytest.raises(EUnknownRegister, match=r'input registers 0\.\.0 are not'):
         cache.get_register(0, 1, is_input=True)
 
 
@@ -93,7 +93,7 @@ async def test_read_past_group_end_raises():
     """ The value was reported as not read yet, it was null forever """
     cache = ModbusCacheMap(BLOCKS, FakeModbus())
     await cache.do_scan(initial=True)
-    with pytest.raises(EUnknownRegister, match='registers 1..2 are not in one'):
+    with pytest.raises(EUnknownRegister, match=r'registers 1\.\.2 are not in one'):
         cache.get_register(1, 2)
 
 
@@ -107,10 +107,10 @@ async def test_read_over_two_adjacent_groups_raises():
 
 async def test_no_cached_value_names_the_register():
     cache = ModbusCacheMap(BLOCKS, FakeModbus())
-    with pytest.raises(ENoCacheRegister, match='register 12$'):
+    with pytest.raises(ENoCacheRegister, match=r'register 12$'):
         cache.get_register(12, 1)                           # the address, not the offset 2 in the group
     cache.groups[1].values[0] = 0                           # the register 10 of the group is read
-    with pytest.raises(ENoCacheRegister, match='register 11$'):
+    with pytest.raises(ENoCacheRegister, match=r'register 11$'):
         cache.get_register(10, 2)                           # the second register is not read
 
 
@@ -220,7 +220,7 @@ async def test_scan_error_returns_false(error):
 
 def test_overlapping_blocks_are_rejected():
     blocks = [{'start_reg': 0, 'count': 4, 'scan_divider': 1}, {'start_reg': 3, 'count': 2, 'scan_divider': 5}]
-    with pytest.raises(ValueError, match='overlaps the block of registers 0..3'):
+    with pytest.raises(ValueError, match=r'overlaps the block of registers 0\.\.3'):
         ModbusCacheMap(blocks, FakeModbus())
     # the holding and input registers are separate, adjacent blocks do not overlap
     ModbusCacheMap([blocks[0], {**blocks[1], 'type': 'input'}, {'start_reg': 4, 'count': 1, 'scan_divider': 1}],
