@@ -7,9 +7,8 @@ import tornado.httpserver
 import tornado.testing
 import tornado.web
 
-from evok.devices import Devices, AI
+from evok.devices import AI, Devices, to_bool
 from evok.evok import LegacyJsonHandler, LegacyRestHandler
-from evok.devices import to_bool
 from evok.w1 import OwBusDriver
 
 
@@ -63,7 +62,7 @@ async def test_owbus_flags_in_json(fetch, owbus):
 
 
 async def test_owbus_invalid_flag(fetch, owbus):
-    code, reply = await fetch('/rest/owbus/OWFS', 'POST', urlencode({'do_reset': 'maybe'}))
+    code, _reply = await fetch('/rest/owbus/OWFS', 'POST', urlencode({'do_reset': 'maybe'}))
     assert code == 400
     assert owbus == []
 
@@ -92,7 +91,7 @@ def analogs():
 async def test_get_all_property(fetch, analogs):
     assert await fetch('/rest/ai/all/range') == (200, [{'circuit': '1_01', 'range': [0, 10]}])
     assert await fetch('/rest/ai/all/value') == (200, [{'circuit': '1_01', 'value': 1.0},
-                                                         {'circuit': '1_02', 'value': 2.0}])
+                                                       {'circuit': '1_02', 'value': 2.0}])
 
 
 async def test_get_all_unknown_property(fetch, analogs):
@@ -144,7 +143,7 @@ class FakeOutput:
 ])
 async def test_post_url(fetch, path, code):
     Devices['do']['1_01'] = FakeOutput('1_01')
-    status, reply = await fetch(path, 'POST', urlencode({'value': '1'}))
+    status, _reply = await fetch(path, 'POST', urlencode({'value': '1'}))
     assert status == code
     assert Devices['do']['1_01'].calls == ([{'value': '1'}] if code == 200 else [])
 
@@ -159,6 +158,7 @@ def test_alias_all_is_reserved():
 def modbus_buses(l0306):
     """ An RTU bus with two units and a TCP bus with one, created from the configuration """
     from types import SimpleNamespace
+
     from evok import config
     config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
         'RTU': {'type': 'MODBUSRTU', 'port': '/dev/null', 'baudrate': 9600, 'parity': 'E', 'retries': 2,

@@ -1,4 +1,6 @@
-#!/usr/bin/python
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _status(device, **kwarg):
@@ -24,7 +26,8 @@ def register_status_cb(callback):
             try:
                 callback(device, kwarg)
             except Exception:
-                pass
+                # an error of a client must not stop the change of the device which sent the event
+                logger.exception("Error in the status callback")
 
         status = newstatus
     else:
@@ -38,7 +41,8 @@ def register_config_cb(callback):
             try:
                 callback(device, kwarg)
             except Exception:
-                pass
+                # an error of a client must not stop the change of the device which sent the event
+                logger.exception("Error in the config callback")
 
         config = newconfig
     else:

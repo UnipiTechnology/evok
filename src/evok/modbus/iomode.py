@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import logging
-from .client import Client, AccessorU16, AccessorBit, Accessor
+
+from .client import Accessor, AccessorBit, AccessorU16, Client
 
 logger = logging.getLogger(__name__)
 

@@ -4,11 +4,12 @@ import time
 from types import SimpleNamespace
 
 import pytest
+import yaml
 from tmodbus import AsyncModbusClient, AsyncSmartTransport
 from tmodbus.exceptions import CRCError, ModbusConnectionError, RequestRetryFailedError, ServerDeviceBusyError
 
 from evok import config
-from evok.devices import Devices, DEVICE_INFO, MODBUS_SLAVE, OWBUS, SENSOR, SERIALBUS, TCPBUS
+from evok.devices import DEVICE_INFO, MODBUS_SLAVE, OWBUS, SENSOR, SERIALBUS, TCPBUS, Devices
 from evok.w1 import DS18B20, OwBusDriver
 
 
@@ -120,7 +121,7 @@ def test_config_with_autogen(tmp_path):
 
 
 def test_config_python_tags_are_not_executed(tmp_path):
-    with pytest.raises(Exception):
+    with pytest.raises(yaml.YAMLError):
         write_config(tmp_path, 'apis: !!python/object/apply:os.getcwd []\n')
 
 
@@ -438,7 +439,7 @@ async def test_failing_unit_is_probed_by_one_short_request():
     transport = bus_transport(base)
     transport.set_failing(1, True)
     start = time.monotonic()
-    with pytest.raises(TimeoutError, match='No response to the probe after 0.05 seconds'):
+    with pytest.raises(TimeoutError, match=r'No response to the probe after 0\.05 seconds'):
         await transport.send_and_receive(1, 'pdu')
     assert time.monotonic() - start < 0.5
     assert base.requests == 1                                  # no retry
@@ -497,8 +498,7 @@ async def test_single_request_is_sent_once():
     base = SlowTransport()
     transport = bus_transport(base)
     start = time.monotonic()
-    with transport.single_request(1):
-        with pytest.raises(TimeoutError):
-            await transport.send_and_receive(1, 'pdu')
+    with transport.single_request(1), pytest.raises(TimeoutError):
+        await transport.send_and_receive(1, 'pdu')
     assert base.requests == 1 and time.monotonic() - start < 0.5
     assert 1 not in transport._single_units                 # the next requests have the retries again

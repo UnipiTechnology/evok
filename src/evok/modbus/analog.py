@@ -1,12 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import logging
 from math import isfinite, isnan
 
-from ..devices import AI, AO, REGISTER, DATA_POINT, to_float
-from .cache import ENoCacheRegister
+from ..devices import AI, AO, DATA_POINT, REGISTER, to_float
 from .base import IODevice
-from .client import Client, Accessor, Accessor32, AccessorBit, AccessorFactory
+from .cache import ENoCacheRegister
+from .client import Accessor, Accessor32, AccessorBit, AccessorFactory, Client
 from .iomode import IOMode, WithIOMode
 
 logger = logging.getLogger(__name__)

@@ -1,14 +1,13 @@
 """ The 1-Wire bus: the sensors found by the kernel, the poll of their values """
 import asyncio
+import builtins
 import logging
-import typing
 
-from ..devices import OWBUS, OWPOWER
-from ..devices import devents, Devices, SENSOR, to_bool
+from ..devices import OWBUS, OWPOWER, SENSOR, Devices, devents, to_bool
 from ..modbus import set_devices
 from . import sysfs
-from .sysfs import address_key
 from .sensors import SUPPORTED_DEVICES, DuplicateCircuitError, MySensorFabric, NotSupportedError, check_interval
+from .sysfs import address_key
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,7 @@ class OwBusDriver:
         self.scan_interval = check_interval(scan_interval, 'scan_interval', zero=True)
         self.interval = check_interval(interval)
         self.scanned = set()
-        self.mysensors = list()
+        self.mysensors = []
         self.owpower_circuit = owpower_circuit
         self._wakeup = None     # the event waking up poll()
         self._scan_wakeup = None    # the event waking up scanning()
@@ -80,7 +79,7 @@ class OwBusDriver:
                 await self.run()
             except asyncio.CancelledError:
                 raise
-            except Exception as E:
+            except Exception as E:  # noqa: BLE001
                 self._log_failure(E)
             # the devices are located again by the next scan
             for mysensor in self.mysensors:
@@ -126,7 +125,7 @@ class OwBusDriver:
 
         if do_reset:
             await self.do_reset()
-        if not (scan_interval is None) and (scan_interval != self.scan_interval):
+        if scan_interval is not None and (scan_interval != self.scan_interval):
             self.scan_interval = scan_interval
             # the new interval applies at once, not after the current one, with 0 it was an hour
             self._wake_scanning()
@@ -134,7 +133,7 @@ class OwBusDriver:
         if do_scan:
             logger.info("Invoked scan of 1W bus")
             self.do_scan()
-        if not (interval is None) and (interval != self.interval):
+        if interval is not None and (interval != self.interval):
             self.interval = interval
             for mysensor in self.mysensors:  # Global change - for all sensors
                 mysensor.interval = interval
@@ -197,9 +196,9 @@ class OwBusDriver:
             logger.info("Invoked reset of 1W master")
             owpower = Devices.by_name(OWPOWER, self.owpower_circuit)
             # under the lock of its Modbus unit, its state and event follow the writes
-            await set_devices([(owpower, dict(value=True))])
+            await set_devices([(owpower, {'value': True})])
             await asyncio.sleep(0.2)
-            await set_devices([(owpower, dict(value=False))])
+            await set_devices([(owpower, {'value': False})])
             await asyncio.sleep(0.05)
             self.do_scan()
         else:
@@ -234,7 +233,7 @@ class OwBusDriver:
             return
         await asyncio.sleep(SEARCH_WAIT)
 
-    def _update(self, master: sysfs.W1Master, names: "typing.List[str]"):
+    def _update(self, master: sysfs.W1Master, names: "builtins.list[str]"):
         """ Assign the found devices to the sensors, create the found ones, a sensor not found is lost """
         found = {address_key(name): name for name in names}
         for key, name in found.items():
@@ -331,7 +330,7 @@ class OwBusDriver:
         try:
             async with self.bus_lock:
                 changed = await mysensor.read_val_from_sens(mysensor.sens)
-        except Exception as E:
+        except Exception as E:  # noqa: BLE001
             if not mysensor.lost:  # Catch the edge
                 logger.debug(f"Sensor {mysensor.circuit} is lost: {type(E).__name__}: {E}")
                 mysensor.set_lost()

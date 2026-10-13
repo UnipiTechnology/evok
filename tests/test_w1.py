@@ -1,14 +1,15 @@
 import asyncio
-import os
 import json
 import logging
+import os
 
 import pytest
 
 from evok import devents
-from evok.devices import Devices, SENSOR
-from evok.w1 import DS18B20, DS2408, DS2438, OwBusDriver, MySensorFabric, address_key
-from evok.w1 import bus as w1_bus, sysfs as w1_sysfs
+from evok.devices import SENSOR, Devices
+from evok.w1 import DS18B20, DS2408, DS2438, MySensorFabric, OwBusDriver, address_key
+from evok.w1 import bus as w1_bus
+from evok.w1 import sysfs as w1_sysfs
 from evok.w1.bus import leaf_error
 
 
@@ -603,7 +604,7 @@ def thermometers(bus, sysfs, *names, interval=10):
         sysfs.device(name, temperature=20000 + n * 1000)
     master = w1_sysfs.W1Master()
     sensors = [DS18B20(w1_sysfs.owfs_address(name), 'DS18B20', bus, interval=interval) for name in names]
-    for sensor, name in zip(sensors, names):
+    for sensor, name in zip(sensors, names, strict=True):
         sensor.sens = master.device(name)
     bus._master = master
     bus.bus_lock = asyncio.Lock()
@@ -662,7 +663,6 @@ async def test_failed_bulk_conversion_converts_one_by_one(bus, sysfs, monkeypatc
     await poll_once(bus)
     assert (first.value, second.value) == (20.0, 21.0)
     assert caplog.text.count('conversion of all thermometers failed') == 1
-
 
 
 async def test_comm_of_a_sensor(bus, events):

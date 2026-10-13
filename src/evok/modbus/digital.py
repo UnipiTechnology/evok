@@ -1,8 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-from ..devices import DI, DO, RO, LED, Devices, to_bool, to_float
+from ..devices import DI, DO, LED, RO, Devices, to_bool, to_float
 from .base import IODevice
-from .client import Client, Accessor, AccessorBit, AccessorU16, AccessorU32
+from .client import Accessor, AccessorBit, AccessorU16, AccessorU32, Client
 from .iomode import DIMode, WithDIMode
 from .pwm import PwmFrequency
 

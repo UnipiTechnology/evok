@@ -1,11 +1,9 @@
+import conftest
 import pytest
 
 from evok.devices import devents
-
 from evok.modbus.cache import ENoCacheRegister, EUnknownRegister
 from evok.modbus.client import Proxy
-
-import conftest
 
 BLOCKS = [
     {'start_reg': 0, 'count': 2, 'scan_divider': 1},

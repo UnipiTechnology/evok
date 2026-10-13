@@ -1,8 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 from math import ceil
 
-from .client import Client, Accessor, AccessorU16
+from .client import Accessor, AccessorU16, Client
 
 
 def round_freq(freq: float) -> float:

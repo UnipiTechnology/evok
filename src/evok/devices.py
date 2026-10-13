@@ -1,10 +1,11 @@
 import logging
-from . import devents
 import math
 import re
+from collections.abc import Callable
 from copy import deepcopy
-from typing import Any, Callable, Union
+from typing import Any
 
+from . import devents
 from .errors import DeviceNotFound
 from .schemas import MAX_ALIAS_LENGTH
 
@@ -62,14 +63,17 @@ class Aliases:
                     value['devtype'] = name
                     logger.warning(f"Aliases: Detected old devtype '{key}'! Upgrading...")
             self.initial_dict[key] = value
-        self.dirty_callback: Union[None, Callable] = None
-        self.save_callback: Union[None, Callable] = None
+        self.dirty_callback: Callable | None = None
+        self.save_callback: Callable | None = None
 
     def __getitem__(self, key):
         return self.alias_dict.__getitem__(key)
 
     def __contains__(self, key):
         return self.alias_dict.__contains__(key)
+
+    def get(self, key, default=None):
+        return self.alias_dict.get(key, default)
 
     def register_dirty_cb(self, func: Callable) -> None:
         self.dirty_callback = func
@@ -142,13 +146,13 @@ class Aliases:
         self.delete(alias)
 
     def get_aliases_by_circuit(self, devtype: str, circuit: str):
-        return list((alias for alias, rec in self.initial_dict.items()
-                     if (rec.get("devtype", None) == devtype) and (rec.get("circuit", None) == circuit)))
+        return [alias for alias, rec in self.initial_dict.items()
+                if rec.get("devtype", None) == devtype and rec.get("circuit", None) == circuit]
 
     def get_dict_to_save(self) -> dict[str, dict[str, str]]:
         aliases = deepcopy(self.initial_dict)
-        aliases.update(dict(((alias, {"circuit": device.circuit, "devtype": device.devtype})
-                             for alias, device in self.alias_dict.items())))
+        aliases.update({alias: {"circuit": device.circuit, "devtype": device.devtype}
+                        for alias, device in self.alias_dict.items()})
         return aliases
 
     @property
@@ -166,7 +170,7 @@ class Aliases:
         }
         return ret
 
-    async def set(self, save: bool = False, delete: str = None):
+    async def set(self, save: bool = False, delete: str | None = None):
         if delete is not None:
             self.remove(delete)
         if save is not None and to_bool(save):
@@ -177,46 +181,37 @@ class DeviceList(dict):
     aliases = Aliases({})
 
     def __init__(self, altnames):
-        super(DeviceList, self).__init__()
+        super().__init__()
         self.altnames = altnames
 
     def __setitem__(self, key, value):
-        super(DeviceList, self).__setitem__(key, value)
+        super().__setitem__(key, value)
 
     def __getitem__(self, key):
         try:
-            return super(DeviceList, self).__getitem__(key)
+            return super().__getitem__(key)
         except KeyError:
-            return super(DeviceList, self).__getitem__(self.altnames[key])
-
-    def _devdict(self, devtype):
-        """ Devices of a type, the type can be an altname """
-        try:
-            return self[devtype]
-        except KeyError:
-            raise DeviceNotFound(f"Invalid device type '{devtype}'")
+            return super().__getitem__(self.altnames[key])
 
     def by_name(self, devtype, circuit=None, major_group=None):
         """ The device of a type (or its altname) with a circuit or an alias,
             without a circuit all devices of the type, optionally of a major_group
         """
-        devdict = self._devdict(devtype)
+        devdict = super().get(self.altnames.get(devtype, devtype))
+        if devdict is None:
+            raise DeviceNotFound(f"Invalid device type '{devtype}'")
         if circuit is None:
             if major_group is not None:
                 return [dev for dev in devdict.values() if dev.major_group == major_group]
             return devdict.values()
         circuit = str(circuit)
-        try:
-            return devdict[circuit]
-        except KeyError:
-            if circuit not in self.aliases:
-                raise DeviceNotFound(f"Circuit or alias with name '{circuit}' not defined!")
-            ret = self.aliases[circuit]
-            ret_name = ret.devtype
-            if ret_name == devtype or ret_name == devtype_altnames.get(devtype):
-                return ret
-            else:
-                raise DeviceNotFound(f"Invalid device circuit '{str(circuit)}' with devtype '{devtype}'")
+        dev = devdict.get(circuit)
+        if dev is not None:
+            return dev
+        dev = self.aliases.get(circuit)
+        if dev is None or dev.devtype not in (devtype, devtype_altnames.get(devtype)):
+            raise DeviceNotFound(f"Circuit or alias '{circuit}' with devtype '{devtype}' not found")
+        return dev
 
     def register_device(self, devtype_name, device):
         """ can be called with devtype = INTEGER or NAME
@@ -232,8 +227,8 @@ class DeviceList(dict):
                 self.aliases.add(alias, device)
                 device.alias = alias
                 logger.info(f"Set alias {alias} to {devtype_name}[{device.circuit}]")
-            except Exception as E:
-                logger.warning(f"Error on setting saved alias: {str(E)}")
+            except Exception as E:  # noqa: BLE001
+                logger.warning(f"Error on setting saved alias: {E}")
 
         devents.config(device)
         logger.debug(f"Registered new device '{devtype_name}' with circuit {device.circuit} \t ({device})")
@@ -321,6 +316,7 @@ devtype_altnames = {
 def devtype_of(name: str) -> str:
     """ Device type of a name, also of 'dev' in full() which is not always the device type (e.g. 'wd') """
     return devtype_altnames.get(name, name)
+
 
 Devices = DeviceList(devtype_altnames)
 for _key in num_to_devtype_name.values():

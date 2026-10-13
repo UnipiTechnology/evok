@@ -1,14 +1,11 @@
 import pytest
-
-from evok.devices import Devices, DI, DO, RO, AI, AO, LED, WATCHDOG, NV_SAVE
-from evok.modbus.builder import IOParser
-from evok.modbus.digital import DigitalInput, DigitalOutput, ULED
-from evok.modbus.special import Watchdog, NvSave
-from evok.devices import DATA_POINT, REGISTER
-from evok.modbus.analog import AnalogInput, AnalogOutputBrain, DataPoint, OwTemperature
-
 from conftest import make_client, scan
 
+from evok.devices import AI, AO, DATA_POINT, DI, DO, LED, NV_SAVE, REGISTER, RO, WATCHDOG, Devices
+from evok.modbus.analog import AnalogInput, AnalogOutputBrain, DataPoint, OwTemperature
+from evok.modbus.builder import IOParser
+from evok.modbus.digital import ULED, DigitalInput, DigitalOutput
+from evok.modbus.special import NvSave, Watchdog
 
 # registers 0..399, a block is read by one request of at most 125 registers
 BLOCKS_0_399 = [{'start_reg': start, 'count': 100, 'scan_divider': 1} for start in range(0, 400, 100)]
@@ -53,7 +50,8 @@ def test_l0306_eventable_devices(l0306):
 def test_l0306_register_layout(l0306):
     populate(l0306)
     di = Devices.by_name(DI, '1_03')
-    assert (di.accessor.index, di.accessor.mask, di.accessor_counter.index, di.accessor_debounce.index) == (0, 0b100, 17, 1012)
+    assert (di.accessor.index, di.accessor.mask, di.accessor_counter.index, di.accessor_debounce.index) == \
+        (0, 0b100, 17, 1012)
     assert (di.dimode.accessor_mode.index, di.dimode.accessor_polarity.index,
             di.dimode.accessor_toggle.index) == (1014, 1015, 1016)
     do = Devices.by_name(DO, '1_02')
@@ -195,7 +193,7 @@ def test_bao_with_more_outputs_is_an_error(caplog):
 
 def test_invalid_feature_is_skipped(caplog):
     hw = data_point_hw(datatype='bogus')
-    hw['modbus_features'].append(dict(type='DATA_POINT', count=1, value_reg=5))
+    hw['modbus_features'].append({'type': 'DATA_POINT', 'count': 1, 'value_reg': 5})
     populate(hw)
     assert circuits(DATA_POINT) == ['1_5']                 # the other features are created
     assert 'Invalid feature DATA_POINT' in caplog.text

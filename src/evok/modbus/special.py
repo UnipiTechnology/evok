@@ -1,11 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import asyncio
 import logging
 
-from ..devices import OWPOWER, WATCHDOG, NV_SAVE, to_bool
+from ..devices import NV_SAVE, OWPOWER, WATCHDOG, to_bool
 from .base import IODevice
-from .client import Client, AccessorU16
+from .client import AccessorU16, Client
 
 logger = logging.getLogger(__name__)
 
@@ -145,4 +143,4 @@ class Watchdog(IODevice):
             if to_bool(reset):
                 # the unit restarts at once, it does not respond and a retry would restart it again
                 await self.client.write_coil_without_response(self.reset_coil, 1)
-                logger.info("Performed reset of board %s" % self.circuit)
+                logger.info(f"Performed reset of board {self.circuit}")

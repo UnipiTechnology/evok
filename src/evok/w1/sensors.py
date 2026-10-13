@@ -3,8 +3,7 @@ import asyncio
 import logging
 import time
 
-from ..devices import SENSOR
-from ..devices import devents, Devices
+from ..devices import SENSOR, Devices, devents
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +24,13 @@ SUPPORTED_DEVICES = ["DS18S20", "DS18B20", "DS2438", "DS2408", "DS2406", "DS2413
 
 class NotSupportedError(ValueError):
     """ The request is not supported by the device, a ValueError is reported as a bad request """
-    pass
 
 
 class DuplicateCircuitError(ValueError):
     """ A sensor with the circuit of a created one, it replaced the created sensor in Devices """
-    pass
 
 
-class MySensor(object):
+class MySensor:
     def __init__(self, addr, sensor_type, bus, interval=None, circuit=None, major_group=1):
         self.alias = ""
         self.devtype = SENSOR
@@ -88,8 +85,7 @@ class MySensor(object):
     def calc_interval(self):
         if self.lost:  # Sensor is inactive (disconnected)
             self.lostinterval *= 2
-            if self.lostinterval > MAX_LOSTINTERVAL:
-                self.lostinterval = MAX_LOSTINTERVAL
+            self.lostinterval = min(self.lostinterval, MAX_LOSTINTERVAL)
             return self.lostinterval
         return self.interval
 

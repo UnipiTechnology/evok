@@ -1,12 +1,11 @@
 import json
 
 import pytest
+from test_mqtt_handler import devices, mqtt, settle  # noqa: F401
 
-from evok.devices import Devices, AI, AO, DATA_POINT, DEVICE_INFO, DI, DO, LED, MODBUS_SLAVE, RO, SENSOR, WATCHDOG
+from evok.devices import AI, AO, DATA_POINT, DEVICE_INFO, DI, DO, LED, MODBUS_SLAVE, RO, SENSOR, WATCHDOG, Devices
 from evok.mqtt_ha import discovery, ha_id
 from evok.mqtt_handler import MqttSettings
-
-from test_mqtt_handler import devices, mqtt, settle  # noqa: F401
 
 
 class Unit:
@@ -134,7 +133,7 @@ def configs(broker):
 
 async def test_configs_are_published_before_the_states(mqtt):  # noqa: F811
     Devices[DI]['1_01'].major_group = Devices[RO]['1_01'].major_group = '1'
-    handler, broker = await mqtt({'ha_discovery': True})
+    _handler, broker = await mqtt({'ha_discovery': True})
     topics = [topic for topic, _, _ in broker.client.published]
     assert topics.index('homeassistant/switch/evok/ro_1_01/config') < topics.index('evok/ro/1_01')
     assert topics.index('homeassistant/binary_sensor/evok/di_1_01/config') < topics.index('evok/di/1_01')
@@ -159,7 +158,7 @@ async def test_changed_config_is_published_again(mqtt):  # noqa: F811
 
 async def test_no_configs_without_ha_discovery(mqtt):  # noqa: F811
     Devices[RO]['1_01'].major_group = '1'
-    handler, broker = await mqtt()
+    _handler, broker = await mqtt()
     assert configs(broker) == {}
 
 

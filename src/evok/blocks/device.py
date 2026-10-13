@@ -5,7 +5,7 @@
     of the output itself is refused. The state has the output and the progress of its running sequence,
     an event is sent when a sequence starts, does a step and ends.
 """
-from ..devices import Devices, SEQUENCER, devents, to_bool, to_float
+from ..devices import SEQUENCER, Devices, devents, to_bool, to_float
 from .sequencer import Sequence, Step, pulse_params, sequencer
 
 MAX_STEPS = 100

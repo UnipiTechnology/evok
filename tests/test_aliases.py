@@ -1,6 +1,6 @@
 import pytest
 
-from evok.devices import Aliases, Devices, DeviceNotFound, DI, RO
+from evok.devices import DI, RO, Aliases, DeviceNotFound, Devices
 
 
 class FakeDevice:
@@ -133,7 +133,6 @@ def test_none_alias_resets_to_empty_string(devices):
     devices.set_alias(None, devices[DI]['1_01'])
     assert devices[DI]['1_01'].alias == ''
     assert 'kitchen' not in devices.aliases
-
 
 
 @pytest.mark.parametrize('find', [

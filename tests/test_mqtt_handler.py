@@ -6,7 +6,7 @@ import aiomqtt
 import pytest
 
 from evok import mqtt_handler
-from evok.devices import Devices, DI, RO
+from evok.devices import DI, RO, Devices
 from evok.mqtt_handler import MqttHandler, MqttSettings
 from evok.ws_handler import registered_ws
 
@@ -190,7 +190,7 @@ async def test_device_mask(mqtt):
     ('{"value": 1, "alias": "pump"}', {'value': 1, 'alias': 'pump'}),
 ])
 async def test_set_command(mqtt, payload, expected):
-    handler, broker = await mqtt()
+    _handler, broker = await mqtt()
     broker.receive('evok/ro/1_01/set', payload)
     await settle()
     assert Devices[RO]['1_01'].calls == [expected]
@@ -203,7 +203,7 @@ async def test_set_command(mqtt, payload, expected):
     ('evok/foo/1_01/set', '1', 'DeviceNotFound'),
 ])
 async def test_invalid_command_publishes_an_error(mqtt, caplog, topic, payload, error):
-    handler, broker = await mqtt()
+    _handler, broker = await mqtt()
     broker.receive(topic, payload)
     await settle()
     assert Devices[RO]['1_01'].calls == []
@@ -215,7 +215,7 @@ async def test_invalid_command_publishes_an_error(mqtt, caplog, topic, payload, 
 
 async def test_read_only_does_not_subscribe(mqtt, caplog):
     caplog.set_level(logging.WARNING, logger='evok')
-    handler, broker = await mqtt({'read_only': True})
+    _handler, broker = await mqtt({'read_only': True})
     assert broker.client.subscribed == []
     assert 'accepted from any client' not in caplog.text
 
@@ -226,14 +226,14 @@ async def test_commands_without_a_user_are_warned(mqtt, caplog):
 
 
 async def test_failed_connection_is_logged_once(mqtt, caplog):
-    handler, broker = await mqtt(failures=['[Errno 111] Connection refused'] * 3)
+    _handler, broker = await mqtt(failures=['[Errno 111] Connection refused'] * 3)
     errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1 and 'cannot connect to the broker 127.0.0.1:1883' in errors[0]
     assert broker.client.published[0] == ('evok/status', 'online', True)
 
 
 async def test_lost_connection_publishes_all_states_again(mqtt, caplog):
-    handler, broker = await mqtt()
+    _handler, broker = await mqtt()
     first = broker.client
     first.queue.put_nowait(None)                         # the broker disconnects
     for _ in range(100):
@@ -258,7 +258,7 @@ async def test_stop_publishes_offline(mqtt):
 async def test_command_during_a_sequence_is_refused(mqtt):
     """ An output cannot be changed while its sequencer runs, the error is published """
     from evok.blocks import Sequence, Step, sequencer
-    handler, broker = await mqtt()
+    _handler, broker = await mqtt()
     relay = Devices[RO]['1_01']
     sequencer.start(relay, Sequence([Step({'value': 0}, 10)]))
     broker.receive('evok/ro/1_01/set', '1')
