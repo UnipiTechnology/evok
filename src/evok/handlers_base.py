@@ -1,4 +1,5 @@
 import json
+import logging
 from itertools import chain
 
 import jsonschema
@@ -10,9 +11,10 @@ from .devices import OWBUS, DEVICE_INFO, SENSOR, MODBUS_SLAVE, \
     REGISTER, DATA_POINT, NV_SAVE
 from .auth import TokenAuth
 from .errors import DeviceNotFound, ReadOnlyAccess, SequenceRunning, UnitUnavailable
-from .log import logger
 from .modbus import set_devices
 from .schemas import schemas
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_VALIDATE = True
 

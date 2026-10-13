@@ -12,10 +12,12 @@
     the newer value of the change.
 """
 import asyncio
+import logging
 from dataclasses import dataclass
 
 from ..devices import devents, to_bool, to_float
-from ..log import logger
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from ..log import logger
+import logging
 from .client import Client, AccessorU16, AccessorBit, Accessor
+
+logger = logging.getLogger(__name__)
 
 
 class IOMode:

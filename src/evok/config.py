@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import List, Dict, Tuple, Union
 
@@ -15,7 +16,8 @@ from . import w1
 import yaml
 from .devices import Devices, Aliases
 from .devices import OWBUS, SERIALBUS, DEVICE_INFO, TCPBUS, MODBUS_SLAVE
-from .log import logger
+
+logger = logging.getLogger(__name__)
 
 
 class EvokConfigError(Exception):

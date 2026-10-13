@@ -5,6 +5,7 @@ Created on Fri Sep 25 16:10:02 2026
 
 @author: bokula
 """
+import logging
 from .digital import DigitalInput, DigitalOutput, Relay, ULED
 from .special import OwPower, NvSave, Watchdog
 from .analog import AnalogInput, AnalogOutput, AnalogOutputBrain,\
@@ -13,9 +14,10 @@ from ..devices import \
     DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
     REGISTER, DATA_POINT, NV_SAVE, Devices
 from ..blocks import attach
-from ..log import logger
 from .client import Client
 from .pwm import HardPwmFrequency, SoftPwmFrequency
+
+logger = logging.getLogger(__name__)
 
 
 class IOParser:

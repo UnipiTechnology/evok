@@ -1,3 +1,4 @@
+import logging
 from . import devents
 import math
 import re
@@ -5,8 +6,9 @@ from copy import deepcopy
 from typing import Any, Callable, Union
 
 from .errors import DeviceNotFound
-from .log import logger
 from .schemas import MAX_ALIAS_LENGTH
+
+logger = logging.getLogger(__name__)
 
 """
    Structured dict/dict of all devices in the system
