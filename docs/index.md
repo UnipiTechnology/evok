@@ -2,6 +2,10 @@
 
 Evok is the primary API for accessing I/Os of [NEURON], [PATRON], [GATE] and [Unipi 1.1] devices including [Extension modules] by [Unipi technology]. Evok is a translation layer between its provided APIs and Modbus, which Unipi PLCs use, you can look at their [reference](https://kb.unipi.technology/en:sw:02-apis:02-modbus-tcp). You can also checkout [Evok API documentation](https://unipitechnology.stoplight.io/docs/evok).
 
+
+![Evok Architecture Diagram](./img/evok-architecture.svg)
+
+
 It provides multiple ways to easily access the I/Os of the devices, including:
 
 - RESTful WebForms API
