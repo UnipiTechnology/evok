@@ -14,7 +14,7 @@ With a `token` in the configuration all APIs require it, see [Security](./securi
 | [WebSocket](#websocket-doc) | ❌                             | Real-time automated  | both ways      |
 | [BULK](#bulk-doc)           | ✅                             | Automated            | client to Evok |
 | [Webhook](#webhook-doc)     | N/A                           | Listening to changes | Evok to client |
-| [RPC](#rpc-doc)             | ❌                             | Automated            | client to Evok |
+| [RPC](#rpc-doc)             | ✅ (batch)                     | Automated            | client to Evok |
 | [MQTT](#mqtt-doc)           | ❌                             | Integration by a broker | both ways   |
 
 ## REST ([doc](./apis/rest.md))

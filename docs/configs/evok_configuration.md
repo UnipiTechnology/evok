@@ -10,9 +10,9 @@ evok --config-dir ./my-config --alias-file ./alias.yaml
 
 ## API settings
 
-In this section you can configure address and port for API listening. These settings will be applied to protocols [REST](../apis/rest.md), [JSON](../apis/json.md), [BULK](../apis/bulk.md), [RPC](../apis/rpc.md), [Webhook](../apis/webhook.md), [WebSocket](../apis/websocket.md). The [MQTT](../apis/mqtt.md) API connects to a broker, see its section.
+In this section you can configure address and port for API listening. These settings will be applied to protocols [REST](../apis/rest.md), [JSON](../apis/json.md), [BULK](../apis/bulk.md), [RPC](../apis/rpc.md), [WebSocket](../apis/websocket.md). The [Webhook](../apis/webhook.md) sends requests to its address and the [MQTT](../apis/mqtt.md) API connects to a broker, see their sections.
 
-- `port` - port for API listening, needs to be changed in `etc/nginx/sites-available/evok` too
+- `port` - port for API listening, needs to be changed in `/etc/nginx/sites-available/evok` too
 - `address` - address of the interface for API listening, `127.0.0.1` if the parameter is missing,
   set it to an empty value to listen on all interfaces
 - `token` - an optional token required by all APIs except `/version`, a long random string,
@@ -38,7 +38,8 @@ In this section you can configure address and port for API listening. These sett
 
 - `enabled` - enables webhook notifications (`true` / `false`)
 - `address` - address (with port) to which notifications should be sent
-- `device_mask` - list of devices to notify on (written as a JSON list, same format as `address`)
+- `device_mask` - list of the device types to notify on, e.g. `["di", "wd"]`; the alternative names as `input`, `wd`
+  or `temp` are accepted
 - `complex_events` - Evok will send POST requests with the same data as WebSocket, rather than an empty GET request
 - `min_interval` - minimum time between two requests in seconds (default `1.0`). The changes in the meantime are merged
   into one request with the last state of each device, only one request is sent at a time
@@ -157,6 +158,7 @@ comm_channels:
 #### MODBUSTCP & MODBUSRTU
 
 - `model` - assigns a Modbus register map (examples: `xS51`, `xS11`), see [hw_definitions](./hw_definitions.md), required.
+  A numeric name must be quoted, e.g. `'00'`, YAML reads `00` as the number 0 and the model is not found.
 - `slave-id` - slave address or unit-ID of the Modbus device, `1`..`247` on RTU, `0`..`255` on TCP (Default value is `1`).
   It has to be unique on a `MODBUSRTU` bus and on a Modbus TCP server (`hostname` and `port`), also when more
   `MODBUSTCP` buses connect to the same server. A device with the slave-id of an already created device is not created
@@ -209,7 +211,7 @@ TCP_EXT:
   devices:
     myIAQ:
       slave-id: 1
-      model: IAQ
+      model: IAQ-TH
 ```
 
 #### 1-Wire device
@@ -243,6 +245,7 @@ You can force the creation of this file using this command:
  - The device name is generated based on the `slave-id`. In standard Unipi controllers it is the same as the section number.
  - The OWFS section is generated only if the device supports 1-Wire and the `owserver` package is installed
    (Evok 3.1 does not use owserver, the bus is read by the kernel).
+   An OWFS section with `hostname` or `port` of owserver is an error, the bus is not created; remove them.
    - The `owpower` parameter is defined only if Unipi controller supports this feature.
 
 ```yaml title="Autogen example"
@@ -259,13 +262,13 @@ comm_channels:
     devices:
       1:
         slave-id: 1
-        model: 00
+        model: '00'
       2:
         slave-id: 2
-        model: 13
+        model: '13'
       3:
         slave-id: 3
-        model: 13
+        model: '13'
   OWFS:
     type: OWFS
     interval: 10

@@ -49,8 +49,10 @@ is set as a unit of its own. The results are in the order of the request.
 ## Errors
 
 With the `read_token` a request with an assignment is refused with the status 403, also its queries.
-All assignments are checked before any device is set. An unknown device type, circuit or alias is reported
-with the status 404, invalid params with the status 400, and no device is set.
+All assignments are checked before any device is set. An unknown device type, or an unknown circuit or alias
+of `individual_assignments`, is reported with the status 404, invalid params with the status 400, and no device is set.
+The `device_circuits` of `group_queries` and `group_assignments` only filter the devices of the type,
+an unknown circuit or alias in it is skipped.
 
 An error while setting a device is reported with the status 400 (e.g. a value out of range), 409
 (an output with a running sequence of its [sequencer](./sequencer.md)), 503
