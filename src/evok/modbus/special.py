@@ -75,7 +75,8 @@ class NvSave(IODevice):
             self.value = 1
             self.hold_task = asyncio.create_task(self._hold())
             try:
-                await self.client.mb_client.write_single_coil(self.coil, 1)
+                # the unit saves its settings and may not respond, a retry would save them again
+                await self.client.write_coil_without_response(self.coil, 1)
             except Exception:
                 # a task cancelled before it starts does not run its finally block
                 self.hold_task.cancel()
@@ -140,5 +141,6 @@ class Watchdog(IODevice):
 
         if self.reset_coil >= 0 and reset is not None:
             if to_bool(reset):
-                await self.client.mb_client.write_single_coil(self.reset_coil, 1)
+                # the unit restarts at once, it does not respond and a retry would restart it again
+                await self.client.write_coil_without_response(self.reset_coil, 1)
                 logger.info("Performed reset of board %s" % self.circuit)

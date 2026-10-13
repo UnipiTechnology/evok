@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import asyncio
+import contextlib
 import time
 
 from tmodbus import AsyncSmartTransport
@@ -21,6 +22,7 @@ class BusTransport(AsyncSmartTransport):
         super().__init__(base_transport, **kwargs)
         self.probe_timeout = probe_timeout
         self.failing_units: set[int] = set()    # the unit ids probed by one request, set by ModbusScanner
+        self._single_units: set[int] = set()    # the unit ids sent one request, see single_request()
 
     def set_failing(self, unit_id: int, failing: bool):
         if failing:
@@ -28,8 +30,19 @@ class BusTransport(AsyncSmartTransport):
         else:
             self.failing_units.discard(unit_id)
 
+    @contextlib.contextmanager
+    def single_request(self, unit_id: int):
+        """ The requests of the unit are sent once with probe_timeout, without the retries, e.g. a write after
+            which the unit restarts and does not respond; a retry repeated the restart
+        """
+        self._single_units.add(unit_id)
+        try:
+            yield
+        finally:
+            self._single_units.discard(unit_id)
+
     async def send_and_receive(self, unit_id, pdu):
-        if unit_id not in self.failing_units:
+        if unit_id not in self.failing_units and unit_id not in self._single_units:
             return await super().send_and_receive(unit_id, pdu)
         async with self._communication_lock:
             try:

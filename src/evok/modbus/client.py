@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import asyncio
+import contextlib
 import struct
 from math import isfinite
 import functools
@@ -9,13 +10,15 @@ from typing import Literal
 from tmodbus import (
     AsyncModbusClient
 )
-from tmodbus.exceptions import TModbusError
+from tmodbus.exceptions import InvalidResponseError, TModbusError
 from tmodbus.utils.order_aware_struct import OrderAwareStruct
 
 from .cache import ModbusCacheMap
 from ..devices import devents
-from ..errors import UnitCommunicationError, UnitUnavailable, describe_error
+from ..errors import UnitCommunicationError, UnitUnavailable, describe_error, root_cause
 from ..log import logger
+
+RESTART_WAIT = 0.1      # s, the wait after a write after which the unit restarts, before it is read
 
 UINT16 = struct.Struct(">H")
 INT16 = struct.Struct(">h")
@@ -68,6 +71,24 @@ class Client:
     def read_registers(self, index: int, count: int = 1, is_input: bool = False) -> list[int]:
         """ Return the cached values of count registers, the datatypes are decoded by the accessors """
         return self.cache.get_register(index, count, is_input=is_input)
+
+    async def write_coil_without_response(self, coil: int, value: int, wait: float | None = None) -> bool:
+        """ Write a coil after which the unit restarts, e.g. its reset or the save of its settings, it may not
+            respond: the coil is written once without the retries, a missing or a broken response is not an error;
+            wait for the restart before the unit is read. Return True if the unit responded.
+        """
+        single_request = getattr(getattr(self.mb_client, 'transport', None), 'single_request', None)
+        try:
+            with single_request(self.mb_client.unit_id) if single_request else contextlib.nullcontext():
+                await self.mb_client.write_single_coil(coil, value)
+            responded = True
+        except Exception as E:
+            if not isinstance(root_cause(E), (TimeoutError, InvalidResponseError)):
+                raise
+            logger.debug(f"Unit {self.name}: no response to the write of coil {coil}, it restarts: {E}")
+            responded = False
+        await asyncio.sleep(RESTART_WAIT if wait is None else wait)
+        return responded
 
     async def write_registers(self, index: int, values: list[int]):
         """ Write holding registers and update the cache, so the next check does not see a stale value """

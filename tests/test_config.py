@@ -490,3 +490,15 @@ def test_probe_timeout_invalid(caplog, value):
     create({'BUS': {'type': 'MODBUSRTU', 'port': '/dev/null', 'probe_timeout': value}})
     assert 'BUS' not in Devices[SERIALBUS]
     assert 'probe_timeout must be a positive number' in caplog.text
+
+
+async def test_single_request_is_sent_once():
+    """ A write after which the unit restarts was retried, the retry restarted the unit again """
+    base = SlowTransport()
+    transport = bus_transport(base)
+    start = time.monotonic()
+    with transport.single_request(1):
+        with pytest.raises(TimeoutError):
+            await transport.send_and_receive(1, 'pdu')
+    assert base.requests == 1 and time.monotonic() - start < 0.5
+    assert 1 not in transport._single_units                 # the next requests have the retries again

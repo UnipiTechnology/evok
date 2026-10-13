@@ -528,7 +528,9 @@ async def test_ai_rejected_mode_keeps_alias(unit):
 
 @pytest.fixture
 def nv_save(monkeypatch):
+    from evok.modbus import client as client_module
     monkeypatch.setattr(NvSave, 'HOLD_TIME', 0.01)
+    monkeypatch.setattr(client_module, 'RESTART_WAIT', 0)
     client = make_client([{'start_reg': 0, 'count': 1, 'scan_divider': 1}])
     return client, NvSave('x', client, 5)
 
