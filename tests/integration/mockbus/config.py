@@ -13,10 +13,10 @@ functional tier we generate a minimal config that:
 The hw_definition files (``00.yaml``, ``01.yaml``) are copied verbatim from the
 real device's ``/etc/evok/hw_definitions/`` into ``mockbus/hw_definitions/``.
 
-The 1-Wire bus (OWBUS / temp sensor) is NOT configured here: it requires an
-OWFS server (owserver, port 4304) which the mockbus does not provide. Sensor
-tests therefore have no target in functional mode (they fail honestly rather
-than against a fake).
+The 1-Wire bus (OWBUS / temp sensor) is configured as an OWFS bus, but it is not
+served by a daemon: evok reads the kernel 1-Wire subsystem directly. The launcher
+(``start.py``) mounts a fake sysfs tree at ``/sys/bus/w1/devices`` in a private
+mount namespace, so the sensor tests have a target without hardware.
 """
 
 from __future__ import annotations
@@ -59,14 +59,16 @@ def generate_config(
                     "2": {"slave-id": 2, "model": "01"},
                 },
             },
-            # 1-Wire bus: a fake owserver (mockbus/owserver.py) serves a
-            # DS18B20 at 127.0.0.1:4304. owpower '1' is the OwPower device
-            # registered from board 1's hw_definition (val_coil 1001) and is
-            # driven by the mockbus; the fake owserver does not need it (it
-            # never powers down the bus), but evok requires the circuit to
+            # 1-Wire bus: evok reads the kernel subsystem at /sys/bus/w1/devices.
+            # The launcher mounts a fake sysfs tree there (a DS18B20 at the same
+            # address the cassettes were recorded against). owpower '1' is the
+            # OwPower device registered from board 1's hw_definition (val_coil
+            # 1001) and is driven by the mockbus; the fake bus does not need it
+            # (it never powers down the bus), but evok requires the circuit to
             # resolve for `do_reset`.
             "OWBUS": {
                 "type": "OWFS",
+                "master": "w1_bus_master1",
                 "interval": 3,
                 "scan_interval": 60,
                 "owpower": "1",

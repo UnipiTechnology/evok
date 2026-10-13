@@ -11,14 +11,14 @@ Two gates, both hardware-free, in `.github/workflows/integration-tests.yml`:
 | Job | What it does | Catches |
 |-----|--------------|--------|
 | **replay** | Serves golden cassettes offline; validates each response against `spec/spec.json` | the offline toolchain stays self-consistent — spec generator, oracles, contract validator, and cassettes agree with each other |
-| **functional** | Starts the **real evok** against the **mockbus** (fake Modbus PLC + fake 1-Wire owserver), runs the harness as a client | regressions in the server stack itself — routing, dispatch, serialization, validation, errors |
+| **functional** | Starts the **real evok** against the **mockbus** (fake Modbus PLC + fake 1-Wire sysfs), runs the harness as a client | regressions in the server stack itself — routing, dispatch, serialization, validation, errors |
 
 ## How to use locally
 
 **Iterating on evok code** — exercise the real server against the fake buses, no hardware:
 
 ```bash
-# terminal 1: start mockbus + owserver + evok (Ctrl-C stops all)
+# terminal 1: start mockbus + fake 1-Wire + evok (Ctrl-C stops all)
 uv run python mockbus/start.py
 
 # terminal 2: run the harness against it
@@ -61,7 +61,7 @@ then compares something against that frozen snapshot:
 | Mode | Bus behind server | Judge | Catches |
 |------|-------------------|-------|---------|
 | **replay** | none (offline) | spec | tooling drift — spec generator, oracles, contract validator, and cassettes stay mutually consistent |
-| **functional** | fake (mockbus + owserver) | test assertions | server logic regressions — routing, dispatch, serialization, errors |
+| **functional** | fake (mockbus + 1-Wire sysfs) | test assertions | server logic regressions — routing, dispatch, serialization, errors |
 | **compare** | real device | per-field diff vs cassettes | device behavioral drift — every field, with epsilon for floats |
 
 **Why replay isn't tautological.** The spec is **frozen and committed**: if the
@@ -95,7 +95,8 @@ Selected by `EVOK_TEST_MODE`; `EVOK_BASE_URL` selects the target (default
 - **mockbus** (`server.py`) — fake Modbus TCP server, two slave-ids, driven by the
   real `00.yaml` (CPU board) + `01.yaml` (relay board) hw_definitions. Mirrors coil
   writes into holding-register bits so scan-cache transitions fire events.
-- **fake owserver** (`owserver.py`) — serves a DS18B20 over the OWFS protocol.
-- **launcher** (`start.py`) — starts mockbus:5020 + owserver:4304 + evok:8090.
+- **fake 1-Wire sysfs** (`w1sysfs.py`) — a DS18B20 tree mounted at
+  `/sys/bus/w1/devices` inside a private mount namespace.
+- **launcher** (`start.py`) — starts mockbus:5020 + fake 1-Wire sysfs + evok:8090.
 
 See `mockbus/README.md`.
