@@ -21,6 +21,26 @@ In this section you can configure address and port for API listening. These sett
 - `device_mask` - list of devices to notify on (written as a JSON list, same format as `address`)
 - `complex_events` - Evok will send POST requests with the same data as WebSocket, rather than an empty GET request
 
+```yaml title="Example"
+apis:
+  port: 8080
+  # listen on all interfaces
+  # DANGEROUS: the device will be exposed to anyone on the same network
+  address: 0.0.0.0
+  websocket:
+    enabled: true
+    # set to true to publish states of all devices, including internal devices like watchdog
+    all_filtered: false
+  webhook:
+    enabled: false
+    # address of the target http server
+    address: http://127.0.0.1:80
+    # list of device types to notify on  - adding AI will generate a large amount of messages!
+    device_mask: ["input","wd"] 
+    # set to true to send a POST request with device data, rather than an empty GET request
+    complex_events: false
+```
+
 ## Hardware configuration
 
 The hardware configuration is represented by a device tree with this structure:
