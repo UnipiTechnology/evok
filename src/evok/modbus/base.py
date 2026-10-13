@@ -42,6 +42,16 @@ class IODevice:
             ret['alias'] = self.alias
         return ret
 
+    def _with_common(self, ret: dict) -> dict:
+        """ Add the communication with the unit of the device (comm, last_comm) and its alias, the last items
+            of the state; the value of a unit which does not respond is the last known one, comm tells it
+        """
+        comm = getattr(self.client, 'comm', None)
+        if comm is not None:
+            ret['comm'] = comm()
+            ret['last_comm'] = self.client.last_comm()
+        return self._with_alias(ret)
+
 
 async def set_devices(assignments: list[tuple], states: dict | None = None) -> list[dict]:
     """ Set the devices by the params of assignments [(device, kw)], return their states in the same order

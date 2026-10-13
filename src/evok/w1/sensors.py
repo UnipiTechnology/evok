@@ -1,5 +1,6 @@
 """ The 1-Wire sensors, their values are read from the devices of the bus """
 import asyncio
+import time
 
 from ..devices import SENSOR
 from ..devices import devents, Devices
@@ -74,6 +75,14 @@ class MySensor(object):
         """ Read the values, return True if they have changed, the change is reported by poll() """
         raise NotImplementedError("Please Implement this method")
 
+    def _with_comm(self, ret: dict) -> dict:
+        """ The communication with the sensor as of a device of a Modbus unit: comm ok or timeout (lost),
+            last_comm seconds since its last read; time is the loop time of the read, deprecated
+        """
+        ret['comm'] = 'timeout' if self.lost else 'ok'
+        ret['last_comm'] = round(time.monotonic() - self.readtime, 3) if self.readtime else None
+        return ret
+
     def calc_interval(self):
         if self.lost:  # Sensor is inactive (disconnected)
             self.lostinterval *= 2
@@ -101,6 +110,7 @@ class DS18B20(MySensor):  # thermometer
                'interval': self.interval,
                'type': self.type,
                }
+        self._with_comm(ret)
         if self.alias is not None and self.alias != '':
             ret['alias'] = self.alias
         return ret
@@ -137,6 +147,7 @@ class DS2438(MySensor):  # vdd + vad + thermometer
                'interval': self.interval,
                'type': self.type
                }
+        self._with_comm(ret)
         if self.alias is not None and self.alias != '':
             ret['alias'] = self.alias
         return ret
@@ -188,6 +199,7 @@ class DS2408(MySensor):
                'interval': self.interval,
                'type': self.type
                }
+        self._with_comm(ret)
         if self.alias is not None and self.alias != '':
             ret['alias'] = self.alias
         return ret

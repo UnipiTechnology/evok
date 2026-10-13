@@ -77,7 +77,7 @@ class AnalogInput(WithIOMode, IODevice):
                'modes': self.modes,
                'range': self.range,
                }
-        self._with_alias(ret)
+        self._with_common(ret)
         return ret
 
 
@@ -258,7 +258,7 @@ class DataPoint(IODevice):
         if self.unit is not None:
             ret['unit'] = self.unit
 
-        self._with_alias(ret)
+        self._with_common(ret)
         return ret
 
 
@@ -277,7 +277,7 @@ class Register(DataPoint):
                'circuit': self.circuit,
                'value': self.value,
                }
-        self._with_alias(ret)
+        self._with_common(ret)
         return ret
 
 

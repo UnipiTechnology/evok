@@ -55,6 +55,10 @@ The `circuit` can be also an alias.
 Evok sends the states of the changed devices to every client, always as a list. With a filter set by `filter`,
 only the states of the device types in the filter are sent.
 
+The state of a device of a Modbus unit and of a 1-Wire sensor has `comm` (`ok`, `timeout`, `error`) and `last_comm`
+(seconds since the last successful communication with the unit). When the unit stops responding or responds again,
+the states of all its devices are sent, `value` keeps the last known value and `comm` tells if it is valid.
+
 ## Errors
 
 An invalid request (invalid JSON, unknown command, missing `dev` or `circuit`, unknown device, invalid params)

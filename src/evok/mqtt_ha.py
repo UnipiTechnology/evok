@@ -4,7 +4,7 @@
     before the first state of the device; again when it changes, e.g. the alias (the name of the entity)
     or the range of an AO in another mode. The entities read the states of the MQTT API by value templates,
     the commands are its plain values on <prefix>/<device>/<circuit>/set. The entities of a Modbus unit
-    or of a 1-Wire bus are one device of Home Assistant, available by <prefix>/status.
+    or of a 1-Wire bus are one device of Home Assistant, available by <prefix>/status and by comm of their state.
 """
 import re
 
@@ -79,6 +79,18 @@ def _entities(devtype, state: dict, read_only: bool) -> list[tuple[str, str, dic
     return []
 
 
+def _availability(prefix, devtype, state_topic, state) -> dict:
+    """ Evok online and the communication of the device ok, a device of a unit which does not respond
+        is unavailable; the communication of a unit itself is available while Evok is online
+    """
+    status = {'topic': f"{prefix}/status", 'payload_available': 'online', 'payload_not_available': 'offline'}
+    if 'comm' not in state or devtype == MODBUS_SLAVE:
+        return {'availability': [status]}
+    comm = {'topic': state_topic, 'value_template': "{{ 'online' if value_json.comm == 'ok' else 'offline' }}",
+            'payload_available': 'online', 'payload_not_available': 'offline'}
+    return {'availability': [status, comm], 'availability_mode': 'all'}
+
+
 def discovery(prefix: str, ha_prefix: str, devtype: str, circuit, state: dict, read_only=False,
               device=None) -> list[tuple[str, dict]]:
     """ The config messages (topic, payload) of the entities of a device, none for an unsupported device """
@@ -98,9 +110,7 @@ def discovery(prefix: str, ha_prefix: str, devtype: str, circuit, state: dict, r
         payload = {'name': f"{name} {name_suffix}" if name_suffix else name,
                    'unique_id': f"{node}_{object_id}",
                    'state_topic': state_topic,
-                   'availability_topic': f"{prefix}/status",
-                   'payload_available': 'online',
-                   'payload_not_available': 'offline',
+                   **_availability(prefix, devtype, state_topic, state),
                    'device': _ha_device(node, group)}
         if config.pop('command', False):
             payload['command_topic'] = f"{state_topic}/set"

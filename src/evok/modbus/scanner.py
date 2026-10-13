@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import asyncio
-import time
 
 from tmodbus import (
     AsyncModbusClient,
@@ -121,6 +120,7 @@ class ModbusScanner:
         except Exception as E:
             # reported by full(), the communication errors are set by the cache
             self.cache.scan_error = E
+            self.client.send_comm_change()
             # the error repeats on every scan, do not flood the log
             if repr(E) != self.logged_scan_error:
                 self.logged_scan_error = repr(E)
@@ -197,7 +197,6 @@ class ModbusScanner:
                 interval = min(interval * 2, max(self.MAX_SCAN_INTERVAL, self.scan_interval))
 
     def full(self):
-        last_comm_time = self.cache.last_comm_time
         scan_error = self.cache.scan_error
         ret = {'dev': 'modbus_slave',
                'circuit': self.circuit,
@@ -206,8 +205,9 @@ class ModbusScanner:
                'modbus_spec': self.modbus_spec,
                'scan_interval': self.scan_interval,
                'scan_enabled': self.scan_enabled,
-               'last_comm': time.monotonic() - last_comm_time if last_comm_time is not None else None,
+               'last_comm': self.client.last_comm(),
                'scan_error': describe_error(scan_error) if scan_error is not None else None,
+               'comm': self.client.comm(),
                }
         if self.alias != '':
             ret['alias'] = self.alias

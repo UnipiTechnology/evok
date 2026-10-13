@@ -20,7 +20,7 @@ class OwPower(IODevice):
 
     def full(self):
         ret = {'dev': 'owpower', 'circuit': self.circuit, 'value': self.value}
-        self._with_alias(ret)
+        self._with_common(ret)
         return ret
 
     async def set(self, value=None, alias=None):
@@ -52,7 +52,7 @@ class NvSave(IODevice):
 
     def full(self):
         ret = {'dev': 'nv_save', 'circuit': self.circuit, 'value': self.value}
-        self._with_alias(ret)
+        self._with_common(ret)
         return ret
 
     async def _hold(self):
@@ -108,7 +108,7 @@ class Watchdog(IODevice):
                'timeout': self.timeout,
                'was_wd_reset': self.was_wd_boot_value,
                }
-        self._with_alias(ret)
+        self._with_common(ret)
         return ret
 
     async def check_new_data(self):
