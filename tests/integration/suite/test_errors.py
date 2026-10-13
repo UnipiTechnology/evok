@@ -80,13 +80,11 @@ def test_error_rest_silently_noops_json_body(http):
     assert r.body.get("success") is True, f"expected silent success (current bug); got {r.body!r}"
 
 
-def test_error_property_not_a_python_attribute(http):
-    # BUG #2 (see FINDINGS.md): the property-read path does getattr(device, prop),
-    # but some full() keys are NOT Python attributes (e.g. AI exposes `unit` in
-    # full() via the `unit_name` property, not `unit`). Reading such a key leaks an
-    # AttributeError in the error envelope. This pins the current behavior.
+def test_error_property_read_unit(http):
+    # BUG #2 (see FINDINGS.md) is FIXED: the property-read path used to do
+    # getattr(device, prop) while AI exposed `unit` in full() via `unit_name`,
+    # leaking an AttributeError. `unit` is now a real read path and returns the
+    # value. This asserts the corrected behavior.
     r = http.get("/rest/ai/1_01/unit")
-    assert r.status in (404, 400), r.raw_text
-    _assert_error_envelope(r.body)
-    # The leaked exception class is part of the (current) contract.
-    assert "AttributeError" in r.body["errors"], r.body
+    assert r.status == 200, r.raw_text
+    assert r.body == {"unit": "V"}, r.body

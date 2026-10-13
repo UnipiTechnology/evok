@@ -19,14 +19,13 @@
             "Simple",
             "PWM"
           ],
-          "pending": false,
           "pwm_duty": 0,
           "pwm_freq": 39.0625,
           "value": 1
         },
         "success": true
       },
-      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"do\", \"circuit\": \"1_01\", \"value\": 1, \"pending\": false, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_freq\": 39.0625, \"pwm_duty\": 0}}",
+      "raw_text": "{\"result\": {\"circuit\": \"1_01\", \"dev\": \"do\", \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_duty\": 0, \"pwm_freq\": 39.0625, \"value\": 1}, \"success\": true}",
       "status": 200
     }
   },
@@ -50,7 +49,6 @@
             "Simple",
             "PWM"
           ],
-          "pending": false,
           "pwm_duty": 0,
           "pwm_freq": 39.0625,
           "value": 1

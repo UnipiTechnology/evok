@@ -68,7 +68,8 @@ recorded against):
 | ai | 1_01 (1) | `00.yaml` |
 | ao | 1_01 (1) | `00.yaml` (BAO) |
 | led | 1_01–1_04 (4) | `00.yaml` |
-| wd | 2_01, 1_01 (2) | both boards |
+| wd | 1, 2 (2) | both boards |
+| nv_save | 1, 2 (2) | both boards (`NV_SAVE`) |
 | owpower | 1 (1) | `00.yaml` |
 | owbus | OWBUS (1) | fake 1-Wire sysfs |
 | temp | 28CD79A90800004A (1) | fake 1-Wire sysfs (DS18B20) |

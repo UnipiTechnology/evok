@@ -1,0 +1,18 @@
+{
+  "3c71e1e53ef6d5de": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/ai/1_01/unit"
+    },
+    "response": {
+      "body": {
+        "unit": "V"
+      },
+      "raw_text": "{\"unit\": \"V\"}",
+      "status": 200
+    }
+  }
+}

@@ -18,7 +18,7 @@
         },
         "success": true
       },
-      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"ro\", \"circuit\": \"2_01\", \"value\": 0}}",
+      "raw_text": "{\"result\": {\"circuit\": \"2_01\", \"dev\": \"ro\", \"value\": 0}, \"success\": true}",
       "status": 200
     }
   },
@@ -42,14 +42,13 @@
             "Simple",
             "PWM"
           ],
-          "pending": false,
           "pwm_duty": 0,
           "pwm_freq": 39.0625,
           "value": 0
         },
         "success": true
       },
-      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"do\", \"circuit\": \"1_01\", \"value\": 0, \"pending\": false, \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_freq\": 39.0625, \"pwm_duty\": 0}}",
+      "raw_text": "{\"result\": {\"circuit\": \"1_01\", \"dev\": \"do\", \"mode\": \"Simple\", \"modes\": [\"Simple\", \"PWM\"], \"pwm_duty\": 0, \"pwm_freq\": 39.0625, \"value\": 0}, \"success\": true}",
       "status": 200
     }
   },
@@ -110,7 +109,6 @@
             "Simple",
             "PWM"
           ],
-          "pending": false,
           "pwm_duty": 0,
           "pwm_freq": 39.0625,
           "value": 1
@@ -123,7 +121,6 @@
             "Simple",
             "PWM"
           ],
-          "pending": false,
           "pwm_duty": 0,
           "pwm_freq": 39.0625,
           "value": 0
@@ -136,7 +133,6 @@
             "Simple",
             "PWM"
           ],
-          "pending": false,
           "pwm_duty": 0,
           "pwm_freq": 39.0625,
           "value": 0
@@ -149,7 +145,6 @@
             "Simple",
             "PWM"
           ],
-          "pending": false,
           "pwm_duty": 0,
           "pwm_freq": 39.0625,
           "value": 0
@@ -478,17 +473,15 @@
           "value": 0
         },
         {
-          "circuit": "2_01",
+          "circuit": "2",
           "dev": "wd",
-          "nv_save": 0,
           "timeout": 5000,
           "value": 0,
           "was_wd_reset": 0
         },
         {
-          "circuit": "1_01",
+          "circuit": "1",
           "dev": "wd",
-          "nv_save": 0,
           "timeout": 5000,
           "value": 0,
           "was_wd_reset": 0
@@ -532,7 +525,6 @@
             "Simple",
             "PWM"
           ],
-          "pending": false,
           "pwm_duty": 0,
           "pwm_freq": 39.0625,
           "value": 0

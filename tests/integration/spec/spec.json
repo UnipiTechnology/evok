@@ -361,9 +361,6 @@
             },
             "type": "array"
           },
-          "pending": {
-            "type": "boolean"
-          },
           "pwm_duty": {
             "enum": [
               0
@@ -392,7 +389,6 @@
           "dev",
           "mode",
           "modes",
-          "pending",
           "pwm_duty",
           "pwm_freq",
           "value"
@@ -509,6 +505,40 @@
           "modbus_type",
           "scan_interval",
           "slave_id"
+        ],
+        "type": "object"
+      }
+    },
+    "nv_save": {
+      "response": {
+        "additionalProperties": true,
+        "properties": {
+          "circuit": {
+            "enum": [
+              "1",
+              "2"
+            ],
+            "type": "string"
+          },
+          "dev": {
+            "enum": [
+              "nv_save"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "enum": [
+              0
+            ],
+            "maximum": 0,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "circuit",
+          "dev",
+          "value"
         ],
         "type": "object"
       }
@@ -815,8 +845,8 @@
         "properties": {
           "circuit": {
             "enum": [
-              "1_01",
-              "2_01"
+              "1",
+              "2"
             ],
             "type": "string"
           },
@@ -825,14 +855,6 @@
               "wd"
             ],
             "type": "string"
-          },
-          "nv_save": {
-            "enum": [
-              0
-            ],
-            "maximum": 0,
-            "minimum": 0,
-            "type": "integer"
           },
           "timeout": {
             "enum": [
@@ -862,7 +884,6 @@
         "required": [
           "circuit",
           "dev",
-          "nv_save",
           "timeout",
           "value",
           "was_wd_reset"

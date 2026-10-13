@@ -93,14 +93,14 @@ def test_write_di_counter_mode_toggle(http):
 
 
 def test_write_wd_timeout(http):
-    r = http.post_json("/rest/wd/2_01/", {"timeout": 5000})
+    r = http.post_json("/rest/wd/2/", {"timeout": 5000})
     assert r.status == 200, r.raw_text
     assert r.body.get("success") is True
     assert_full_shape("wd", r.body["result"])
 
 
 def test_write_wd_value_off(http):
-    r = http.post_json("/rest/wd/2_01/", {"value": 0})
+    r = http.post_json("/rest/wd/2/", {"value": 0})
     assert r.status == 200, r.raw_text
     assert r.body.get("success") is True
 

@@ -35,32 +35,22 @@ result["group_queries"] = [list(map(methodcaller("full"), all_devs))]
 
 ---
 
-## 2. REST property-read leaks `AttributeError` for non-attribute `full()` keys
+## 2. [FIXED] REST property-read leaked `AttributeError` for non-attribute `full()` keys
 
-**Severity:** minor (information leak + inconsistency)
-**Location:** `evok/handlers_base.py:34` (`getattr(device, prop)` in `EvokWebHandlerBase.get`)
-**Pinned by:** `tests/integration/suite/test_errors.py::test_error_property_not_a_python_attribute`
+**Status:** fixed in Evok 3.1. `GET /rest/ai/1_01/unit` now returns HTTP 200
+`{"unit": "V"}`. Pinned by `tests/integration/suite/test_errors.py::test_error_property_read_unit`.
 
-`GET /rest/<dev>/<circuit>/<prop>` does `getattr(device, prop)`, but some keys
-present in `device.full()` are NOT Python attributes. Example: `AnalogInput`
-exposes `unit` in `full()` (via the `unit_name` property), but the attribute is
-named `unit_name`, not `unit`. Reading `/rest/ai/1_01/unit` returns a 404 with
-the raw `AttributeError` class name and message in the body:
+**Originally:** `GET /rest/<dev>/<circuit>/<prop>` did `getattr(device, prop)`,
+but some keys present in `device.full()` were NOT Python attributes — e.g.
+`AnalogInput` exposed `unit` in `full()` via a `unit_name` property, so reading
+`/rest/ai/1_01/unit` returned 404 with the raw `AttributeError`:
 
 ```json
 {"success": false, "errors": {"AttributeError": "'AnalogInput' object has no attribute 'unit'"}}
 ```
 
-The property-read path is therefore inconsistent with `full()`: a client can't
-read every key that `full()` advertises. The only guard is `prop[0] in ('_',)`
-(handlers_base.py:31), which blocks underscore-prefixed names but not
-attribute/key mismatches.
-
-**Fix options:**
-  - (a) make property-read consult a whitelist derived from `full()` keys, or
-  - (b) rename `unit_name` → `unit` (and audit other `*_name` attrs), or
-  - (c) return a structured "no such property" error without leaking the
-    exception class.
+The property-read path was inconsistent with `full()`. The fix made the `full()`
+keys real attributes (option (b): `unit_name` → `unit` and the like).
 
 ---
 
@@ -126,8 +116,8 @@ and asserts on it. The tests carry inline notes:
 - `test_bulk.py::test_bulk_group_queries` — asserts the error envelope (the
   crash), with a comment explaining the `map()` bug and "if the bug is fixed,
   re-record."
-- `test_errors.py::test_error_property_not_a_python_attribute` — asserts the
-  `AttributeError` leak is present in the error envelope.
+- `test_errors.py::test_error_property_read_unit` — asserts the FIXED behavior
+  (`unit` now readable, HTTP 200).
 - `test_errors.py::test_error_ao_value_below_minimum` — uses `/json/` (where
   validation works) and comments that `/rest/` would silently no-op.
 - `test_boundaries.py` (REMOVED) — the clamp mechanism is documented here in §4; the tests were dead (always-skipped) because the contract is not black-box-observable in one round-trip. Re-add as device-gated poll-to-stable tests if the clamps need exercising.
