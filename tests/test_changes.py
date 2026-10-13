@@ -353,3 +353,52 @@ async def test_write_coil_without_response_reports_the_response(units, monkeypat
     assert await client.write_coil_without_response(1002, 1) is True
     restarting_unit(client, 1002, TimeoutError())
     assert await client.write_coil_without_response(1002, 1) is False
+
+
+# ---- #201: comm and last_comm of the devices ----
+
+@pytest.mark.parametrize('error, comm', [
+    (None, 'ok'),
+    (TimeoutError('Response timeout'), 'timeout'),
+    (CRCError('CRC error', response_bytes=b'\x01'), 'error'),
+])
+async def test_comm_of_a_unit(units, error, comm):
+    client, = await units('1')
+    client.cache.scan_error = error
+    assert client.comm() == comm
+
+
+async def test_comm_of_a_timeout_of_the_retries(units):
+    """ The root cause of the error of tmodbus decides, a RequestRetryFailedError of a timeout is a timeout """
+    client, = await units('1')
+    error = RequestRetryFailedError('Failed after 2 attempts')
+    error.__cause__ = TimeoutError('Response timeout after 0.5 seconds')
+    client.cache.scan_error = error
+    assert client.comm() == 'timeout'
+
+
+def fail_reads(client, error):
+    async def fail(*args, **kwargs):
+        raise error
+    client.mb_client.read_holding_registers = fail
+    client.mb_client.read_input_registers = fail
+
+
+async def test_lost_unit_sends_all_its_devices_once(units, events):
+    client, = await units('1')
+    di = Devices.by_name(DI, '1_01')
+    assert (di.full()['comm'], di.full()['last_comm'] >= 0) == ('ok', True)
+    reads = client.mb_client.read_holding_registers, client.mb_client.read_input_registers
+    fail_reads(client, TimeoutError('Response timeout'))
+    events.clear()
+    assert not await client.do_scan()
+    assert not await client.do_scan()                       # the same comm, no event
+    lost, = [proxy.changeset for proxy in events]
+    assert len(lost) == len(set(client.eventable_devices + client.devices)) and di in lost
+    assert di.full()['comm'] == 'timeout' and di.full()['value'] is not None      # the last known value
+    client.mb_client.read_holding_registers, client.mb_client.read_input_registers = reads
+    events.clear()
+    assert await client.do_scan()
+    recovered, = [proxy.changeset for proxy in events]
+    assert len(recovered) == len(lost) and di.full()['comm'] == 'ok'
+

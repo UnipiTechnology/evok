@@ -33,6 +33,11 @@ def dev(devtype, circuit):
     return Devices.by_name(devtype, circuit)
 
 
+def without_comm(state: dict) -> dict:
+    """ The state without the communication with the unit, last_comm changes with the time """
+    return {key: value for key, value in state.items() if key not in ('comm', 'last_comm')}
+
+
 # --- DigitalInput -----------------------------------------------------------
 
 async def test_di_value_counter_debounce(unit):
@@ -358,9 +363,11 @@ async def test_output_states(unit):
     await unit({1: 0b01})
     do, led = dev(DO, '1_01'), dev(LED, '1_01')
     Devices.set_alias('my_do', do)
-    assert list(do.full()) == ['dev', 'circuit', 'value', 'mode', 'modes', 'pwm_freq', 'pwm_duty', 'alias']
+    assert list(do.full()) == ['dev', 'circuit', 'value', 'mode', 'modes', 'pwm_freq', 'pwm_duty', 'comm', 'last_comm',
+                               'alias']
     assert (do.full()['dev'], do.full()['value']) == ('do', 1)
-    assert led.full() == {'dev': 'led', 'circuit': '1_01', 'value': 0}
+    assert without_comm(led.full()) == {'dev': 'led', 'circuit': '1_01', 'value': 0}
+    assert led.full()['comm'] == 'ok' and led.full()['last_comm'] >= 0
 
 
 async def test_finish_all_ends_running_pulses(unit):
@@ -836,7 +843,7 @@ async def test_register_holding_and_input():
     await hreg.set(value='5')
     assert client.mb_client.holding[0] == 5
     assert await hreg.check_new_data()            # cache is updated without a scan
-    assert hreg.full() == {'dev': 'register', 'circuit': 'h', 'value': 5}
+    assert without_comm(hreg.full()) == {'dev': 'register', 'circuit': 'h', 'value': 5}
     with pytest.raises(ValueError, match='read-only'):
         await ireg.set(value=1)
     with pytest.raises(ValueError, match='out of range'):
@@ -869,13 +876,13 @@ async def test_data_point_read_only_without_valid():
     client, dp = make_dp([7])
     await client.cache.do_scan(initial=True)
     assert await dp.check_new_data()
-    assert dp.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 7, 'writable': False}
+    assert without_comm(dp.full()) == {'dev': 'data_point', 'circuit': 'x', 'value': 7, 'writable': False}
     assert not await dp.check_new_data()
     with pytest.raises(ValueError, match='read-only'):
         await dp.set(value=1)
     assert client.mb_client.writes == []
     assert await dp.set() is None
-    assert dp.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 7, 'writable': False}
+    assert without_comm(dp.full()) == {'dev': 'data_point', 'circuit': 'x', 'value': 7, 'writable': False}
 
 
 async def test_ow_temperature_valid_mask():
@@ -886,7 +893,7 @@ async def test_ow_temperature_valid_mask():
     assert t.is_valid is False
     await client.cache.do_scan(initial=True)
     assert await t.check_new_data()
-    assert t.full() == {'dev': 'data_point', 'circuit': 'x', 'value': 21.5, 'writable': False, 'unit': 'C',
+    assert without_comm(t.full()) == {'dev': 'data_point', 'circuit': 'x', 'value': 21.5, 'writable': False, 'unit': 'C',
                         'valid': True}
     # only the validity changes
     client.mb_client.holding[2] = 0b01

@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import contextlib
+import time
 import struct
 from math import isfinite
 import functools
@@ -67,6 +68,23 @@ class Client:
         self.failing_devices = set()    # logged once, until they check new data again
         self.sent_aliases = {}          # the alias of each device by the last check, Devices.set_alias() sends no event
         self.lock = asyncio.Lock()      # not reentrant, set() of a device must not change the unit again
+        # comm by the last event of the devices, a change sends all of them; the devices are created after
+        # a successful scan
+        self.sent_comm = 'ok'
+
+    def comm(self) -> str:
+        """ The communication with the unit: ok, timeout (the unit does not respond) or error (e.g. a CRC error,
+            an exception response of the unit, the port), by the root cause of the error of its last scan
+        """
+        error = self.cache.scan_error
+        if error is None:
+            return 'ok'
+        return 'timeout' if isinstance(root_cause(error), TimeoutError) else 'error'
+
+    def last_comm(self) -> float | None:
+        """ Seconds since the last successful communication with the unit, None before it """
+        last = self.cache.last_comm_time
+        return None if last is None else round(time.monotonic() - last, 3)
 
     def read_registers(self, index: int, count: int = 1, is_input: bool = False) -> list[int]:
         """ Return the cached values of count registers, the datatypes are decoded by the accessors """
@@ -135,9 +153,19 @@ class Client:
     async def _scan(self, all_groups: bool = False) -> bool:
         """ Read the register blocks, send the changed devices as one event; under the lock """
         if not await self.cache.do_scan(all_groups=all_groups):
+            # the values are stale, the devices are sent with the changed comm
+            self.send_comm_change()
             return False
         await self._check_devices()
         return True
+
+    def send_comm_change(self):
+        """ Send all devices as one event if comm has changed since the last event, e.g. a lost unit """
+        if self.comm() != self.sent_comm:
+            self.sent_comm = self.comm()
+            devices = list(dict.fromkeys(self.eventable_devices + self.devices))
+            if devices:
+                devents.status(Proxy(devices))
 
     async def _check_devices(self):
         """ Send the devices changed since their last check as one event, also by their alias; under the lock """
@@ -165,6 +193,10 @@ class Client:
             if changed:
                 changeset.append(device)
 
+        if self.comm() != self.sent_comm:
+            # also a recovered unit, all devices are sent
+            self.sent_comm = self.comm()
+            changeset = list(dict.fromkeys(self.eventable_devices + self.devices))
         if len(changeset) > 0:
             proxy = Proxy(changeset)
             devents.status(proxy)
