@@ -85,7 +85,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 
 - **Komunikace zařízení:** stav každého zařízení Modbus jednotky a 1-Wire čidla obsahuje `comm` (`ok`, `timeout`,
   `error`) a `last_comm` (sekundy od poslední úspěšné komunikace); ztráta a obnovení jednotky pošle stavy všech
-  jejích zařízení, `value` je poslední známá. Entity Home Assistantu jsou bez komunikace nedostupné. — #201
+  jejích zařízení, `value` je poslední známá. Entity Home Assistantu jsou bez komunikace nedostupné. — `969798e`
 - **Zabezpečení:** volitelný `token` pro všechna API (Bearer, Basic, `?token=` u WebSocketu) a `allowed_origins`.
   — `763016c`, `2b7f668`
 - **Token jen pro čtení:** volitelný `read_token` (vyžaduje `token`). Povolí čtení REST a JSON, dotazy bulk, `all`,
@@ -118,7 +118,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 
 ## Zastaralé
 
-- `time` 1-Wire čidla, čas smyčky událostí při čtení; nahrazuje ho `last_comm`. — #201
+- `time` 1-Wire čidla, čas smyčky událostí při čtení; nahrazuje ho `last_comm`. — `969798e`
 - `counter_mode` a `counter_modes` u DI. `Disabled` jen hlásí čítač 0, režim se neukládá. — `a5d8065`
 - Parametr `timeout` RPC metody `output_set_for_time` je alias `pulse_duration`. — `e16a3bf`
 - `nv_sav_coil` ve WD feature se nepoužívá, ukládání řeší feature NV_SAVE. — `f298e87`
