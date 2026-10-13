@@ -11,7 +11,7 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - **Unipi nodes for Node-RED:** which `Origin` header they send to the WebSocket. If they send their own address,
   Evok refuses them with 403 and the address has to be added to `allowed_origins`.
 - **nginx configuration of the package:** it has to pass the original host for the WebSocket
-  (`proxy_set_header Host $host`, `$host:$server_port` of evok-web works since PR origin-default-port), otherwise the web
+  (`proxy_set_header Host $host`, `$host:$server_port` of evok-web works since `b1415ef`), otherwise the web
   interface behind nginx gets no WebSocket. Checked with evok-web 3.18 on a Patron.
 - **Firmware and the scan after a change:** if the firmware shows a write in its registers with a delay, the reply
   to a change still has the old state, the next scan corrects it.

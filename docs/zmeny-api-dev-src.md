@@ -11,7 +11,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - **Uzly Unipi pro Node-RED:** jakou hlavičku `Origin` posílají na WebSocket. Pokud posílají svou vlastní adresu,
   Evok je odmítne s 403 a je potřeba ji přidat do `allowed_origins`.
 - **Konfigurace nginx v balíčku:** pro WebSocket musí předávat původního hostitele (`proxy_set_header Host $host`,
-  `$host:$server_port` z evok-web funguje od PR origin-default-port), jinak webové rozhraní přes nginx nedostane WebSocket.
+  `$host:$server_port` z evok-web funguje od `b1415ef`), jinak webové rozhraní přes nginx nedostane WebSocket.
   Ověřeno s evok-web 3.18 na Patronu.
 - **Firmware a sken po změně:** pokud firmware promítne zápis do registrů se zpožděním, vrátí odpověď na změnu
   ještě starý stav a opraví ho až další sken.
