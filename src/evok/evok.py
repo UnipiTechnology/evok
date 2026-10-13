@@ -7,20 +7,17 @@ import logging.handlers
 import os
 import signal
 import sys
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version
 
 import tornado.httpclient
 import tornado.httpserver
 import tornado.web
 
-from . import auth
-from . import config
-from . import rpc_handler
+from . import auth, config, rpc_handler
 from .auth import TokenAuth
 from .blocks import sequencer
 from .bulk_handler import JSONBulkHandler
-from .devices import MODBUS_SLAVE, RUN, OWBUS
-from .devices import Devices, devents, devtype_of
+from .devices import MODBUS_SLAVE, OWBUS, RUN, Devices, devents, devtype_of
 from .handlers_base import EvokWebHandlerBase
 from .log import package_logger, read_log_tail
 from .mqtt_handler import MqttHandler, MqttSettings
@@ -80,8 +77,8 @@ class WhHandler:
                     self.pending[(state['dev'], state.get('circuit'))] = state
             if self.pending and self.send_task is None:
                 self.send_task = asyncio.create_task(self._send())
-        except Exception as E:
-            logger.exception(f"WhHandler error in event: {E}")
+        except Exception:
+            logger.exception("WhHandler error in event")
 
     async def _send(self):
         """ Send the pending states, wait min_interval since the last request """
@@ -110,7 +107,7 @@ class WhHandler:
 
 class LegacyRestHandler(EvokWebHandlerBase):
     def _get_kw(self) -> dict:
-        return dict([(k, v[0].decode()) for (k, v) in self.request.body_arguments.items()])
+        return {k: v[0].decode() for (k, v) in self.request.body_arguments.items()}
 
 
 class LegacyJsonHandler(EvokWebHandlerBase):
@@ -122,7 +119,7 @@ class LoadAllHandler(EvokWebHandlerBase):
     # tornado returns 405 Method Not Allowed for POST
     SUPPORTED_METHODS = ("GET", "OPTIONS")
 
-    async def get(self):  # noqa
+    async def get(self):
         """This function returns a heterogeneous list of all devices exposed via the REST API"""
         result = self._get_all()
         self.write(json.dumps(result))
@@ -201,8 +198,8 @@ class AliasTask:
                 try:
                     alias_dict = self.get_dict_to_save()
                     await asyncio.to_thread(config.save_aliases, alias_dict, self.alias_file)
-                except Exception as E:
-                    logger.exception(E)
+                except Exception:
+                    logger.exception("Cannot save the aliases")
                     # try it again after SAVE_TIME
                     self.dirty_trigger.set()
         except asyncio.CancelledError:
@@ -210,8 +207,8 @@ class AliasTask:
             if self.dirty_trigger.is_set():
                 try:
                     config.save_aliases(self.get_dict_to_save(), self.alias_file)
-                except Exception as E:
-                    logger.exception(E)
+                except Exception:
+                    logger.exception("Cannot save the aliases")
             raise
 
 
@@ -308,7 +305,7 @@ async def main():
         (r"/json/all/?", LoadAllHandler),
         (r"/json/([^/]+)/([^/]+)/?([^/]+)?/?", LegacyJsonHandler),
         (r"/version/?", VersionHandler),
-        (r"/log/?", LogHandler, dict(log_file=log_file)),
+        (r"/log/?", LogHandler, {'log_file': log_file}),
     ]
 
     # enabled if the section is missing, it was always enabled before the option was added
@@ -319,7 +316,7 @@ async def main():
 
     if evok_config.get_api('websocket').get('enabled', False):
         all_filtered = evok_config.get_api('websocket').get("all_filtered", False)
-        api_routes.append((r"/ws/?", WsHandler, dict(all_filtered=all_filtered)))
+        api_routes.append((r"/ws/?", WsHandler, {'all_filtered': all_filtered}))
 
     app = tornado.web.Application(
         handlers=api_routes,

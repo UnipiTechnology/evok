@@ -1,6 +1,6 @@
 import pytest
 
-from evok.devices import Aliases, Devices, DeviceNotFound, DI, RO
+from evok.devices import DI, RO, Aliases, DeviceNotFound, Devices
 
 
 class FakeDevice:

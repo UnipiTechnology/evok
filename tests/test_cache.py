@@ -3,14 +3,12 @@ import logging
 from types import SimpleNamespace
 
 import pytest
-from tenacity import RetryError
-from tmodbus.exceptions import (CRCError, IllegalDataAddressError, ModbusConnectionError,
-                                 RequestRetryFailedError)
-
-from evok.modbus.cache import ModbusCacheMap, RegisterGroup, ENoCacheRegister, EUnknownRegister
-from evok.modbus.scanner import ModbusScanner
-
 from conftest import FakeModbus
+from tenacity import RetryError
+from tmodbus.exceptions import CRCError, IllegalDataAddressError, ModbusConnectionError, RequestRetryFailedError
+
+from evok.modbus.cache import ENoCacheRegister, EUnknownRegister, ModbusCacheMap, RegisterGroup
+from evok.modbus.scanner import ModbusScanner
 
 BLOCKS = [
     {'start_reg': 0, 'count': 2, 'scan_divider': 1},

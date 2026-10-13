@@ -7,7 +7,7 @@ import tornado.testing
 import tornado.web
 import tornado.websocket
 
-from evok.devices import Devices, DI, DO, SENSOR, WATCHDOG
+from evok.devices import DI, DO, Devices
 from evok.ws_handler import WsHandler, registered_ws
 
 

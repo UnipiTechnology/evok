@@ -1,12 +1,11 @@
 import json
 
 import pytest
+from test_mqtt_handler import devices, mqtt, settle  # noqa: F401
 
-from evok.devices import Devices, AI, AO, DATA_POINT, DEVICE_INFO, DI, DO, LED, MODBUS_SLAVE, RO, SENSOR, WATCHDOG
+from evok.devices import AI, AO, DATA_POINT, DEVICE_INFO, DI, DO, LED, MODBUS_SLAVE, RO, SENSOR, WATCHDOG, Devices
 from evok.mqtt_ha import discovery, ha_id
 from evok.mqtt_handler import MqttSettings
-
-from test_mqtt_handler import devices, mqtt, settle  # noqa: F401
 
 
 class Unit:

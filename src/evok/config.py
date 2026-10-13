@@ -1,9 +1,7 @@
 import logging
 import os
-from typing import List, Dict, Tuple, Union
 
-from .modbus import ModbusScanner
-from .modbus.transport import BusTransport
+import yaml
 from tenacity import AsyncRetrying, retry_never, stop_after_attempt, stop_after_delay, wait_fixed
 from tmodbus import (
     AsyncRtuTransport,
@@ -12,10 +10,9 @@ from tmodbus import (
 )
 
 from . import w1
-
-import yaml
-from .devices import Devices, Aliases
-from .devices import OWBUS, SERIALBUS, DEVICE_INFO, TCPBUS, MODBUS_SLAVE
+from .devices import DEVICE_INFO, MODBUS_SLAVE, OWBUS, SERIALBUS, TCPBUS, Aliases, Devices
+from .modbus import ModbusScanner
+from .modbus.transport import BusTransport
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +22,13 @@ class EvokConfigError(Exception):
 
 
 class HWDict:
-    def __init__(self, dir_paths: List[str] = None, paths: List[str] = None):
+    def __init__(self, dir_paths: list[str] | None = None, paths: list[str] | None = None):
         """
         :param dir_paths: paths to directories with definitions, all '.yaml' files are loaded
         :param paths: paths to definition files
         """
-        self.definitions: Dict[str, dict] = {}
-        scope = list()
+        self.definitions: dict[str, dict] = {}
+        scope = []
         if dir_paths is not None:
             for dp in dir_paths:
                 if not os.path.isdir(dp):
@@ -48,7 +45,7 @@ class HWDict:
             file_name = os.path.basename(file_path)[:-len(".yaml")]
             # an invalid file is skipped, the other definitions are loaded
             try:
-                with open(file_path, 'r') as yfile:
+                with open(file_path) as yfile:
                     ydata = yaml.safe_load(yfile)
             except (OSError, yaml.YAMLError) as E:
                 logger.error(f"HWDict: Cannot load definition file '{file_path}': {E}")
@@ -72,7 +69,7 @@ class BusDevice:
         self.bus_driver = bus_driver
         self.circuit = circuit
         self.settings = settings
-        self.devices: List[str] = []    # the circuits of the created Modbus devices of the bus
+        self.devices: list[str] = []    # the circuits of the created Modbus devices of the bus
 
     def full(self):
         return dict({'dev': self.devtype, 'circuit': self.circuit}, **self.settings, devices=list(self.devices))
@@ -91,7 +88,7 @@ class SerialBusDevice(BusDevice):
 
 
 class DeviceInfo:
-    def __init__(self, name: str, family: str, model: str, sn: Union[None, int], board_count: int):
+    def __init__(self, name: str, family: str, model: str, sn: int | None, board_count: int):
         """
         :param family: [Neuron, Patron, UNIPI1, Iris]
         :param model: [S103, M533, ...]
@@ -100,7 +97,7 @@ class DeviceInfo:
         """
         self.family: str = family
         self.model: str = model
-        self.sn: Union[None, int] = sn
+        self.sn: int | None = sn
         self.board_count: int = board_count
         self.circuit: str = f"{name}"
 
@@ -125,19 +122,19 @@ class EvokConfig:
         self.logging: dict = self.__get_logging_conf(data)
 
     def __merge_data(self, source: dict, append: dict):
-        for key in append:
-            if key in source and type(source[key]) == dict and type(append[key]) == dict:
-                source[key] = self.__merge_data(source[key], append[key])
+        for key, value in append.items():
+            if isinstance(source.get(key), dict) and isinstance(value, dict):
+                source[key] = self.__merge_data(source[key], value)
             else:
-                source[key] = append[key]
+                source[key] = value
         return source
 
-    def __get_final_conf(self, scope: List[str], check_autogen: bool = True) -> dict:
+    def __get_final_conf(self, scope: list[str], check_autogen: bool = True) -> dict:
         """ Merge the config files in the scope, the later ones override the former ones """
         final_conf = {}
         for path in scope:
             try:
-                with open(path, 'r') as f:
+                with open(path) as f:
                     ydata = yaml.safe_load(f)
             except FileNotFoundError:
                 logger.warning(f"Config file {path} not found!")
@@ -197,13 +194,13 @@ class BusClaims:
 
     def __init__(self):
         # the circuits of the created Modbus devices -> their bus, the circuit is only the name of the device
-        self.names: Dict[str, str] = {}
+        self.names: dict[str, str] = {}
         # the real paths of the serial ports -> their bus, two buses would mix their requests on one line
-        self.serial_ports: Dict[str, str] = {}
+        self.serial_ports: dict[str, str] = {}
         # (line, slave-id) -> the device and its bus, the line is the serial port or (host, port) of TCP
-        self.units: Dict[tuple, Tuple[str, str]] = {}
+        self.units: dict[tuple, tuple[str, str]] = {}
         # the 1-Wire master (None is the first one) -> its OWFS bus, two buses created all its sensors twice
-        self.w1_masters: Dict[Union[str, None], str] = {}
+        self.w1_masters: dict[str | None, str] = {}
 
 
 def create_devices(evok_config: EvokConfig, hw_dict):
@@ -212,8 +209,8 @@ def create_devices(evok_config: EvokConfig, hw_dict):
         # an error in the config of a bus does not stop creating the other buses
         try:
             _create_bus(bus_name, bus_data or {}, hw_dict, claims)
-        except Exception as E:
-            logger.exception(f"Error in config of bus '{bus_name}' - {str(E)}")
+        except Exception:
+            logger.exception(f"Error in config of bus '{bus_name}'")
 
 
 def bus_retries(bus_data: dict) -> int:
@@ -240,18 +237,18 @@ def retry_strategies(timeout: float, connect_timeout: float, retries: int = 1) -
         A unit which does not respond is slowed down by its ModbusScanner.
     """
     attempts = retries + 1
-    return dict(
+    return {
         # one attempt, its failure is a ModbusConnectionError; it also opens the connection
         # before the first request, the bus is not opened by Evok, a failed open was not reported
-        auto_reconnect=AsyncRetrying(stop=stop_after_attempt(1), wait=wait_fixed(0)),
+        "auto_reconnect": AsyncRetrying(stop=stop_after_attempt(1), wait=wait_fixed(0)),
         # the retries of the request, e.g. with a new connection after a lost one;
         # retry_never: the default retry of AsyncRetrying is any exception, the transport adds its reasons
-        response_retry_strategy=AsyncRetrying(
+        "response_retry_strategy": AsyncRetrying(
             retry=retry_never,
             stop=stop_after_attempt(attempts) | stop_after_delay(attempts * (timeout + connect_timeout)),
             wait=wait_fixed(0.1),
         ),
-    )
+    }
 
 
 def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
@@ -262,7 +259,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
 
     bus = None
     line = None
-    bus_device_info: Union[None, DeviceInfo] = None
+    bus_device_info: DeviceInfo | None = None
     if bus_type == 'OWFS':
         interval = bus_data.get("interval", 60)
         scan_interval = bus_data.get("scan_interval", 300)
@@ -355,7 +352,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
         return
 
     if bus is not None:
-        bus_device_info_data = bus_data.get("device_info", None)  # noqa
+        bus_device_info_data = bus_data.get("device_info", None)
         if bus_device_info_data is not None:
             bus_device_info_data: dict
             family = bus_device_info_data.get("family", 'unknown')
@@ -431,15 +428,15 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
                                             DeviceInfo(name=device_name, family=family, model=model, sn=sn,
                                                        board_count=board_count))
 
-        except Exception as E:
-            logger.exception(f"Error in config section '{bus_type}:{device_name}' - {str(E)}")
+        except Exception:
+            logger.exception(f"Error in config section '{bus_type}:{device_name}'")
 
 
 def load_aliases(path):
     # the file is read whatever its extension is, it is overwritten by save_aliases()
     alias_conf = {}
     try:
-        with open(path, 'r') as f:
+        with open(path) as f:
             alias_conf = yaml.safe_load(f) or {}
     except FileNotFoundError:
         logger.info(f"Alias file {path} not found, no aliases are loaded")
@@ -455,9 +452,9 @@ def load_aliases(path):
     version = str(version)
     if version in ("1", "1.0"):
         # transform array to dict and rename dev_type -> devtype if version 1.0
-        result = dict(((rec["name"], {"circuit": rec.get("circuit", None), "devtype": rec.get("dev_type", None)})
-                       for rec in alias_conf.get("aliases", {})
-                       if rec.get("name", None) is not None))
+        result = {rec["name"]: {"circuit": rec.get("circuit", None), "devtype": rec.get("dev_type", None)}
+                  for rec in alias_conf.get("aliases", {})
+                  if rec.get("name", None) is not None}
     elif version in ("2", "2.0"):
         result = alias_conf.get("aliases") or {}
     else:

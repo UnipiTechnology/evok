@@ -6,11 +6,11 @@ import pytest
 from evok.blocks import SequencerDevice
 from evok.devices import Aliases
 from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, Register
-from evok.modbus.digital import DigitalInput, DigitalOutput, Relay, ULED
+from evok.modbus.digital import ULED, DigitalInput, DigitalOutput, Relay
 from evok.modbus.scanner import ModbusScanner
 from evok.modbus.special import NvSave, OwPower, Watchdog
+from evok.schemas import bulk_post_inp_example, bulk_post_inp_schema, schemas
 from evok.w1 import MySensor, OwBusDriver
-from evok.schemas import schemas, bulk_post_inp_schema, bulk_post_inp_example
 
 # the classes whose set() receives the validated request of each schema key
 SET_CLASSES = {

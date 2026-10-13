@@ -1,8 +1,7 @@
 import pytest
+from conftest import make_client
 
 from evok.modbus.pwm import HardPwmFrequency, SoftPwmFrequency
-
-from conftest import make_client
 
 
 async def make_pwm(cls, holding):

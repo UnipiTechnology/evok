@@ -1,8 +1,7 @@
 import pytest
+from conftest import make_client
 
 from evok.modbus.iomode import DIMode, IOMode
-
-from conftest import make_client
 
 MODES = {'Voltage': {'value': 0, 'unit': 'V', 'range': [0, 10]},
          'Current': {'value': 1, 'unit': 'mA', 'range': [0, 20]},

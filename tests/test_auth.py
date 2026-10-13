@@ -34,7 +34,7 @@ async def server():
         (r"/json/([^/]+)/([^/]+)/?([^/]+)?/?", LegacyJsonHandler),
         (r"/bulk/?", JSONBulkHandler),
         (r"/version/?", VersionHandler),
-        (r"/log/?", LogHandler, dict(log_file=None)),
+        (r"/log/?", LogHandler, {'log_file': None}),
         (r"/rpc/?", RpcHandler),
         (r"/ws/?", WsHandler),
     ]))

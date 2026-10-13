@@ -5,11 +5,26 @@ from itertools import chain
 import jsonschema
 import tornado.web
 
-from .devices import Devices, to_float
-from .devices import OWBUS, DEVICE_INFO, SENSOR, MODBUS_SLAVE, \
-    DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
-    REGISTER, DATA_POINT, NV_SAVE
 from .auth import TokenAuth
+from .devices import (
+    AI,
+    AO,
+    DATA_POINT,
+    DEVICE_INFO,
+    DI,
+    DO,
+    LED,
+    MODBUS_SLAVE,
+    NV_SAVE,
+    OWBUS,
+    OWPOWER,
+    REGISTER,
+    RO,
+    SENSOR,
+    WATCHDOG,
+    Devices,
+    to_float,
+)
 from .errors import DeviceNotFound, ReadOnlyAccess, SequenceRunning, UnitUnavailable
 from .modbus import set_devices
 from .schemas import schemas
@@ -102,12 +117,12 @@ class EvokWebHandlerBase(TokenAuth, tornado.web.RequestHandler):
 
             self.write(json.dumps(result))
         except DeviceNotFound as E:
-            logger.error(f"GET: {str(E)}")
+            logger.error(f"GET: {E}")
             self.write(json.dumps({'success': False, 'errors': {str(type(E).__name__): str(E)}}))
             self.set_status(status_code=404)
 
-        except Exception as E:
-            logger.exception(f"GET: {str(E)}")
+        except Exception:
+            logger.exception("GET")
             self.write(json.dumps({'success': False, 'errors': {'Server error': 'internal'}}))
             self.set_status(status_code=500)
         self.set_header('Content-Type', 'application/json')
@@ -137,8 +152,8 @@ class EvokWebHandlerBase(TokenAuth, tornado.web.RequestHandler):
             self.write(json.dumps({'success': False, 'errors': errors}))
             self.set_status(status_code=status)
 
-        except Exception as E:
-            logger.exception(f"POST: {str(E)}")
+        except Exception:
+            logger.exception("POST")
             self.write(json.dumps({'success': False, 'errors': {'Server error': 'internal'}}))
             self.set_status(status_code=500)
         self.set_header('Content-Type', 'application/json')

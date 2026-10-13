@@ -7,7 +7,7 @@ import tornado.testing
 import tornado.web
 
 from evok.bulk_handler import JSONBulkHandler
-from evok.devices import Devices, DO, SENSOR, MODBUS_SLAVE
+from evok.devices import DO, MODBUS_SLAVE, SENSOR, Devices
 
 
 class FakeDevice:
@@ -151,6 +151,7 @@ async def test_large_body_is_refused():
 async def test_group_query_of_the_buses(bulk, l0306):
     """ #238: the buses had no full(), the bulk failed """
     from types import SimpleNamespace
+
     from evok import config
     config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
         'RTU': {'type': 'MODBUSRTU', 'port': '/dev/null', 'devices': {'u1': {'slave-id': 1, 'model': 'L0306'}}},

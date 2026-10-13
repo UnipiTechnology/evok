@@ -1,14 +1,15 @@
 import asyncio
-import os
 import json
 import logging
+import os
 
 import pytest
 
 from evok import devents
-from evok.devices import Devices, SENSOR
-from evok.w1 import DS18B20, DS2408, DS2438, OwBusDriver, MySensorFabric, address_key
-from evok.w1 import bus as w1_bus, sysfs as w1_sysfs
+from evok.devices import SENSOR, Devices
+from evok.w1 import DS18B20, DS2408, DS2438, MySensorFabric, OwBusDriver, address_key
+from evok.w1 import bus as w1_bus
+from evok.w1 import sysfs as w1_sysfs
 from evok.w1.bus import leaf_error
 
 

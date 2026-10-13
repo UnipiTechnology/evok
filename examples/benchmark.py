@@ -1,11 +1,11 @@
+import asyncio
 import math
+import statistics
 import sys
 import time
 from asyncio import events, tasks
-import statistics
 
 import aiohttp
-import asyncio
 
 host = '127.0.0.1'
 
@@ -288,7 +288,7 @@ async def json_request_set(session: aiohttp.ClientSession, results, dev_type: st
 
 
 async def request(fce, period: float, repeat: int, dev_type: str) -> dict:
-    results = list()
+    results = []
     async with aiohttp.ClientSession() as session:
         async with TaskGroup() as group:
             for _ in range(repeat):
@@ -318,7 +318,7 @@ async def main():
     if len(device_id) == 0:
         device_id = 'dev'
     print(f"Benchmark started for device: '{device_id}' #", end='.')
-    results = list()
+    results = []
 
     for dev_type in ['do', 'ao']:
         for fce in [rest_request_get, json_request_get, rest_request_set, json_request_set]:

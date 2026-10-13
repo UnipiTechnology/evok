@@ -7,9 +7,8 @@ import tornado.httpserver
 import tornado.testing
 import tornado.web
 
-from evok.devices import Devices, AI
+from evok.devices import AI, Devices, to_bool
 from evok.evok import LegacyJsonHandler, LegacyRestHandler
-from evok.devices import to_bool
 from evok.w1 import OwBusDriver
 
 
@@ -159,6 +158,7 @@ def test_alias_all_is_reserved():
 def modbus_buses(l0306):
     """ An RTU bus with two units and a TCP bus with one, created from the configuration """
     from types import SimpleNamespace
+
     from evok import config
     config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
         'RTU': {'type': 'MODBUSRTU', 'port': '/dev/null', 'baudrate': 9600, 'parity': 'E', 'retries': 2,

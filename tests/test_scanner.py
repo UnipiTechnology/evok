@@ -2,14 +2,13 @@ import asyncio
 import time
 
 import pytest
+from conftest import FakeModbus
 from tmodbus import AsyncRtuTransport, AsyncSmartTransport, AsyncTcpTransport
 from tmodbus.exceptions import RequestRetryFailedError
 
 from evok import devents
-from evok.devices import Devices, DI, MODBUS_SLAVE
+from evok.devices import DI, MODBUS_SLAVE, Devices
 from evok.modbus.scanner import ModbusScanner
-
-from conftest import FakeModbus
 
 
 def make_scanner(l0306, scan_freq=50, scan_enabled=True, unit_id=1):

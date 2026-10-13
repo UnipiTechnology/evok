@@ -6,7 +6,7 @@ import aiomqtt
 import pytest
 
 from evok import mqtt_handler
-from evok.devices import Devices, DI, RO
+from evok.devices import DI, RO, Devices
 from evok.mqtt_handler import MqttHandler, MqttSettings
 from evok.ws_handler import registered_ws
 

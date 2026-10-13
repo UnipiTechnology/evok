@@ -115,11 +115,11 @@ def test_timeout_is_not_an_alias():
 
 # ---- the sequencer device of an output ----
 
-from evok.devices import Devices, SEQUENCER  # noqa: E402
+from conftest import make_client, scan  # noqa: E402
+
+from evok.devices import SEQUENCER, Devices  # noqa: E402
 from evok.modbus import set_devices  # noqa: E402
 from evok.modbus.builder import IOParser  # noqa: E402
-
-from conftest import make_client, scan  # noqa: E402
 
 
 @pytest.fixture
@@ -266,6 +266,7 @@ async def test_rpc_pending_is_only_a_pulse(unit):
 
 async def test_rpc_change_during_a_pulse_is_refused(unit):
     from types import SimpleNamespace
+
     from evok.rpc_handler import Handler, SequenceRunningError, create_response
     await unit()
     await set_devices([(Devices[SEQUENCER]['do_1_01'], {'value': 1, 'pulse_duration': 10})])

@@ -8,7 +8,7 @@ from tmodbus import AsyncModbusClient, AsyncSmartTransport
 from tmodbus.exceptions import CRCError, ModbusConnectionError, RequestRetryFailedError, ServerDeviceBusyError
 
 from evok import config
-from evok.devices import Devices, DEVICE_INFO, MODBUS_SLAVE, OWBUS, SENSOR, SERIALBUS, TCPBUS
+from evok.devices import DEVICE_INFO, MODBUS_SLAVE, OWBUS, SENSOR, SERIALBUS, TCPBUS, Devices
 from evok.w1 import DS18B20, OwBusDriver
 
 

@@ -1,23 +1,19 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import asyncio
 import contextlib
-import logging
-import time
-import struct
-from math import isfinite
 import functools
-
+import logging
+import struct
+import time
+from math import isfinite
 from typing import Literal
-from tmodbus import (
-    AsyncModbusClient
-)
+
+from tmodbus import AsyncModbusClient
 from tmodbus.exceptions import InvalidResponseError, TModbusError
 from tmodbus.utils.order_aware_struct import OrderAwareStruct
 
-from .cache import ModbusCacheMap
 from ..devices import devents
 from ..errors import UnitCommunicationError, UnitUnavailable, describe_error, root_cause
+from .cache import ModbusCacheMap
 
 logger = logging.getLogger(__name__)
 
@@ -176,12 +172,12 @@ class Client:
             changed = False
             try:
                 changed = hasattr(device, 'check_new_data') and await device.check_new_data() is True
-            except Exception as E:
+            except Exception:
                 # the error repeats on every scan, do not flood the log
                 if device not in self.failing_devices:
                     self.failing_devices.add(device)
                     logger.exception(f"Error while checking new data in device '{device.devtype}_{device.circuit}', "
-                                     f"next errors are not logged until it works again: {E}")
+                                     "next errors are not logged until it works again")
             else:
                 if device in self.failing_devices:
                     self.failing_devices.discard(device)
@@ -241,8 +237,8 @@ class Accessor:
         self.decimals = decimals
 
     def params(self) -> dict:
-        return dict(is_input=self.is_input, ratio=self.ratio,
-                    offset=self.offset, decimals=self.decimals)
+        return {"is_input": self.is_input, "ratio": self.ratio,
+                "offset": self.offset, "decimals": self.decimals}
 
     def refactor(self, datatype: str = 'uint16', ratio=1, offset=0, decimals=None,
                  word_order=None) -> "Accessor":
@@ -380,7 +376,7 @@ class AccessorFactory:
     def get(cls, index: int, datatype: str = 'uint16', *, is_input: bool = False,
             ratio=1, offset=0, decimals=None, word_order=None) -> Accessor:
         """ word_order is accepted only by 32-bit datatypes """
-        kwargs = dict(ratio=ratio, offset=offset, decimals=decimals)
+        kwargs = {"ratio": ratio, "offset": offset, "decimals": decimals}
         accessor_cls = cls.accessor_classes.get(datatype)
         if accessor_cls is None:
             logger.warning(f'Unknown datatype "{datatype}" in AccessorFactory index={index}')

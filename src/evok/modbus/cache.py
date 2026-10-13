@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import logging
 import time
-
 from dataclasses import dataclass, field
+
 from tmodbus import AsyncModbusClient
 from tmodbus.exceptions import TModbusError
 
@@ -14,7 +12,6 @@ MAX_READ_COUNT = 125     # registers read by one Modbus request
 
 class ENoCacheRegister(Exception):
     """ The register was not read yet """
-    pass
 
 
 class EUnknownRegister(Exception):
@@ -22,7 +19,6 @@ class EUnknownRegister(Exception):
 
         Not a ValueError, the API reports it as an error of the server, not of the request.
     """
-    pass
 
 
 @dataclass

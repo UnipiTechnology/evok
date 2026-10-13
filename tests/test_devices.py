@@ -3,19 +3,18 @@ import json
 import math
 
 import pytest
+from conftest import make_client, scan
 
 from evok import devents
-from evok.devices import Devices, DI, DO, RO, AI, LED, SEQUENCER, WATCHDOG
-from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
-from evok.modbus.builder import IOParser
 from evok.blocks import attach, sequencer
-from evok.modbus.digital import BinaryOutput, DigitalInput, DigitalOutput, Relay, ULED
-from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
-from evok.modbus.special import NvSave, OwPower
+from evok.devices import AI, DI, DO, LED, RO, SEQUENCER, WATCHDOG, Devices
 from evok.errors import SequenceRunning
 from evok.modbus import set_devices
-
-from conftest import make_client, scan
+from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
+from evok.modbus.builder import IOParser
+from evok.modbus.client import FLOAT32_BE, FLOAT32_LE, to_registers
+from evok.modbus.digital import ULED, BinaryOutput, DigitalInput, DigitalOutput, Relay
+from evok.modbus.special import NvSave, OwPower
 
 
 @pytest.fixture
@@ -990,7 +989,7 @@ async def test_do_invalid_pwm(unit, params):
 
 @pytest.mark.parametrize('params', [{'mode': 'Unknown'}, {'counter_mode': 'Unknown'}, {'ds_mode': 'Unknown'}])
 async def test_di_unknown_mode(unit, params):
-    client = await unit()
+    await unit()
     with pytest.raises(ValueError, match='unknown'):
         await dev(DI, '1_01').set(**params)
 

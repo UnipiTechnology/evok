@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from tmodbus.exceptions import ModbusConnectionError
 
 from evok.devices import Devices

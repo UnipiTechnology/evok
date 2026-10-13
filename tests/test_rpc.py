@@ -4,7 +4,7 @@ import pytest
 from tornado_jsonrpc2.exceptions import InvalidParams, MethodNotFound
 
 from evok.blocks import sequencer
-from evok.devices import Devices, DO, RO
+from evok.devices import DO, RO, Devices
 from evok.rpc_handler import Handler, create_response
 
 
@@ -110,6 +110,7 @@ async def test_unknown_method():
 async def rpc():
     """ JSON-RPC over HTTP, the errors are converted also by tornado_jsonrpc2 """
     import json
+
     import tornado.httpclient
     import tornado.httpserver
     import tornado.testing
@@ -149,7 +150,7 @@ async def test_internal_error_over_http_is_logged_not_sent(rpc, caplog):
     Devices[DO]['1_01'] = FailingOutput(KeyError('internal detail'))
     reply = await rpc('output_set', ['1_01', 1])
     assert reply['error'] == {'code': -32603, 'message': 'Internal error: internal'}
-    assert "RPC output_set: 'internal detail'" in caplog.text and 'Traceback' in caplog.text
+    assert "RPC output_set" in caplog.text and "KeyError: 'internal detail'" in caplog.text  # in the traceback
 
 
 async def test_invalid_params_over_http(rpc, outputs):

@@ -6,17 +6,10 @@ host = '127.0.0.1'
 def main():
     url = f"http://{host}/rpc"
 
-    # Example echo method
+    # the state of a relay
     payload_get = {
         "method": "relay_get",
         "params": ["xs51_01"],
-        "jsonrpc": "2.0",
-        "id": 0,
-    }
-
-    payload_set = {
-        "method": "relay_set",
-        "params": ["xs51_01", '1'],
         "jsonrpc": "2.0",
         "id": 0,
     }

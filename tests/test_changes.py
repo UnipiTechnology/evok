@@ -3,20 +3,19 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
-from tmodbus.exceptions import CRCError, RequestRetryFailedError
+from conftest import make_client, scan
 from tmodbus import AsyncSmartTransport, AsyncTcpTransport
+from tmodbus.exceptions import CRCError, RequestRetryFailedError
 
-from evok.blocks import sequencer, start_pulse
 from evok import devents
-from evok.devices import Devices, DI, DO, NV_SAVE, WATCHDOG
+from evok.blocks import sequencer, start_pulse
+from evok.devices import DI, DO, NV_SAVE, WATCHDOG, Devices
 from evok.errors import UnitCommunicationError, UnitUnavailable
 from evok.handlers_base import client_error
 from evok.modbus import set_devices
 from evok.modbus.builder import IOParser
 from evok.modbus.scanner import ModbusScanner
 from evok.rpc_handler import Handler, UnitUnavailableError, create_response
-
-from conftest import make_client, scan
 
 
 @pytest.fixture
@@ -338,6 +337,7 @@ async def test_nv_save_of_a_unit_without_a_response(units, monkeypatch):
 async def test_reset_refused_by_the_unit_is_an_error(units, monkeypatch):
     """ An exception response is not a restart """
     from tmodbus.exceptions import IllegalDataAddressError
+
     from evok.modbus import client as client_module
     monkeypatch.setattr(client_module, 'RESTART_WAIT', 0)
     client, = await units('1')

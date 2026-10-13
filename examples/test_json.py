@@ -1,5 +1,6 @@
-import requests
 import json
+
+import requests
 
 host = '192.168.221.169'
 
