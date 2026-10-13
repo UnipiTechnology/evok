@@ -3,12 +3,12 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
-from tmodbus.exceptions import RequestRetryFailedError
+from tmodbus.exceptions import CRCError, RequestRetryFailedError
 from tmodbus import AsyncSmartTransport, AsyncTcpTransport
 
 from evok.blocks import sequencer, start_pulse
 from evok import devents
-from evok.devices import Devices, DI, DO, NV_SAVE
+from evok.devices import Devices, DI, DO, NV_SAVE, WATCHDOG
 from evok.errors import UnitCommunicationError, UnitUnavailable
 from evok.handlers_base import client_error
 from evok.modbus import set_devices
@@ -296,3 +296,60 @@ async def test_rpc_unavailable_unit(units):
         await create_response(SimpleNamespace(method='input_set', params=['1_01', 10]),
                               Handler.__new__(Handler))
     assert Devices.by_name(DI, '1_01').debounce != 10
+
+
+def restarting_unit(client, coil, error):
+    """ The unit restarts after the write of the coil, it does not respond """
+    writes = []
+    write = client.mb_client.write_single_coil
+
+    async def restart(address, value):
+        if address == coil:
+            writes.append((address, value))
+            raise error
+        await write(address, value)
+    client.mb_client.write_single_coil = restart
+    return writes
+
+
+@pytest.mark.parametrize('error', [TimeoutError('Response timeout after 0.5 seconds'),
+                                   CRCError('CRC error', response_bytes=b'\x0f\x05')])
+async def test_reset_of_a_unit_without_a_response(units, monkeypatch, error):
+    """ The reset was a 503 error and it was sent twice by the retry """
+    from evok.modbus import client as client_module
+    monkeypatch.setattr(client_module, 'RESTART_WAIT', 0.02)
+    client, = await units('1')
+    writes = restarting_unit(client, 1002, error)
+    start = asyncio.get_running_loop().time()
+    state, = await set_devices([(Devices.by_name(WATCHDOG, '1'), {'reset': 1})])
+    assert writes == [(1002, 1)] and state['dev'] == 'wd'
+    assert asyncio.get_running_loop().time() - start >= 0.02       # waited for the restart before the read
+
+
+async def test_nv_save_of_a_unit_without_a_response(units, monkeypatch):
+    from evok.modbus import client as client_module
+    monkeypatch.setattr(client_module, 'RESTART_WAIT', 0)
+    client, = await units('1')
+    writes = restarting_unit(client, 1003, TimeoutError('Response timeout'))
+    state, = await set_devices([(Devices.by_name(NV_SAVE, '1'), {'value': 1})])
+    assert writes == [(1003, 1)] and state['value'] == 1
+
+
+async def test_reset_refused_by_the_unit_is_an_error(units, monkeypatch):
+    """ An exception response is not a restart """
+    from tmodbus.exceptions import IllegalDataAddressError
+    from evok.modbus import client as client_module
+    monkeypatch.setattr(client_module, 'RESTART_WAIT', 0)
+    client, = await units('1')
+    restarting_unit(client, 1002, IllegalDataAddressError(5))
+    with pytest.raises(UnitCommunicationError):
+        await set_devices([(Devices.by_name(WATCHDOG, '1'), {'reset': 1})])
+
+
+async def test_write_coil_without_response_reports_the_response(units, monkeypatch):
+    from evok.modbus import client as client_module
+    monkeypatch.setattr(client_module, 'RESTART_WAIT', 0)
+    client, = await units('1')
+    assert await client.write_coil_without_response(1002, 1) is True
+    restarting_unit(client, 1002, TimeoutError())
+    assert await client.write_coil_without_response(1002, 1) is False
