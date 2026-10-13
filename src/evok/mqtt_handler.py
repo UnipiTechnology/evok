@@ -17,16 +17,18 @@
 """
 import asyncio
 import json
+import logging
 import socket
 
 import aiomqtt
 
 from .devices import RUN, Devices, devtype_of, num_to_devtype_name
 from .handlers_base import CLIENT_ERRORS, check_params, client_error
-from .log import logger
 from .modbus import set_devices
 from .mqtt_ha import discovery
 from .ws_handler import registered_ws
+
+logger = logging.getLogger(__name__)
 
 RECONNECT_DELAY = 5     # s, the next connection to the broker after a failure
 

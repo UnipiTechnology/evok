@@ -1,4 +1,5 @@
 import json
+import logging
 
 import jsonschema
 import tornado.web
@@ -7,8 +8,9 @@ from .auth import TokenAuth
 from .devices import Devices, devtype_of
 from .handlers_base import CLIENT_ERRORS, check_params, client_error
 from .modbus import set_devices
-from .log import logger
 from .schemas import bulk_post_inp_schema
+
+logger = logging.getLogger(__name__)
 
 
 class JSONBulkHandler(TokenAuth, tornado.web.RequestHandler):

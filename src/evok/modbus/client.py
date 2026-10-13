@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import contextlib
+import logging
 import time
 import struct
 from math import isfinite
@@ -17,7 +18,8 @@ from tmodbus.utils.order_aware_struct import OrderAwareStruct
 from .cache import ModbusCacheMap
 from ..devices import devents
 from ..errors import UnitCommunicationError, UnitUnavailable, describe_error, root_cause
-from ..log import logger
+
+logger = logging.getLogger(__name__)
 
 RESTART_WAIT = 0.1      # s, the wait after a write after which the unit restarts, before it is read
 

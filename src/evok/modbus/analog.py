@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import logging
 from math import isfinite, isnan
 
 from ..devices import AI, AO, REGISTER, DATA_POINT, to_float
-from ..log import logger
 from .cache import ENoCacheRegister
 from .base import IODevice
 from .client import Client, Accessor, Accessor32, AccessorBit, AccessorFactory
 from .iomode import IOMode, WithIOMode
+
+logger = logging.getLogger(__name__)
 
 
 def non_finite_to_str(value):

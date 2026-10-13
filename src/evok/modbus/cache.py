@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import logging
 import time
 
 from dataclasses import dataclass, field
 from tmodbus import AsyncModbusClient
 from tmodbus.exceptions import TModbusError
 
-from ..log import logger
-
+logger = logging.getLogger(__name__)
 
 MAX_READ_COUNT = 125     # registers read by one Modbus request
 

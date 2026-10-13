@@ -22,12 +22,13 @@ from .bulk_handler import JSONBulkHandler
 from .devices import MODBUS_SLAVE, RUN, OWBUS
 from .devices import Devices, devents, devtype_of
 from .handlers_base import EvokWebHandlerBase
-from .log import logger, read_log_tail
+from .log import package_logger, read_log_tail
 from .mqtt_handler import MqttHandler, MqttSettings
 from .ws_handler import WEBSOCKET_SETTINGS, WsHandler, registered_ws
 
 logging.basicConfig(level=logging.WARNING)
-logger.setLevel(logging.INFO)
+package_logger.setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_DIR = '/etc/evok'
 MAX_BODY_SIZE = 1024 * 1024     # a body of a request of the API, a bulk of hundreds of assignments has tens of kB
@@ -255,7 +256,7 @@ async def main():
     logger.info(f"Starting Evok {evok_version} using config directory '{config_path}'.")
     logger.info(f"Setting logging level to '{log_level}'.")
 
-    logger.setLevel(log_level)
+    package_logger.setLevel(log_level)
     # the root logger is already configured on import, force applies the level to the other libraries too
     logging.basicConfig(level=log_level, force=True)
     if log_level != 'DEBUG':
@@ -274,7 +275,7 @@ async def main():
         log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         filelog_handler.setFormatter(log_formatter)
         filelog_handler.setLevel(log_level)
-        logger.addHandler(filelog_handler)
+        package_logger.addHandler(filelog_handler)
 
     hw_dict = config.HWDict(dir_paths=[f'{config_path}/hw_definitions/'])
     config.load_aliases(alias_file)

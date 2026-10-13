@@ -1,10 +1,12 @@
 """ The 1-Wire sensors, their values are read from the devices of the bus """
 import asyncio
+import logging
 import time
 
 from ..devices import SENSOR
 from ..devices import devents, Devices
-from ..log import logger
+
+logger = logging.getLogger(__name__)
 
 MAX_LOSTINTERVAL = 300  # 5 minutes
 
