@@ -69,7 +69,8 @@ integration on the same broker creates the entities, no configuration of Home As
 - The configs are published retained to `<ha_prefix>/<component>/<node>/<object_id>/config`
   (`ha_prefix` is `homeassistant` by default, the node is the prefix of Evok, e.g. `evok`) before the first state
   of each device, again when they change (an alias, the mode of an AO) and after each connection to the broker.
-- The entities are available while the status of Evok is `online`.
+- The entities are available while the status of Evok is `online` and the communication of their device
+  is `ok` (`comm` of its state), an entity of a Modbus unit which does not respond is unavailable.
 - The switches and the numbers send the commands to `<prefix>/<device>/<circuit>/set`. A pulse
   is set by the sequencer, e.g. by an MQTT action of an automation to `<prefix>/sequencer/ro_1_01/set`.
 - `device_mask` limits the announced devices too.

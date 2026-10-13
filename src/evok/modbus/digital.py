@@ -23,7 +23,7 @@ class BinaryOutput(IODevice):
         self.value = None
 
     def full(self):
-        return self._with_alias(self._state())
+        return self._with_common(self._state())
 
     def _state(self) -> dict:
         """ The state without the alias, the alias is the last item of full() """
@@ -206,7 +206,7 @@ class DigitalInput(WithDIMode, IODevice):
         if self.mode == 'DirectSwitch':
             ret['ds_mode'] = self.ds_mode
             ret['ds_modes'] = self.ds_modes
-        self._with_alias(ret)
+        self._with_common(ret)
         return ret
 
     async def set(self, debounce=None, mode=None, counter=None, counter_mode=None, ds_mode=None, alias=None):

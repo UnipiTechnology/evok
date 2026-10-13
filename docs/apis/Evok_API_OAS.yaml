@@ -3331,6 +3331,7 @@ components:
     Relay_output:
       title: Relay output
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           properties:
             dev:
@@ -3370,6 +3371,7 @@ components:
     Digital_output:
       title: Digital output
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           properties:
             dev:
@@ -3445,6 +3447,7 @@ components:
       title: Digital input
       description: Instance of a digital input
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           properties:
             dev:
@@ -3589,6 +3592,7 @@ components:
       x-stoplight:
         id: 2ovrjp93gjanf
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           properties:
             dev:
@@ -3650,6 +3654,7 @@ components:
       x-stoplight:
         id: vbqyhhnguvagi
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           properties:
             dev:
@@ -3759,6 +3764,7 @@ components:
       x-stoplight:
         id: gpgqdqty1w38v
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           x-stoplight:
             id: sasd65sd5267f
@@ -3818,6 +3824,7 @@ components:
       x-stoplight:
         id: i7k79ibsmvl2b
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           x-stoplight:
             id: szaxon6pdw26f
@@ -3848,6 +3855,7 @@ components:
       x-stoplight:
         id: unoehfu4bco8h
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           x-stoplight:
             id: xjt8iszwhxdck
@@ -4102,12 +4110,31 @@ components:
           description: Stop the running sequence without its final state.
         alias:
           type: string
+    Comm:
+      title: Communication
+      description: The communication with the Modbus unit of the device or with a 1-Wire sensor (#201).
+      type: object
+      properties:
+        comm:
+          type: string
+          enum: [ok, timeout, error]
+          description: '*ok* - the last scan of the unit succeeded; *timeout* - the unit (the sensor) does not respond;
+                       *error* - another error, e.g. a CRC error or an exception response of the unit. The value of the
+                       device is the last known one, valid with *ok*.'
+          readOnly: true
+        last_comm:
+          type: [number, 'null']
+          examples: [0.04]
+          description: Seconds since the last successful communication with the unit (the last read of the sensor),
+                       null before it.
+          readOnly: true
     Owpower:
       title: 1-Wire power supply
       x-stoplight:
         id: 9b4mib6c28oh8
       description: Power supply of 1-Wire bus.
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           x-stoplight:
             id: sasd65sd5267f
@@ -4149,6 +4176,7 @@ components:
       x-stoplight:
         id: 9asdag6c28oh8
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           x-stoplight:
             id: sasd65sd5267f
@@ -4298,6 +4326,7 @@ components:
           interval: 10
           type: DS18S20
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           x-stoplight:
             id: wlj3b73nnfhtp
@@ -4385,6 +4414,7 @@ components:
         id: ecwet1h8clvtd
       description: Main part of a custom user-defined Modbus device
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           x-stoplight:
             id: ajd6yqf4kfve2
@@ -4431,6 +4461,7 @@ components:
       x-stoplight:
         id: ptcf7sfa7wr7i
       allOf:
+        - $ref: '#/components/schemas/Comm'
         - type: object
           x-stoplight:
             id: 5vq8our722g7r

@@ -31,7 +31,7 @@ def test_switch_of_a_relay():
     assert topic == 'homeassistant/switch/evok/ro_1_01/config'
     assert payload == {
         'name': 'RO 1_01', 'unique_id': 'evok_ro_1_01', 'state_topic': 'evok/ro/1_01',
-        'availability_topic': 'evok/status', 'payload_available': 'online', 'payload_not_available': 'offline',
+        'availability': [{'topic': 'evok/status', 'payload_available': 'online', 'payload_not_available': 'offline'}],
         'device': {'identifiers': ['evok_1'], 'name': 'evok 1', 'manufacturer': 'Unipi'},
         'command_topic': 'evok/ro/1_01/set', 'value_template': '{{ value_json.value }}',
         'state_on': '1', 'state_off': '0', 'payload_on': '1', 'payload_off': '0'}
@@ -161,3 +161,16 @@ async def test_no_configs_without_ha_discovery(mqtt):  # noqa: F811
     Devices[RO]['1_01'].major_group = '1'
     handler, broker = await mqtt()
     assert configs(broker) == {}
+
+
+def test_availability_by_the_communication_of_the_unit():
+    """ #201: an entity of a unit which does not respond is unavailable """
+    _, payload = config(discovery('evok', 'ha', DI, '1_01', {'value': 1, 'comm': 'ok', 'last_comm': 0.02},
+                                  device=Unit(DI, '1_01')))
+    assert payload['availability_mode'] == 'all'
+    assert payload['availability'][1] == {
+        'topic': 'evok/di/1_01', 'value_template': "{{ 'online' if value_json.comm == 'ok' else 'offline' }}",
+        'payload_available': 'online', 'payload_not_available': 'offline'}
+    _, unit = config(discovery('evok', 'ha', MODBUS_SLAVE, 'xS51', {'scan_error': 'TimeoutError', 'comm': 'timeout'},
+                               device=object()))
+    assert len(unit['availability']) == 1 and 'availability_mode' not in unit     # it shows the outage

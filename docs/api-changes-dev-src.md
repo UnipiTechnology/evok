@@ -87,6 +87,10 @@ the HW definitions. The incompatible changes come first. Every change names its 
 
 ## New features
 
+- **Communication of the devices:** the state of each device of a Modbus unit and of a 1-Wire sensor has `comm`
+  (`ok`, `timeout`, `error`) and `last_comm` (seconds since the last successful communication); a lost and
+  a recovered unit sends the states of all its devices, `value` is the last known one. The entities of
+  Home Assistant are unavailable without the communication. — #201
 - **Security:** an optional `token` for all APIs (Bearer, Basic, `?token=` for the WebSocket) and `allowed_origins`.
   — `763016c`, `2b7f668`
 - **Read-only token:** an optional `read_token` (requires `token`). It allows reading by REST and JSON, the queries
@@ -120,6 +124,7 @@ the HW definitions. The incompatible changes come first. Every change names its 
 
 ## Deprecated
 
+- `time` of a 1-Wire sensor, the time of the event loop of the read; `last_comm` replaces it. — #201
 - `counter_mode` and `counter_modes` of a DI. `Disabled` only reports the counter as 0, the mode is not saved.
   — `a5d8065`
 - The param `timeout` of the RPC method `output_set_for_time` is an alias of `pulse_duration`. — `e16a3bf`

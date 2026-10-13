@@ -662,3 +662,16 @@ async def test_failed_bulk_conversion_converts_one_by_one(bus, sysfs, monkeypatc
     await poll_once(bus)
     assert (first.value, second.value) == (20.0, 21.0)
     assert caplog.text.count('conversion of all thermometers failed') == 1
+
+
+
+async def test_comm_of_a_sensor(bus, events):
+    """ #201: the communication as of a device of a Modbus unit """
+    sensor = DS18B20('28.000001', 'DS18B20', bus)
+    assert (sensor.full()['comm'], sensor.full()['last_comm']) == ('ok', None)       # not read yet
+    sensor.sens = FakeSens(temperature=21.5)
+    await read(bus, sensor)
+    assert sensor.full()['comm'] == 'ok' and 0 <= sensor.full()['last_comm'] < 1
+    sensor.sens = None
+    await read(bus, sensor)
+    assert sensor.full()['comm'] == 'timeout'

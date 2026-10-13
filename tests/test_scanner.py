@@ -92,9 +92,10 @@ async def test_scan_error_is_reported(l0306):
     mb.read_holding_registers = fail
     assert not await scanner.cache.do_scan(initial=True)
     assert scanner.full()['scan_error'] == 'RequestRetryFailedError: no response'
+    assert scanner.full()['comm'] == 'error'                # not a timeout
     mb.read_holding_registers = read
     assert await scanner.cache.do_scan(initial=True)
-    assert scanner.full()['scan_error'] is None
+    assert (scanner.full()['scan_error'], scanner.full()['comm']) == (None, 'ok')
 
 
 async def test_unexpected_error_of_scan_task_is_logged(l0306, caplog):
