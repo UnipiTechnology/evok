@@ -41,7 +41,7 @@ Find this section:
 #   | Logging settings |
 #   +------------------+
 logging:
-  level: WARNING
+  level: INFO
   # ^ Minimum severity of messages to be logged, where minimum is CRITICAL.
   # ^ Options: [CRITICAL, ERROR, WARNING, INFO, DEBUG]
 ```
@@ -97,5 +97,5 @@ You can obtain the version of Evok by executing following command:
 ```
 
 ```bash title="Output"
-v3.0.0
+v3.1.0
 ```

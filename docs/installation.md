@@ -55,6 +55,21 @@ sudo apt install -y evok
     sudo apt install -y evok-web
     ```
 
+## 1-Wire bus
+
+Evok 3.1 reads the 1-Wire sensors by the kernel, owserver is not needed. The 1-Wire master (e.g. the DS2482)
+and the modules of the sensors (`w1_therm` and others) have to be loaded by the kernel. The udev rule
+[`60-evok-w1.rules`](https://github.com/UnipiTechnology/evok/blob/dev-3.1/etc/udev/rules.d/60-evok-w1.rules)
+gives Evok the access to the forced search and to the conversion of all thermometers at once:
+
+```bash title="Installing the udev rule"
+sudo cp 60-evok-w1.rules /etc/udev/rules.d/
+sudo udevadm control --reload
+sudo udevadm trigger --subsystem-match=w1 --action=add
+```
+
+See [OWFS bus](./configs/evok_configuration.md#bus-configuration) in the configuration.
+
 ## Beta version
 
 !!! danger

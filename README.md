@@ -9,6 +9,7 @@ It provides multiple ways to easily access the I/Os of the devices, including:
 - Bulk request JSON API
 - WebSocket API
 - JSON-RPC API
+- MQTT API with Home Assistant discovery
 
 Besides that, Evok also supports sending notifications via webhook.
 

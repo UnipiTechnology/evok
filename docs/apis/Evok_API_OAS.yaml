@@ -4678,7 +4678,7 @@ components:
               value:
                 success: false
                 errors:
-                  DeviceNotFound: Circuit or alias with name '1_99' not defined!
+                  DeviceNotFound: Circuit or alias '1_99' with devtype 'do' not found
             unknown-device-type:
               value:
                 success: false

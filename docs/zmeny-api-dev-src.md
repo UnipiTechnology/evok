@@ -1,6 +1,6 @@
-# Změny API ve větvi dev-src
+# Změny API ve větvi dev-3.1
 
-Evok · větev `dev-src` proti `main` (`b2e241c`) · do `4003436` · 135 commitů
+Evok · větev `dev-3.1` proti `main` (`b2e241c`)
 
 Přehled změn, které ovlivní klienty REST, JSON, Bulk, WebSocket, RPC a webhooku, konfiguraci a HW definice.
 Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
@@ -40,7 +40,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
   (dřív se ořízla), neznámý režim DI. — `1a6910c`, `891bd4a`, `5f15f41`
 - NaN a nekonečné hodnoty AI a datových bodů se vrací jako řetězce `'NaN'`, `'Infinity'`, `'-Infinity'`. — `5f15f41`
 - `last_comm` jednotky je `null` před první komunikací, dřív asi 1,7e9 s. — `2f323f0`
-- **1-Wire čidla z konfigurace:** žádná událost `lost: true` hned po startu nebo po novém připojení k owserveru, čidlo
+- **1-Wire čidla z konfigurace:** žádná událost `lost: true` hned po startu nebo po restartu sběrnice, čidlo
   se čte až po nalezení na sběrnici. Čidlo, které hledání na sběrnici nenašlo, se hlásí jako ztracené. — `5fa3eca`
 - **RO, DO, LED:** bez `pulse_duration`, `timeout` (DO) a `pending`, pulz se nastavuje přes sequencer výstupu
   (`/rest/sequencer/<typ>_<okruh>`, `running` místo `pending`). Během něj se změna výstupu kromě aliasu odmítne
@@ -75,9 +75,13 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 
 - `ao_set` bere `mode` místo frekvence, metody `ai_set*` byly odstraněny. — `af3982c`
 - Chybové kódy: neplatné parametry `-32602`, nedostupná jednotka `-32000`, změna s tokenem jen pro čtení `-32001`,
-  interní chyba `-32603` bez textu výjimky. — `cb94d9f`, `c8a92a4`
+  interní chyba `-32603` bez textu výjimky. — `cb94d9f`, `c8a92a4`, `4003436`
 
 ### Ostatní
+
+- **Sběrnice OWFS:** `hostname` / `port` owserveru jsou chyba konfigurace, sběrnice se nevytvoří, použijte `master`
+  (viz Konfigurace). Jeden master obsluhuje jednu sběrnici OWFS, druhá sběrnice se stejným masterem se nevytvoří.
+  — `776b371`, `dc7b1ee`
 
 - `print_log` u `modbus_slave` byl nahrazen `GET /log`. — `54fe858`
 
@@ -170,5 +174,5 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
 
 ---
 
-Sestaveno ze zpráv 135 commitů mezi `main` a `dev-src` (po `4003436`) a ze změn dokumentace API. Kód na `main`
+Sestaveno ze zpráv commitů mezi `main` a `dev-3.1` a ze změn dokumentace API. Kód na `main`
 nebyl porovnáván řádek po řádku, drobnosti, které zprávy commitů nepopisují, mohou chybět.

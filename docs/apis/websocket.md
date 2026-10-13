@@ -9,7 +9,7 @@ The WebSocket is at `ws://<host>:8080/ws`. With a `token` in the configuration i
 in a browser can connect only from the address of Evok or from `allowed_origins`, see [Security](../security.md).
 With the `read_token` the command `set` gets the error `ReadOnlyAccess`.
 
-Evok sends a ping every 10 s and closes a connection without a pong for 30 s, e.g. after a lost network.
+Evok sends a ping every 10 s and closes a connection without a pong within 10 s, e.g. after a lost network.
 A message of a client can have at most 64 kB.
 
 ## Events
@@ -31,8 +31,9 @@ The client sends a JSON object with the command in `cmd`.
 
 ### filter
 
-Sets the device types sent in events. Altnames such as `input` or `relay` can be used, unknown types are skipped.
-An empty list stops the events, `["default"]` restores the default filter, which sends the events of all devices.
+Sets the device types sent in events. Altnames such as `input` or `relay` can be used, unknown types are skipped;
+a list of only unknown types is refused with `ValueError`. An empty list stops the events, a list starting with
+`"default"` restores the default filter, which sends the events of all devices.
 
 ### all
 
@@ -67,7 +68,7 @@ or a device on a Modbus unit which failed its last scan (`UnitUnavailable`) or a
 gets an error reply only to the requesting client, in the same format as REST:
 
 ```json
-{"success": false, "errors": {"DeviceNotFound": "Circuit or alias with name '9_99' not defined!"}}
+{"success": false, "errors": {"DeviceNotFound": "Circuit or alias '9_99' with devtype 'do' not found"}}
 ```
 
 ## Examples

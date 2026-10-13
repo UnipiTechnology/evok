@@ -42,7 +42,7 @@ A Modbus unit which does not respond refuses the change, an output refuses it wh
 An error is published to `<prefix>/error`:
 
 ```json
-{"topic": "evok/ro/1_01/set", "success": false, "errors": {"DeviceNotFound": "Circuit or alias with name '1_01' not defined!"}}
+{"topic": "evok/ro/1_01/set", "success": false, "errors": {"DeviceNotFound": "Circuit or alias '1_01' with devtype 'ro' not found"}}
 ```
 
 With `read_only: true` Evok does not subscribe the commands.
@@ -67,7 +67,8 @@ integration on the same broker creates the entities, no configuration of Home As
 - The entities of a Modbus unit or of a 1-Wire bus are one device of Home Assistant, e.g. `evok xS51`.
   The name of an entity is the alias of the device, e.g. `pump`, or its type and circuit, e.g. `RO 1_01`.
 - The configs are published retained to `<ha_prefix>/<component>/<node>/<object_id>/config`
-  (`ha_prefix` is `homeassistant` by default, the node is the prefix of Evok, e.g. `evok`) before the first state
+  (`ha_prefix` is `homeassistant` by default, the node is the prefix of Evok with the characters other than letters, digits, `_` and `-` replaced by `_`,
+  e.g. `evok` or `evok_boiler-room`) before the first state
   of each device, again when they change (an alias, the mode of an AO) and after each connection to the broker.
 - The entities are available while the status of Evok is `online` and the communication of their device
   is `ok` (`comm` of its state), an entity of a Modbus unit which does not respond is unavailable.

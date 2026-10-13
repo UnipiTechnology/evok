@@ -3,7 +3,8 @@
 The RPC (Remote Procedure Call) API is used for invoking procedures, functions or methods across a network. It is suitable for automated request.
 
 The API uses [JSON-RPC](https://www.jsonrpc.org/specification) at `/rpc`. Params can be passed as an array in the order
-of the table below or as an object with their names. With a `token` in the configuration it is required as
+of the table below or as an object with their names. A batch request (a list of calls) returns a list of the results,
+each call is done and checked by the `read_token` on its own. With a `token` in the configuration it is required as
 `Authorization: Bearer <token>` or as the password of Basic authentication, see [Security](../security.md).
 
 ## Methods
@@ -47,7 +48,7 @@ by the [sequencer](./sequencer.md) of the output, its state is not in the state 
 | `-32002` | Sequence running: the output cannot be changed while its sequencer runs a pulse or sequence |
 
 ```rs title="Example"
-{'jsonrpc': '2.0', 'id': 0, 'error': {'code': -32602, 'message': "Invalid params: Circuit or alias with name '9_99' not defined!"}}
+{'jsonrpc': '2.0', 'id': 0, 'error': {'code': -32602, 'message': "Invalid params: Circuit or alias '9_99' with devtype 'ro' not found"}}
 ```
 
 ## Examples
