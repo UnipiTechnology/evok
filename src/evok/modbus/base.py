@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 from ..blocks import sequencer
 from ..devices import Devices
 from ..errors import SequenceRunning

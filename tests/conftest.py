@@ -1,8 +1,8 @@
+import asyncio
 from pathlib import Path
 
 import pytest
 import yaml
-
 from tmodbus.exceptions import ModbusConnectionError
 
 from evok.devices import Devices
@@ -56,6 +56,12 @@ class FakeModbus:
 def make_client(blocks, holding=None, inputs=None):
     mb = FakeModbus(holding, inputs)
     return Client('test', mb, ModbusCacheMap(blocks, mb))
+
+
+async def wait_until(condition, step=0.01):
+    """ Polls the condition of a test, the code under the test has no event of it """
+    while not condition():  # noqa: ASYNC110
+        await asyncio.sleep(step)
 
 
 async def scan(client, initial=False):

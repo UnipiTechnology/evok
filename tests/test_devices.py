@@ -3,19 +3,18 @@ import json
 import math
 
 import pytest
+from conftest import make_client, scan
 
 from evok import devents
-from evok.devices import Devices, DI, DO, RO, AI, LED, SEQUENCER, WATCHDOG
-from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
-from evok.modbus.builder import IOParser
 from evok.blocks import attach, sequencer
-from evok.modbus.digital import BinaryOutput, DigitalInput, DigitalOutput, Relay, ULED
-from evok.modbus.client import to_registers, FLOAT32_LE, FLOAT32_BE
-from evok.modbus.special import NvSave, OwPower
+from evok.devices import AI, DI, DO, LED, RO, SEQUENCER, WATCHDOG, Devices
 from evok.errors import SequenceRunning
 from evok.modbus import set_devices
-
-from conftest import make_client, scan
+from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
+from evok.modbus.builder import IOParser
+from evok.modbus.client import FLOAT32_BE, FLOAT32_LE, to_registers
+from evok.modbus.digital import ULED, BinaryOutput, DigitalInput, DigitalOutput, Relay
+from evok.modbus.special import NvSave, OwPower
 
 
 @pytest.fixture
@@ -893,8 +892,8 @@ async def test_ow_temperature_valid_mask():
     assert t.is_valid is False
     await client.cache.do_scan(initial=True)
     assert await t.check_new_data()
-    assert without_comm(t.full()) == {'dev': 'data_point', 'circuit': 'x', 'value': 21.5, 'writable': False, 'unit': 'C',
-                        'valid': True}
+    assert without_comm(t.full()) == {'dev': 'data_point', 'circuit': 'x', 'value': 21.5, 'writable': False,
+                                      'unit': 'C', 'valid': True}
     # only the validity changes
     client.mb_client.holding[2] = 0b01
     await client.cache.do_scan()
@@ -934,7 +933,7 @@ async def test_data_point_input_register():
 
 
 async def test_data_point_not_scanned():
-    client, dp = make_dp([5])
+    _client, dp = make_dp([5])
     await dp.check_new_data()
     assert dp.value is None
 
@@ -990,7 +989,7 @@ async def test_do_invalid_pwm(unit, params):
 
 @pytest.mark.parametrize('params', [{'mode': 'Unknown'}, {'counter_mode': 'Unknown'}, {'ds_mode': 'Unknown'}])
 async def test_di_unknown_mode(unit, params):
-    client = await unit()
+    await unit()
     with pytest.raises(ValueError, match='unknown'):
         await dev(DI, '1_01').set(**params)
 

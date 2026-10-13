@@ -1,21 +1,17 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Fri Sep 25 16:10:02 2026
 
 @author: bokula
 """
 import logging
-from .digital import DigitalInput, DigitalOutput, Relay, ULED
-from .special import OwPower, NvSave, Watchdog
-from .analog import AnalogInput, AnalogOutput, AnalogOutputBrain,\
-    Register, DataPoint, OwTemperature
-from ..devices import \
-    DI, DO, RO, AI, AO, OWPOWER, LED, WATCHDOG, \
-    REGISTER, DATA_POINT, NV_SAVE, Devices
+
 from ..blocks import attach
+from ..devices import AI, AO, DATA_POINT, DI, DO, LED, NV_SAVE, OWPOWER, REGISTER, RO, WATCHDOG, Devices
+from .analog import AnalogInput, AnalogOutput, AnalogOutputBrain, DataPoint, OwTemperature, Register
 from .client import Client
+from .digital import ULED, DigitalInput, DigitalOutput, Relay
 from .pwm import HardPwmFrequency, SoftPwmFrequency
+from .special import NvSave, OwPower, Watchdog
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +39,7 @@ class IOParser:
 
     def io_circuit(self, i, m_feature):
         """ Circuit of the IO, start_index numbers the IOs of a feature following another one """
-        return "%s_%02d" % (self.circuit, i + 1 + m_feature.get('start_index', 0))
+        return f"{self.circuit}_{i + 1 + m_feature.get('start_index', 0):02d}"
 
     @staticmethod
     def bit_reg(reg, i):
@@ -54,10 +50,10 @@ class IOParser:
         """ The value and the DirectSwitch registers have the bits of 16 inputs, the next 16 are in the next ones """
         has_direct_switch = all(key in m_feature for key in ('ds_modes', 'direct_reg', 'polar_reg', 'toggle_reg'))
         for i in range(max_count):
-            direct_switch = dict(ds_modes=m_feature['ds_modes'],
-                                 regmode=self.bit_reg(m_feature['direct_reg'], i),
-                                 regtoggle=self.bit_reg(m_feature['toggle_reg'], i),
-                                 regpolarity=self.bit_reg(m_feature['polar_reg'], i)) if has_direct_switch else {}
+            direct_switch = {"ds_modes": m_feature['ds_modes'],
+                             "regmode": self.bit_reg(m_feature['direct_reg'], i),
+                             "regtoggle": self.bit_reg(m_feature['toggle_reg'], i),
+                             "regpolarity": self.bit_reg(m_feature['polar_reg'], i)} if has_direct_switch else {}
             _inp = DigitalInput(self.io_circuit(i, m_feature), self.client,
                                 self.bit_reg(m_feature['val_reg'], i), 0x1 << (i % 16),
                                 regdebounce=m_feature['deboun_reg'] + i,
@@ -85,12 +81,12 @@ class IOParser:
         elif m_feature.get('pwm_reg') and m_feature.get('pwm_preset_reg') and m_feature.get('pwm_cpres_reg'):
             pwm = SoftPwmFrequency(self.client, m_feature['pwm_preset_reg'], m_feature['pwm_cpres_reg'])
         elif any(key in m_feature for key in ('pwm_reg', 'pwm_ps_reg', 'pwm_c_reg', 'pwm_preset_reg',
-                                               'pwm_cpres_reg')) or 'PWM' in m_feature.get('modes', []):
+                                              'pwm_cpres_reg')) or 'PWM' in m_feature.get('modes', []):
             raise ValueError(f"Incomplete PWM registers of feature {m_feature['type']}")
         else:
             pwm = None
         for i in range(max_count):
-            pwm_params = dict(pwm=pwm, pwmdutyreg=m_feature['pwm_reg'] + i) if pwm is not None else {}
+            pwm_params = {"pwm": pwm, "pwmdutyreg": m_feature['pwm_reg'] + i} if pwm is not None else {}
             _r = DigitalOutput(self.io_circuit(i, m_feature), self.client,
                                self.output_coil(m_feature, i), self.bit_reg(m_feature['val_reg'], i),
                                0x1 << (i % 16),
@@ -122,7 +118,7 @@ class IOParser:
 
     def parse_feature_ao(self, max_count, m_feature):
         for i in range(max_count):
-            circuit = "%s_%02d" % (self.circuit, i + 1)
+            circuit = f"{self.circuit}_{i + 1:02d}"
             board_val_reg = m_feature['val_reg']
             modes = m_feature['modes']
             reg_mode = m_feature.get('mode_reg', None)
@@ -136,7 +132,7 @@ class IOParser:
             raise ValueError(f"BAO can have only one output, count is {max_count}")
         if max_count < 1:
             return
-        circuit = "%s_%02d" % (self.circuit, 1)
+        circuit = f"{self.circuit}_01"
         _ao = AnalogOutputBrain(circuit, self.client, m_feature['val_reg'],
                                 regmode=m_feature.get('mode_reg'), reg_res=m_feature.get('res_val_reg'),
                                 major_group=self.circuit)
@@ -144,7 +140,7 @@ class IOParser:
 
     def parse_feature_ai(self, max_count, m_feature):
         for i in range(max_count):
-            circuit = "%s_%02d" % (self.circuit, i + 1)
+            circuit = f"{self.circuit}_{i + 1:02d}"
             board_val_reg = m_feature['val_reg'] + i * 2
             modes = m_feature['modes']
             _ai = AnalogInput(circuit, self.client, board_val_reg,
@@ -161,24 +157,24 @@ class IOParser:
         for i in range(max_count):
             board_val_reg = m_feature['start_reg']
             if 'reg_type' in m_feature and m_feature['reg_type'] == 'input':
-                _reg = Register("%s_%d_inp" % (self.circuit, board_val_reg + i), self.client,
+                _reg = Register(f"{self.circuit}_{board_val_reg + i}_inp", self.client,
                                 board_val_reg + i, reg_type='input',
                                 major_group=self.circuit)
             else:
-                _reg = Register("%s_%d" % (self.circuit, board_val_reg + i), self.client,
+                _reg = Register(f"{self.circuit}_{board_val_reg + i}", self.client,
                                 board_val_reg + i, major_group=self.circuit)
             self._register(REGISTER, _reg)
 
     def parse_feature_data_point(self, max_count, m_feature):
         """ The data points follow each other, a 32-bit one takes two registers """
-        _kwargs = dict(reg_type=m_feature.get("reg_type"), datatype=m_feature.get('datatype'),
-                       major_group=self.circuit, offset=m_feature.get("offset", 0),
-                       factor=m_feature.get("factor", 1), unit=m_feature.get("unit"), name=m_feature.get("name"),
-                       writable=m_feature.get("writable", False))
+        _kwargs = {"reg_type": m_feature.get("reg_type"), "datatype": m_feature.get('datatype'),
+                   "major_group": self.circuit, "offset": m_feature.get("offset", 0),
+                   "factor": m_feature.get("factor", 1), "unit": m_feature.get("unit"), "name": m_feature.get("name"),
+                   "writable": m_feature.get("writable", False)}
         _valid_mask_reg = m_feature.get('valid_mask_reg')
         reg = m_feature['value_reg']
         for i in range(max_count):
-            _circuit = "{}_{}".format(self.circuit, reg)
+            _circuit = f"{self.circuit}_{reg}"
             if _valid_mask_reg is not None:
                 _xgt = OwTemperature(_circuit, self.client, reg, _valid_mask_reg, 1 << i, **_kwargs)
             else:
@@ -221,5 +217,5 @@ class IOParser:
         for m_feature in self.hw_features:
             try:
                 self.parse_feature(m_feature)
-            except Exception as E:
+            except Exception as E:  # noqa: BLE001
                 logger.error(f"Invalid feature {m_feature.get('type')} at board {self.circuit}: {E!r}")

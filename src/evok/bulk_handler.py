@@ -106,8 +106,8 @@ class JSONBulkHandler(TokenAuth, tornado.web.RequestHandler):
             # the results of the commands done before the error
             self.write(json.dumps({'success': False, 'errors': errors, **result}))
             self.set_status(status_code=status)
-        except Exception as E:
-            logger.exception(f"BULK: {str(E)}")
+        except Exception:
+            logger.exception("BULK")
             self.write(json.dumps({'success': False, 'errors': {'Server error': 'internal'}, **result}))
             self.set_status(status_code=500)
         finally:

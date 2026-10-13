@@ -1,12 +1,12 @@
 import asyncio
+import contextlib
 import json
 import logging
 
 from tornado import websocket
 
 from .auth import TokenAuth, is_allowed_origin, is_same_origin
-from .devices import DI, RO, AI, AO, SENSOR
-from .devices import Devices, devtype_of, num_to_devtype_name
+from .devices import AI, AO, DI, RO, SENSOR, Devices, devtype_of, num_to_devtype_name
 from .handlers_base import CLIENT_ERRORS, check_params, client_error
 from .modbus import set_devices
 
@@ -18,7 +18,7 @@ registered_ws = {}
 # settings of the tornado.web.Application of the API: a connection lost without its close, e.g. a lost network,
 # is closed after the timeout of the ping, not after the timeout of TCP; the commands are short.
 # The timeout cannot be longer than the interval, Tornado shortened the timeout 30 s to 10 s with a warning.
-WEBSOCKET_SETTINGS = dict(websocket_ping_interval=10, websocket_ping_timeout=10, websocket_max_message_size=65536)
+WEBSOCKET_SETTINGS = {"websocket_ping_interval": 10, "websocket_ping_timeout": 10, "websocket_max_message_size": 65536}
 
 
 class WsHandler(TokenAuth, websocket.WebSocketHandler):
@@ -42,7 +42,7 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
         self.pending: dict[tuple, dict] = {}            # the last state of each changed device not sent yet
         self.send_task: asyncio.Task | None = None
         logger.debug("New WebSocket client connected")
-        if not ("all" in registered_ws):
+        if "all" not in registered_ws:
             registered_ws["all"] = set()
         registered_ws["all"].add(self)
 
@@ -113,16 +113,14 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
             errors, _ = client_error(E)
             logger.error(f"WS: {errors}")
             await self._send_error(errors)
-        except Exception as E:
-            logger.exception(f"WS: {str(E)}")
+        except Exception:
+            logger.exception("WS")
             await self._send_error({'Server error': 'internal'})
 
     async def _send_error(self, errors: dict):
         """ Errors are sent only to the requesting client, in the format of REST """
-        try:
+        with contextlib.suppress(websocket.WebSocketClosedError):
             await self.write_message(json.dumps({'success': False, 'errors': errors}))
-        except websocket.WebSocketClosedError:
-            pass
 
     def _is_default_filter(self) -> bool:
         return self.filter == ["default"]

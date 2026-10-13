@@ -1,14 +1,22 @@
 import math
 
+import conftest
 import pytest
 
 from evok.modbus.cache import ENoCacheRegister, EUnknownRegister
 from evok.modbus.client import (
-    FLOAT32_BE, FLOAT32_LE, Accessor, AccessorBit, AccessorFactory, AccessorFloat32, AccessorI16,
-    AccessorI32, AccessorU16, AccessorU32, to_registers,
+    FLOAT32_BE,
+    FLOAT32_LE,
+    Accessor,
+    AccessorBit,
+    AccessorFactory,
+    AccessorFloat32,
+    AccessorI16,
+    AccessorI32,
+    AccessorU16,
+    AccessorU32,
+    to_registers,
 )
-
-import conftest
 
 BLOCKS = [
     {'start_reg': 0, 'count': 4, 'scan_divider': 1},
@@ -123,17 +131,17 @@ def test_refactor_keeps_only_index_and_is_input():
     same = accessor.refactor('int32')
     assert type(same) is AccessorI32 and same is not accessor
     assert same.index == 3
-    assert same.params() == dict(is_input=True, ratio=1, offset=0, decimals=None, word_order='little')
+    assert same.params() == {'is_input': True, 'ratio': 1, 'offset': 0, 'decimals': None, 'word_order': 'little'}
 
     changed = accessor.refactor('float32', ratio=5, offset=-1, decimals=2, word_order='big')
     assert type(changed) is AccessorFloat32
-    assert changed.params() == dict(is_input=True, ratio=5, offset=-1, decimals=2, word_order='big')
+    assert changed.params() == {'is_input': True, 'ratio': 5, 'offset': -1, 'decimals': 2, 'word_order': 'big'}
 
 
 def test_refactor_defaults():
     accessor = AccessorFactory.get(1, 'float32', ratio=2, word_order='big').refactor()
     assert type(accessor) is AccessorU16
-    assert (accessor.index, accessor.params()) == (1, dict(is_input=False, ratio=1, offset=0, decimals=None))
+    assert (accessor.index, accessor.params()) == (1, {'is_input': False, 'ratio': 1, 'offset': 0, 'decimals': None})
 
 
 def test_refactor_word_order_only_for_32bit():

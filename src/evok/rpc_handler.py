@@ -1,15 +1,14 @@
 import functools
 import inspect
 import logging
-from typing import Awaitable, Optional
+from collections.abc import Awaitable
 
 from tornado_jsonrpc2 import JSONRPCHandler
 from tornado_jsonrpc2.exceptions import InternalError, InvalidParams, MethodNotFound
 
 from .auth import WRITE, TokenAuth
 from .blocks import sequencer, start_pulse
-from .devices import SENSOR, OWBUS, DI, DO, RO, AI, AO
-from .devices import Devices, DeviceNotFound, to_bool
+from .devices import AI, AO, DI, DO, OWBUS, RO, SENSOR, DeviceNotFound, Devices, to_bool
 from .errors import SequenceRunning, UnitUnavailable
 from .modbus import set_devices
 
@@ -57,7 +56,7 @@ async def create_response(request, backend):
     try:
         inspect.signature(method).bind(*args, **kwargs)
     except TypeError as e:
-        raise InvalidParams(str(e))
+        raise InvalidParams(str(e)) from e
 
     try:
         result = method(*args, **kwargs)
@@ -65,14 +64,14 @@ async def create_response(request, backend):
             result = await result
         return result
     except (DeviceNotFound, ValueError) as e:
-        raise InvalidParams(str(e))
+        raise InvalidParams(str(e)) from None
     except UnitUnavailable as e:
-        raise UnitUnavailableError(str(e))
+        raise UnitUnavailableError(str(e)) from None
     except SequenceRunning as e:
-        raise SequenceRunningError(str(e))
-    except Exception as e:
+        raise SequenceRunningError(str(e)) from None
+    except Exception:
         # tornado_jsonrpc2 returned the message of the error to the client and did not log it
-        logger.exception(f"RPC {request.method}: {e}")
+        logger.exception(f"RPC {request.method}")
         raise InternalError("internal") from None
 
 
@@ -114,7 +113,7 @@ class Handler(TokenAuth, JSONRPCHandler):
         'sensor_get_value',
     ))
 
-    def initialize(self, response_creator: Awaitable = None, version: Optional[str] = None):
+    def initialize(self, response_creator: Awaitable | None = None, version: str | None = None):
         if response_creator is None:
             response_creator = functools.partial(create_response, backend=self)
         super().initialize(response_creator=response_creator, version=version)
@@ -131,7 +130,7 @@ class Handler(TokenAuth, JSONRPCHandler):
 
     async def input_set(self, circuit, debounce):
         inp = Devices.by_name(DI, circuit)
-        state, = await set_devices([(inp, dict(debounce=debounce))])
+        state, = await set_devices([(inp, {"debounce": debounce})])
         return state
 
     # ---- Relay ----
@@ -143,7 +142,7 @@ class Handler(TokenAuth, JSONRPCHandler):
         relay = Devices.by_name(RO, circuit)
         # to_bool() as in REST, the string "0" is off
         value = int(to_bool(value))
-        await set_devices([(relay, dict(value=value))])
+        await set_devices([(relay, {"value": value})])
         return value
 
     async def relay_set_for_time(self, circuit, value, pulse_duration):
@@ -160,7 +159,7 @@ class Handler(TokenAuth, JSONRPCHandler):
     async def output_set(self, circuit, value):
         relay = Devices.by_name(DO, circuit)
         value = int(to_bool(value))
-        await set_devices([(relay, dict(value=value))])
+        await set_devices([(relay, {"value": value})])
         return value
 
     async def output_set_for_time(self, circuit, value, pulse_duration=None, timeout=None):
@@ -190,7 +189,7 @@ class Handler(TokenAuth, JSONRPCHandler):
 
     async def ao_set(self, circuit, value, mode):
         ao = Devices.by_name(AO, circuit)
-        state, = await set_devices([(ao, dict(value=value, mode=mode))])
+        state, = await set_devices([(ao, {"value": value, "mode": mode})])
         return state
 
     # ---- OwBus (1wire bus) ----

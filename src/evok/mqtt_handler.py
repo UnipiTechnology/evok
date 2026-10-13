@@ -96,9 +96,9 @@ class MqttSettings:
         """ The arguments of aiomqtt.Client """
         tls_params = aiomqtt.TLSParameters(ca_certs=self.ca_file, certfile=self.cert_file,
                                            keyfile=self.key_file) if self.tls else None
-        return dict(hostname=self.hostname, port=self.port, username=self.username, password=self.password,
-                    identifier=self.client_id, keepalive=self.keepalive, tls_params=tls_params,
-                    will=aiomqtt.Will(f"{self.prefix}/status", 'offline', qos=self.qos, retain=True))
+        return {'hostname': self.hostname, 'port': self.port, 'username': self.username, 'password': self.password,
+                'identifier': self.client_id, 'keepalive': self.keepalive, 'tls_params': tls_params,
+                'will': aiomqtt.Will(f"{self.prefix}/status", 'offline', qos=self.qos, retain=True)}
 
 
 def _bool(value, name) -> bool:
@@ -141,8 +141,8 @@ class MqttHandler:
         try:
             states = device.full()
             self._queue([states] if isinstance(states, dict) else states)
-        except Exception as E:
-            logger.exception(f"MQTT error in event: {E}")
+        except Exception:
+            logger.exception("MQTT error in event")
 
     def _queue(self, states):
         for state in states:
@@ -211,7 +211,7 @@ class MqttHandler:
                     await client.publish(self.topic(*key), json.dumps(state), qos=self.settings.qos, retain=True)
                 except aiomqtt.MqttError:
                     raise
-                except Exception as E:
+                except Exception as E:  # noqa: BLE001
                     logger.error(f"MQTT error in publishing {self.topic(*key)}: {E}")
 
     async def _announce(self, client, key, state):
@@ -239,8 +239,8 @@ class MqttHandler:
         except CLIENT_ERRORS as E:
             errors, _ = client_error(E)
             await self._error(client, topic, errors)
-        except Exception as E:
-            logger.exception(f"MQTT {topic}: {E}")
+        except Exception:
+            logger.exception(f"MQTT {topic}")
             await self._error(client, topic, {'Server error': 'internal'})
 
     @staticmethod

@@ -3,20 +3,19 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
-from tmodbus.exceptions import CRCError, RequestRetryFailedError
+from conftest import make_client, scan
 from tmodbus import AsyncSmartTransport, AsyncTcpTransport
+from tmodbus.exceptions import CRCError, RequestRetryFailedError
 
-from evok.blocks import sequencer, start_pulse
 from evok import devents
-from evok.devices import Devices, DI, DO, NV_SAVE, WATCHDOG
+from evok.blocks import sequencer, start_pulse
+from evok.devices import DI, DO, NV_SAVE, WATCHDOG, Devices
 from evok.errors import UnitCommunicationError, UnitUnavailable
 from evok.handlers_base import client_error
 from evok.modbus import set_devices
 from evok.modbus.builder import IOParser
 from evok.modbus.scanner import ModbusScanner
 from evok.rpc_handler import Handler, UnitUnavailableError, create_response
-
-from conftest import make_client, scan
 
 
 @pytest.fixture
@@ -94,7 +93,7 @@ async def test_unit_without_periodic_scan_is_read_before_it_is_refused(units):
     client.periodic_scan = False
     do = Devices.by_name(DO, '1_01')
     client.cache.scan_error = TimeoutError('no response')
-    state, = await set_devices([(do, {'value': 1})])        # the unit responds again
+    _state, = await set_devices([(do, {'value': 1})])        # the unit responds again
     assert client.cache.scan_error is None and client.mb_client.writes == [('coil', 0, 1)]
     client.mb_client.connected = False
     client.cache.scan_error = TimeoutError('no response')
@@ -190,7 +189,7 @@ async def test_units_are_changed_one_after_another(units):
 
 
 async def test_error_keeps_the_states_done_before_it(units):
-    client1, client2, client3 = await units('1', '2', '3')
+    _client1, _client2, client3 = await units('1', '2', '3')
     assignments = [(Devices.by_name(DO, '1_01'), {'value': 1}),
                    (Devices.by_name(DO, '2_01'), {'value': 1}),
                    (Devices.by_name(DO, '2_02'), {'pwm_duty': 150}),     # fails in set()
@@ -338,6 +337,7 @@ async def test_nv_save_of_a_unit_without_a_response(units, monkeypatch):
 async def test_reset_refused_by_the_unit_is_an_error(units, monkeypatch):
     """ An exception response is not a restart """
     from tmodbus.exceptions import IllegalDataAddressError
+
     from evok.modbus import client as client_module
     monkeypatch.setattr(client_module, 'RESTART_WAIT', 0)
     client, = await units('1')
@@ -401,4 +401,3 @@ async def test_lost_unit_sends_all_its_devices_once(units, events):
     assert await client.do_scan()
     recovered, = [proxy.changeset for proxy in events]
     assert len(recovered) == len(lost) and di.full()['comm'] == 'ok'
-

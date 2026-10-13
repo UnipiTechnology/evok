@@ -7,7 +7,7 @@ import tornado.testing
 import tornado.web
 
 from evok.bulk_handler import JSONBulkHandler
-from evok.devices import Devices, DO, SENSOR, MODBUS_SLAVE
+from evok.devices import DO, MODBUS_SLAVE, SENSOR, Devices
 
 
 class FakeDevice:
@@ -66,7 +66,8 @@ async def test_group_queries(bulk, devices, query, expected):
 
 
 async def test_group_assignment_by_group(bulk, devices):
-    code, reply = await bulk({'group_assignments': [{'device_type': 'do', 'group': 2, 'assigned_values': {'value': 1}}]})
+    code, _reply = await bulk({'group_assignments': [
+        {'device_type': 'do', 'group': 2, 'assigned_values': {'value': 1}}]})
     assert code == 200
     assert (devices[DO]['1_01'].calls, devices[DO]['2_01'].calls) == ([], [{'value': 1}])
 
@@ -108,7 +109,7 @@ async def test_altnames_are_merged(bulk, devices):
 
 
 async def test_unknown_type_in_query(bulk, devices):
-    code, reply = await bulk({'group_queries': [{'device_types': ['do', 'foo']}]})
+    code, _reply = await bulk({'group_queries': [{'device_types': ['do', 'foo']}]})
     assert code == 404
 
 
@@ -116,7 +117,8 @@ async def test_device_circuits_with_alias(bulk, devices):
     Devices.set_alias('pump', devices[DO]['2_01'])
     code, reply = await bulk({
         'group_queries': [{'device_types': ['do'], 'device_circuits': ['pump']}],
-        'group_assignments': [{'device_type': 'do', 'device_circuits': ['pump', '1_01'], 'assigned_values': {'value': 1}}],
+        'group_assignments': [
+            {'device_type': 'do', 'device_circuits': ['pump', '1_01'], 'assigned_values': {'value': 1}}],
     })
     assert code == 200
     assert [state['circuit'] for state in reply['group_queries'][0]] == ['2_01']
@@ -151,6 +153,7 @@ async def test_large_body_is_refused():
 async def test_group_query_of_the_buses(bulk, l0306):
     """ #238: the buses had no full(), the bulk failed """
     from types import SimpleNamespace
+
     from evok import config
     config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
         'RTU': {'type': 'MODBUSRTU', 'port': '/dev/null', 'devices': {'u1': {'slave-id': 1, 'model': 'L0306'}}},

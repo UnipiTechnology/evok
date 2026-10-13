@@ -1,13 +1,7 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import asyncio
 import logging
 
-from tmodbus import (
-    AsyncModbusClient,
-    AsyncTcpTransport,
-    AsyncSmartTransport
-)
+from tmodbus import AsyncModbusClient, AsyncSmartTransport, AsyncTcpTransport
 
 from .. import devents
 from ..devices import MODBUS_SLAVE, Devices, to_bool
@@ -127,7 +121,7 @@ class ModbusScanner:
             if repr(E) != self.logged_scan_error:
                 self.logged_scan_error = repr(E)
                 logger.exception(f"{self.name}: Error while scanning, the same error is not logged "
-                                 f"until a scan succeeds: {E}")
+                                 "until a scan succeeds")
             return False
         if res:
             self.logged_scan_error = None
