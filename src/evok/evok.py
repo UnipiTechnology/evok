@@ -58,7 +58,7 @@ class WhHandler:
 
     def open(self):
         logger.debug(f"New WebHook connected {self.url}")
-        if not ("all" in registered_ws):
+        if "all" not in registered_ws:
             registered_ws["all"] = set()
         registered_ws["all"].add(self)
 

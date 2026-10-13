@@ -125,7 +125,7 @@ class OwBusDriver:
 
         if do_reset:
             await self.do_reset()
-        if not (scan_interval is None) and (scan_interval != self.scan_interval):
+        if scan_interval is not None and (scan_interval != self.scan_interval):
             self.scan_interval = scan_interval
             # the new interval applies at once, not after the current one, with 0 it was an hour
             self._wake_scanning()
@@ -133,7 +133,7 @@ class OwBusDriver:
         if do_scan:
             logger.info("Invoked scan of 1W bus")
             self.do_scan()
-        if not (interval is None) and (interval != self.interval):
+        if interval is not None and (interval != self.interval):
             self.interval = interval
             for mysensor in self.mysensors:  # Global change - for all sensors
                 mysensor.interval = interval

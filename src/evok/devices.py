@@ -72,6 +72,9 @@ class Aliases:
     def __contains__(self, key):
         return self.alias_dict.__contains__(key)
 
+    def get(self, key, default=None):
+        return self.alias_dict.get(key, default)
+
     def register_dirty_cb(self, func: Callable) -> None:
         self.dirty_callback = func
 
@@ -207,17 +210,13 @@ class DeviceList(dict):
                 return [dev for dev in devdict.values() if dev.major_group == major_group]
             return devdict.values()
         circuit = str(circuit)
-        try:
-            return devdict[circuit]
-        except KeyError:
-            if circuit not in self.aliases:
-                raise DeviceNotFound(f"Circuit or alias with name '{circuit}' not defined!")
-            ret = self.aliases[circuit]
-            ret_name = ret.devtype
-            if ret_name == devtype or ret_name == devtype_altnames.get(devtype):
-                return ret
-            else:
-                raise DeviceNotFound(f"Invalid device circuit '{circuit}' with devtype '{devtype}'")
+        dev = devdict.get(circuit)
+        if dev is not None:
+            return dev
+        dev = self.aliases.get(circuit)
+        if dev is None or dev.devtype not in (devtype, devtype_altnames.get(devtype)):
+            raise DeviceNotFound(f"Circuit or alias '{circuit}' with devtype '{devtype}' not found")
+        return dev
 
     def register_device(self, devtype_name, device):
         """ can be called with devtype = INTEGER or NAME

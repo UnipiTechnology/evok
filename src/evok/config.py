@@ -263,13 +263,13 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
     if bus_type == 'OWFS':
         interval = bus_data.get("interval", 60)
         scan_interval = bus_data.get("scan_interval", 300)
-        owpower = bus_data.get("owpower", None)
+        owpower = bus_data.get("owpower")
         for option in ("hostname", "port"):
             if option in bus_data:
                 # owserver is not used, the bus is read by the kernel
                 raise EvokConfigError(f"'{option}' of an OWFS bus is not supported, use 'master' "
                                       f"(the 1-Wire master of the kernel, e.g. w1_bus_master1)")
-        master = bus_data.get("master", None)
+        master = bus_data.get("master")
         if master is not None and (not isinstance(master, str) or not master.startswith('w1_bus_master')):
             raise EvokConfigError(f"master must be the name of a 1-Wire master of the kernel, "
                                   f"e.g. w1_bus_master1, not '{master}'")
@@ -352,7 +352,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
         return
 
     if bus is not None:
-        bus_device_info_data = bus_data.get("device_info", None)
+        bus_device_info_data = bus_data.get("device_info")
         if bus_device_info_data is not None:
             bus_device_info_data: dict
             family = bus_device_info_data.get("family", 'unknown')
@@ -420,7 +420,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
                     device_info.update(device_data.get("device_info", {}))
                     family = device_info.get("family", 'unknown')
                     model = device_info.get("model", 'unknown')
-                    sn = device_info.get("sn", None)
+                    sn = device_info.get("sn")
                     board_count = device_info.get("board_count", 1)
                     if model[:2].lower() in ['xs', 'xm', 'xl', 'xg'] and family == 'unknown':
                         family = 'Extension'

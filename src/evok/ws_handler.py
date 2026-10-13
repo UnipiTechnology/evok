@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import logging
 
@@ -41,7 +42,7 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
         self.pending: dict[tuple, dict] = {}            # the last state of each changed device not sent yet
         self.send_task: asyncio.Task | None = None
         logger.debug("New WebSocket client connected")
-        if not ("all" in registered_ws):
+        if "all" not in registered_ws:
             registered_ws["all"] = set()
         registered_ws["all"].add(self)
 
@@ -118,10 +119,8 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
 
     async def _send_error(self, errors: dict):
         """ Errors are sent only to the requesting client, in the format of REST """
-        try:
+        with contextlib.suppress(websocket.WebSocketClosedError):
             await self.write_message(json.dumps({'success': False, 'errors': errors}))
-        except websocket.WebSocketClosedError:
-            pass
 
     def _is_default_filter(self) -> bool:
         return self.filter == ["default"]
