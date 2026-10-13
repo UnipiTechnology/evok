@@ -273,3 +273,45 @@ def test_invalid_read_token_is_rejected(token, read, error):
     with pytest.raises(ValueError, match=error):
         auth.set_token(token, read)
     assert not auth.is_enabled()
+
+
+@pytest.mark.parametrize('origin, host, same', [
+    ('http://192.168.221.159', '192.168.221.159:80', True),     # nginx of evok-web forwards host:port
+    ('http://plc', 'plc:80', True),
+    ('https://plc', 'plc:443', True),
+    ('http://plc:80', 'plc', True),
+    ('http://PLC.local', 'plc.local', True),
+    ('http://[::1]', '[::1]:80', True),
+    ('http://plc:8080', 'plc:8080', True),
+    ('127.0.0.1:1880', '127.0.0.1:1880', True),                 # Node-RED, no scheme
+    ('https://plc', 'plc:80', False),
+    ('http://plc', 'plc:8080', False),
+    ('http://plc', 'other:80', False),
+    ('http://plc', 'plc:abc', False),
+    ('', 'plc', False),
+])
+def test_same_origin_with_the_default_port(origin, host, same):
+    """ The WebSocket of evok-web behind its nginx (Host: host:80) was refused, the origin has no default port """
+    from types import SimpleNamespace
+    assert auth.is_same_origin(origin, SimpleNamespace(host=host, headers={})) is same
+
+
+def test_same_origin_by_the_forwarded_host():
+    from types import SimpleNamespace
+    request = SimpleNamespace(host='127.0.0.1:8080', headers={'X-Forwarded-Host': 'plc.local:80, proxy'})
+    assert auth.is_same_origin('http://plc.local', request)
+
+
+@pytest.mark.parametrize('configured, origin, allowed', [
+    ('http://a', 'http://a:80', True),
+    ('https://a:443', 'https://a', True),
+    ('http://A:1880/', 'http://a:1880', True),
+    ('http://a', 'http://a:8080', False),
+    ('http://a', 'https://a', False),
+])
+def test_allowed_origins_with_the_default_port(configured, origin, allowed):
+    auth.set_allowed_origins([configured])
+    try:
+        assert auth.is_allowed_origin(origin) is allowed
+    finally:
+        auth.set_allowed_origins(None)

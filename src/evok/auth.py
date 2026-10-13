@@ -23,7 +23,10 @@ WRITE, READ = 'write', 'read'       # the access of a request
 
 _token: str | None = None
 _read_token: str | None = None
-_allowed_origins: frozenset[str] = frozenset()     # scheme://host[:port] in lower case
+_allowed_origins: frozenset[tuple] = frozenset()   # (scheme, host, port), the default port of the scheme
+
+# a browser sends no default port in the origin, nginx of evok-web forwards the host with it, e.g. host:80
+DEFAULT_PORTS = {'http': 80, 'https': 443}
 
 
 def set_token(token, read_token=None) -> None:
@@ -60,23 +63,56 @@ def set_allowed_origins(origins) -> None:
         if parsed is None or parsed.scheme not in ('http', 'https') or not parsed.netloc \
                 or parsed.path not in ('', '/') or parsed.query or parsed.fragment:
             raise ValueError(f"apis: invalid origin {origin!r} in 'allowed_origins', e.g. http://192.168.1.10:1880")
-        allowed.add(f"{parsed.scheme}://{parsed.netloc}".lower())
+        key = _origin_key(origin)
+        if key is None:
+            raise ValueError(f"apis: invalid origin {origin!r} in 'allowed_origins', e.g. http://192.168.1.10:1880")
+        allowed.add(key)
     _allowed_origins = frozenset(allowed)
+
+
+def _host_port(netloc: str, default_port: int | None) -> tuple[str, int | None] | None:
+    """ The host in lower case and the port of a netloc, the default port without one; None if it is invalid """
+    parsed = urlparse('//' + netloc.strip())
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    if not parsed.hostname:
+        return None
+    return parsed.hostname, default_port if port is None else port
+
+
+def _origin_key(origin: str) -> tuple | None:
+    """ (scheme, host, port) of an origin, http://host and http://host:80 are the same origin """
+    parsed = urlparse(origin.strip().rstrip('/'))
+    scheme = parsed.scheme.lower()
+    host_port = _host_port(parsed.netloc, DEFAULT_PORTS.get(scheme)) if parsed.netloc else None
+    return None if host_port is None else (scheme, *host_port)
 
 
 def is_allowed_origin(origin: str) -> bool:
     """ The origin of a web application is in allowed_origins of the configuration """
-    return origin.strip().rstrip('/').lower() in _allowed_origins
+    return _origin_key(origin) in _allowed_origins
 
 
 def is_same_origin(origin: str, request) -> bool:
     """ The origin is the host of the request, also the host forwarded by a proxy, e.g. nginx;
         a browser cannot set X-Forwarded-Host of a WebSocket, a client which can needs no origin
+
+        The default port of the scheme of the origin is the same: a browser does not send it in the origin,
+        nginx of evok-web forwarded the host with it (Host: host:80) and its WebSocket was refused.
     """
-    # Node-RED sends the origin without the scheme
-    netloc = urlparse(origin).netloc if '://' in origin else origin
+    # Node-RED sends the origin without the scheme, its port is compared as it is
+    if '://' in origin:
+        parsed = urlparse(origin)
+        netloc, default_port = parsed.netloc, DEFAULT_PORTS.get(parsed.scheme.lower())
+    else:
+        netloc, default_port = origin, None
+    key = _host_port(netloc, default_port) if netloc else None
+    if key is None:
+        return False
     hosts = [request.host, request.headers.get('X-Forwarded-Host', '')]
-    return bool(netloc) and netloc.lower() in (host.split(',')[0].strip().lower() for host in hosts if host)
+    return any(_host_port(host.split(',')[0], default_port) == key for host in hosts if host)
 
 
 def _request_token(request, query_token: bool) -> str | None:

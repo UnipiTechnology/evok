@@ -105,6 +105,9 @@ location /ws {
 }
 ```
 
+`proxy_set_header Host $host:$server_port` of the nginx of evok-web works too, the default port of the scheme
+(`80` for http, `443` for https) is the same as an origin without a port.
+
 ## Limits
 
 The body of a request can have at most 1 MB, a message of a WebSocket client at most 64 kB, a larger one
