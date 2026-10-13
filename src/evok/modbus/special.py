@@ -42,7 +42,7 @@ class NvSave(IODevice):
 
     devtype = NV_SAVE
 
-    HOLD_TIME = 0.5
+    HOLD_TIME = 2.0
 
     def __init__(self, circuit, client: Client, coil, major_group=0):
         super().__init__(circuit, client, major_group)
