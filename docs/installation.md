@@ -70,49 +70,6 @@ sudo udevadm trigger --subsystem-match=w1 --action=add
 
 See [OWFS bus](./configs/evok_configuration.md#bus-configuration) in the configuration.
 
-## Beta version
-
-!!! danger
-    Do not use in production environment, use solely for development.
-    Beta version includes new features.
-    These features may change or be removed during development.
-
-There are several ways of getting beta version.
-
-### Switching to the beta repository
-
-**To be able use the beta version, you need to have the [OS prepared](#os-preparation) already**. You can switch to the beta version of Evok by adding the repository to the apt sources:
-
-=== "Neuron"
-
-    ```bash
-    echo "deb https://repo.unipi.technology/debian betaevok:trixie main neuron-main neuron-test test" >> /etc/apt/sources.list.d/unipi.list
-    apt update
-    ```
-
-=== "Patron"
-
-    ```bash
-    echo "deb https://repo.unipi.technology/debian betaevok:trixie main patron-main patron-test test" >> /etc/apt/sources.list.d/unipi.list
-    apt update
-    ```
-
-=== "Gate"
-
-    ```bash
-    echo "deb https://repo.unipi.technology/debian betaevok:trixie main g1-main g1-test test" >> /etc/apt/sources.list.d/unipi.list
-    apt update
-    ```
-
-=== "Unipi 1.1"
-
-    ```bash
-    echo "deb https://repo.unipi.technology/debian betaevok:trixie main unipi1-main unipi1-test test" >> /etc/apt/sources.list.d/unipi.list
-    apt update
-    ```
-
-You can proceed to [Installing and updating Evok](#installing-and-updating-evok) section.
-
 ## Uninstallation
 
 ```bash title="Uninstalling Evok"
