@@ -1,0 +1,30 @@
+{
+  "6a001fe7dcb21bfa": {
+    "request": {
+      "form": null,
+      "json": {
+        "group_queries": [
+          {
+            "device_types": [
+              "di",
+              "ro"
+            ]
+          }
+        ]
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/bulk/"
+    },
+    "response": {
+      "body": {
+        "errors": {
+          "TypeError": "Object of type map is not JSON serializable"
+        },
+        "success": false
+      },
+      "raw_text": "{\"success\": false, \"errors\": {\"TypeError\": \"Object of type map is not JSON serializable\"}}",
+      "status": 200
+    }
+  }
+}

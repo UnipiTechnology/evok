@@ -1,0 +1,30 @@
+{
+  "f9e1e215a35fb8b8": {
+    "request": {
+      "form": null,
+      "json": {
+        "id": 3,
+        "jsonrpc": "2.0",
+        "method": "input_get",
+        "params": [
+          "2_01"
+        ]
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rpc"
+    },
+    "response": {
+      "body": {
+        "id": 3,
+        "jsonrpc": "2.0",
+        "result": [
+          0,
+          50
+        ]
+      },
+      "raw_text": "{\"jsonrpc\": \"2.0\", \"id\": 3, \"result\": [0, 50]}",
+      "status": 200
+    }
+  }
+}

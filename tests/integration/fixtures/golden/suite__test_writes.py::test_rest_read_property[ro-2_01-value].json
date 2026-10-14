@@ -1,0 +1,18 @@
+{
+  "8c1c3cf165e54189": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/ro/2_01/value"
+    },
+    "response": {
+      "body": {
+        "value": 1
+      },
+      "raw_text": "{\"value\": 1}",
+      "status": 200
+    }
+  }
+}

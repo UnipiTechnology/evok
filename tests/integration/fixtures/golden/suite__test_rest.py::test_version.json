@@ -1,0 +1,16 @@
+{
+  "3c3e3c796496c21c": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/version"
+    },
+    "response": {
+      "body": "v3.0.6",
+      "raw_text": "v3.0.6",
+      "status": 200
+    }
+  }
+}

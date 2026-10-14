@@ -1,0 +1,21 @@
+{
+  "24c962215eb3f5ac": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/ro/999/"
+    },
+    "response": {
+      "body": {
+        "errors": {
+          "Exception": "Circuit or alias with name '999' not defined!"
+        },
+        "success": false
+      },
+      "raw_text": "{\"success\": false, \"errors\": {\"Exception\": \"Circuit or alias with name '999' not defined!\"}}",
+      "status": 404
+    }
+  }
+}

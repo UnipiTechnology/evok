@@ -1,0 +1,96 @@
+{
+  "9c8cfd113b2f0137": {
+    "request": {
+      "form": null,
+      "json": {
+        "mode": "Voltage"
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/ai/1_01/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "1_01",
+          "dev": "ai",
+          "mode": "Voltage",
+          "modes": {
+            "Current": {
+              "range": [
+                0,
+                20
+              ],
+              "unit": "mA",
+              "value": 1
+            },
+            "Voltage": {
+              "range": [
+                0,
+                10
+              ],
+              "unit": "V",
+              "value": 0
+            }
+          },
+          "range": [
+            0,
+            10
+          ],
+          "unit": "V",
+          "value": 0.01
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"ai\", \"circuit\": \"1_01\", \"value\": 0.01, \"unit\": \"V\", \"mode\": \"Voltage\", \"modes\": {\"Voltage\": {\"value\": 0, \"unit\": \"V\", \"range\": [0, 10]}, \"Current\": {\"value\": 1, \"unit\": \"mA\", \"range\": [0, 20]}}, \"range\": [0, 10]}}",
+      "status": 200
+    }
+  },
+  "bd553a4e9590fbb4": {
+    "request": {
+      "form": null,
+      "json": {
+        "mode": "Current"
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rest/ai/1_01/"
+    },
+    "response": {
+      "body": {
+        "result": {
+          "circuit": "1_01",
+          "dev": "ai",
+          "mode": "Voltage",
+          "modes": {
+            "Current": {
+              "range": [
+                0,
+                20
+              ],
+              "unit": "mA",
+              "value": 1
+            },
+            "Voltage": {
+              "range": [
+                0,
+                10
+              ],
+              "unit": "V",
+              "value": 0
+            }
+          },
+          "range": [
+            0,
+            10
+          ],
+          "unit": "V",
+          "value": 0.01
+        },
+        "success": true
+      },
+      "raw_text": "{\"success\": true, \"result\": {\"dev\": \"ai\", \"circuit\": \"1_01\", \"value\": 0.01, \"unit\": \"V\", \"mode\": \"Voltage\", \"modes\": {\"Voltage\": {\"value\": 0, \"unit\": \"V\", \"range\": [0, 10]}, \"Current\": {\"value\": 1, \"unit\": \"mA\", \"range\": [0, 20]}}, \"range\": [0, 10]}}",
+      "status": 200
+    }
+  }
+}

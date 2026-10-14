@@ -1,0 +1,44 @@
+{
+  "906c1797392a5a6a": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/ai/1_01/"
+    },
+    "response": {
+      "body": {
+        "circuit": "1_01",
+        "dev": "ai",
+        "mode": "Voltage",
+        "modes": {
+          "Current": {
+            "range": [
+              0,
+              20
+            ],
+            "unit": "mA",
+            "value": 1
+          },
+          "Voltage": {
+            "range": [
+              0,
+              10
+            ],
+            "unit": "V",
+            "value": 0
+          }
+        },
+        "range": [
+          0,
+          10
+        ],
+        "unit": "V",
+        "value": 0.01
+      },
+      "raw_text": "{\"dev\": \"ai\", \"circuit\": \"1_01\", \"value\": 0.01, \"unit\": \"V\", \"mode\": \"Voltage\", \"modes\": {\"Voltage\": {\"value\": 0, \"unit\": \"V\", \"range\": [0, 10]}, \"Current\": {\"value\": 1, \"unit\": \"mA\", \"range\": [0, 20]}}, \"range\": [0, 10]}",
+      "status": 200
+    }
+  }
+}

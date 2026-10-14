@@ -1,0 +1,18 @@
+{
+  "49fdb37359e3cbcc": {
+    "request": {
+      "form": null,
+      "json": null,
+      "kind": "http",
+      "method": "GET",
+      "path": "/rest/ai/1_01/value"
+    },
+    "response": {
+      "body": {
+        "value": 0.01
+      },
+      "raw_text": "{\"value\": 0.01}",
+      "status": 200
+    }
+  }
+}

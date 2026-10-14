@@ -1,0 +1,27 @@
+{
+  "536efc6aae1ab93a": {
+    "request": {
+      "form": null,
+      "json": {
+        "id": 8,
+        "jsonrpc": "2.0",
+        "method": "sensor_get_value",
+        "params": [
+          "28CD79A90800004A"
+        ]
+      },
+      "kind": "http",
+      "method": "POST",
+      "path": "/rpc"
+    },
+    "response": {
+      "body": {
+        "id": 8,
+        "jsonrpc": "2.0",
+        "result": 26.3
+      },
+      "raw_text": "{\"jsonrpc\": \"2.0\", \"id\": 8, \"result\": 26.3}",
+      "status": 200
+    }
+  }
+}
