@@ -193,7 +193,7 @@ An invalid value is an error: the unit or the feature is not created and the err
 - The options `--config-dir` and `--alias-file` (variables `EVOK_CONFIG_DIR`, `EVOK_ALIAS_FILE`). Without
   `config.yaml` Evok exits with an error. — `af85489`
 - The OpenAPI document `Evok_API_OAS.yaml` is generated from the schemas of the sources (`python -m evok.openapi`)
-  and attached to each GitHub release, it is not in the repository. — #254
+  and attached to each GitHub release, it is not in the repository. — `9c2d987`, `8ccf4d5`
 
 ---
 
