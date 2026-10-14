@@ -1,7 +1,8 @@
 # Installation guide
 
 Evok can be installed on Unipi OS or RaspberryPi OS based on Debian 13 Trixie, Evok 3.1 needs Python 3.12 or newer.
-To install Evok, you will have to [prepare the OS](#os-preparation) and then [install the package](#installing-and-updating-evok).
+To install Evok, you will have to [prepare the OS](#os-preparation) and then [install the package](#installing-and-updating-evok),
+or install it [into a virtual environment](#installing-into-a-virtual-environment).
 
 ## OS preparation
 
@@ -54,6 +55,67 @@ sudo apt install -y evok
     ```bash title="Installing & updating Evok-web"
     sudo apt install -y evok-web
     ```
+
+## Installing into a virtual environment
+
+Evok can be installed by pip into a Python virtual environment without its Debian package, e.g. to try
+a development branch. It needs Python 3.12 or newer (Debian 13 Trixie).
+
+!!! note
+
+    The Debian package `evok` must not run at the same time, both use the port 8080:
+    `sudo systemctl disable --now evok`.
+
+The HW definitions of the Unipi devices are not part of Evok, they are installed by the package
+`evok-unipi-data` (from the Unipi repository, already configured in the Unipi OS) to `/etc/evok/hw_definitions`.
+On Unipi controllers the local I/Os are read from the Modbus TCP server of the Unipi OS (`127.0.0.1:502`).
+
+```bash title="Installing Evok into ~/evok"
+sudo apt install -y python3-venv git evok-unipi-data
+python3 -m venv ~/evok/venv
+~/evok/venv/bin/pip install "git+https://github.com/UnipiTechnology/evok@dev-3.1"
+```
+
+The same command with `--upgrade` updates Evok, a branch, a tag or a commit can follow `@`.
+
+The configuration directory contains `config.yaml` and `hw_definitions/`
+(see [configuration](./configs/evok_configuration.md)). With `autogen: true` it also needs `autogen.yaml`,
+which the Unipi OS generates to `/etc/evok/autogen.yaml`; without it the buses are configured in `comm_channels`
+of `config.yaml`.
+
+```bash title="Preparing the configuration"
+mkdir -p ~/evok/etc
+curl -o ~/evok/etc/config.yaml https://raw.githubusercontent.com/UnipiTechnology/evok/dev-3.1/examples/config.yaml
+ln -s /etc/evok/hw_definitions ~/evok/etc/hw_definitions
+ln -s /etc/evok/autogen.yaml ~/evok/etc/autogen.yaml
+```
+
+```bash title="Running Evok"
+~/evok/venv/bin/evok --config-dir ~/evok/etc --alias-file ~/evok/alias.yaml
+```
+
+The user running Evok needs the access to the serial ports of the Modbus RTU buses (the group `dialout`)
+and to the 1-Wire bus (the group `evok` of the [udev rule](#1-wire-bus)). Evok can be started by systemd,
+e.g. with `/etc/systemd/system/evok-venv.service` for the user `unipi`:
+
+```ini title="evok-venv.service"
+[Unit]
+Description=Evok in a virtual environment
+After=network.target
+
+[Service]
+User=unipi
+ExecStart=/home/unipi/evok/venv/bin/evok --config-dir /home/unipi/evok/etc --alias-file /home/unipi/evok/alias.yaml
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash title="Enabling the service"
+sudo systemctl daemon-reload
+sudo systemctl enable --now evok-venv
+```
 
 ## 1-Wire bus
 
