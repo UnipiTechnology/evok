@@ -182,7 +182,7 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
 - Volby `--config-dir` a `--alias-file` (proměnné `EVOK_CONFIG_DIR`, `EVOK_ALIAS_FILE`). Bez `config.yaml` Evok
   skončí chybou. — `af85489`
 - OpenAPI dokument `Evok_API_OAS.yaml` se generuje ze schémat ve zdrojácích (`python -m evok.openapi`) a přikládá
-  se ke každému GitHub release, v repozitáři není. — #254
+  se ke každému GitHub release, v repozitáři není. — `9c2d987`, `8ccf4d5`
 
 ---
 
