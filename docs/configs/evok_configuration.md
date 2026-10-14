@@ -85,16 +85,6 @@ Evok does not start with an invalid or unknown option.
   see [Home Assistant](../apis/mqtt.md#home-assistant)
 - `ha_prefix` - the discovery prefix of Home Assistant (default `homeassistant`), the same rules as `prefix`
 
-```yaml title="MQTT"
-apis:
-  mqtt:
-    enabled: true
-    hostname: 192.168.1.10
-    username: evok
-    password: secret
-    prefix: evok/boiler-room
-```
-
 ### Example
 
 All the sections of the APIs are in `apis`. Without a section its defaults are used.
@@ -118,12 +108,17 @@ apis:
     complex_events: true
     min_interval: 1.0
   mqtt:
-    enabled: false
+    enabled: true
+    hostname: 192.168.1.10
+    username: evok
+    password: secret
+    prefix: evok/boiler-room
 ```
 
 !!! warning
 
-    The tokens above are only examples, make your own, e.g. by `openssl rand -hex 32`.
+    The tokens and the password above are only examples, make your own tokens, e.g. by `openssl rand -hex 32`,
+    and use the password of the user of your broker.
 
 ## Hardware configuration
 
@@ -235,6 +230,7 @@ comm_channels:
 !!! Note
     It is better to use automatic device search, rather than defining devices manually.
 
+
 ### Examples
 
 Every definition must be in `comm_channels` section.
@@ -290,7 +286,9 @@ logging:
 
 apis:
   port: 8080
-  address: 127.0.0.1
+  address: ''                     # all interfaces, the token is required
+  token: 3f6c2a8e5b1d4f7a9c0e2b4d6f8a1c3e5b7d9f0a2c4e6b8d0f1a3c5e7b9d2f4a
+  read_token: 9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b
   websocket:
     enabled: true
 
@@ -328,6 +326,10 @@ comm_channels:
         type: DS18B20
         address: 28.95DCD5090000.35
 ```
+
+!!! warning
+
+    The tokens above are only examples, make your own, e.g. by `openssl rand -hex 32`.
 
 ## Autogen
 
