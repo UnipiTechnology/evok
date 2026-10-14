@@ -95,7 +95,7 @@ mosquitto_sub -h 127.0.0.1 -v -t 'evok/#'
 
 ```
 evok/status online
-evok/ro/1_01 {"dev": "ro", "circuit": "1_01", "value": 0}
+evok/ro/1_01 {"dev": "ro", "circuit": "1_01", "value": 0, "comm": "ok", "last_comm": 0.041}
 evok/di/1_01 {"dev": "di", "circuit": "1_01", "value": 1, "debounce": 50, ...}
 ```
 
