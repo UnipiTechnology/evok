@@ -87,7 +87,7 @@ print(requests.post(url, json=payload).json())
 ```
 
 ```rs title="Output"
-{'individual_assignments': [{'dev': 'do', 'circuit': '1_01', 'value': 0, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_02', 'value': 0, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_03', 'value': 0, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_04', 'value': 0, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}]}
+{'success': True, 'individual_assignments': [{'dev': 'do', 'circuit': '1_01', 'value': 1, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0, 'comm': 'ok', 'last_comm': 0.041}, {'dev': 'do', 'circuit': '1_02', 'value': 1, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0, 'comm': 'ok', 'last_comm': 0.041}, {'dev': 'do', 'circuit': '1_03', 'value': 1, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0, 'comm': 'ok', 'last_comm': 0.041}, {'dev': 'do', 'circuit': '1_04', 'value': 1, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0, 'comm': 'ok', 'last_comm': 0.041}]}
 ```
 
 ### Setting DOs to LOW
@@ -108,7 +108,7 @@ print(requests.post(url, json=payload).json())
 ```
 
 ``` rs title="Output"
-{'individual_assignments': [{'dev': 'do', 'circuit': '1_01', 'value': 1, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_02', 'value': 1, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_03', 'value': 1, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}, {'dev': 'do', 'circuit': '1_04', 'value': 1, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}]}
+{'success': True, 'individual_assignments': [{'dev': 'do', 'circuit': '1_01', 'value': 0, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0, 'comm': 'ok', 'last_comm': 0.041}, {'dev': 'do', 'circuit': '1_02', 'value': 0, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0, 'comm': 'ok', 'last_comm': 0.041}, {'dev': 'do', 'circuit': '1_03', 'value': 0, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0, 'comm': 'ok', 'last_comm': 0.041}, {'dev': 'do', 'circuit': '1_04', 'value': 0, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0, 'comm': 'ok', 'last_comm': 0.041}]}
 ```
 
 !!! tip
