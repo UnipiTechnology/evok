@@ -184,3 +184,21 @@ def test_the_document_has_no_yaml_aliases():
     """ The shared schemas are written in full, some tools do not read the anchors and aliases of YAML """
     text = render()
     assert "&id" not in text and "*id" not in text
+
+
+@pytest.mark.parametrize("dev", sorted(schemas.responses))
+def test_examples_of_the_states_are_valid(dev):
+    """ The examples of the document are valid states """
+    schema = schemas.responses[dev]
+    assert schema.get("examples"), f"{dev}: no example"
+    for example in schema["examples"]:
+        jsonschema.validate(example, schema)
+        assert set(example) <= set(schema["properties"]), f"{dev}: {sorted(set(example) - set(schema['properties']))}"
+
+
+@pytest.mark.parametrize("name", sorted({id(s[0]): name for name, s in schemas.schemas.items()}.values()))
+def test_examples_of_the_params_are_valid(name):
+    """ The examples of the params are accepted by the validation of a POST """
+    schema, example = schemas.schemas[name]
+    for params in [example, *schema.get("examples", [])]:
+        jsonschema.validate(params, schema)

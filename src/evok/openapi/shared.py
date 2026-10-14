@@ -141,8 +141,12 @@ PARAMETERS: dict[str, dict] = {
 INFO = {
     "title": "Evok",
     "summary": "A web services API for Unipi products",
-    "description": "The Evok API of a Unipi controller: the REST and JSON API of the devices, "
-    "the WebSocket API, the bulk requests and the JSON-RPC API.",
+    "description": "The REST and JSON API of the devices of Evok (the paths /rest/... and /json/...), generated from "
+    "the schemas of the sources. The other APIs of Evok, /bulk (several reads and writes in one request), /rpc "
+    "(JSON-RPC), /ws (WebSocket) and MQTT, are documented in the pages "
+    "[Bulk](https://evok.readthedocs.io/en/stable/apis/bulk/), [RPC](https://evok.readthedocs.io/en/stable/apis/rpc/), "
+    "[WebSocket](https://evok.readthedocs.io/en/stable/apis/websocket/) and "
+    "[MQTT](https://evok.readthedocs.io/en/stable/apis/mqtt/).",
     "contact": {
         "name": "Evok support",
         "email": "support@unipi.technology",

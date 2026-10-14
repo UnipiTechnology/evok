@@ -352,7 +352,12 @@ def _response(title, properties, required=(), description=None):
         "additionalProperties": True,
         "properties": {
             "dev": {"type": "string", "description": "Device type.", "readOnly": True},
-            "circuit": {"type": "string", "description": 'Device circuit (or "all").', "readOnly": True},
+            "circuit": {
+                "type": "string",
+                "description": "The circuit of the device, see "
+                "[circuit](https://evok.readthedocs.io/en/stable/circuit/).",
+                "readOnly": True,
+            },
             **COMM_PROPERTIES,
             **properties,
         },
@@ -747,3 +752,593 @@ responses: dict[str, dict] = {
     "sequencer": sequencer_resp_schema,
     "run": run_resp_schema,
 }
+
+
+# # the documentation of the schemas in the OpenAPI document: the descriptions and the examples,
+# they do not change the validation of the params
+
+_DOCS = "https://evok.readthedocs.io/en/stable"
+
+
+def _document(schema: dict, description: str | None = None, examples: list | None = None, **properties):
+    """Add the description, the examples of the whole object and the notes of its properties;
+    a property gets a copy, the fragments as ALIAS are shared by more schemas
+    """
+    if description is not None:
+        schema["description"] = description
+    if examples is not None:
+        schema["examples"] = examples
+    for name, notes in properties.items():
+        schema["properties"][name] = {**schema["properties"][name], **notes}
+
+
+def _alias(example: str) -> dict:
+    return {"description": "Alias of the device, an empty string deletes it.", "examples": [example]}
+
+
+_OUTPUT_VALUE = (
+    "The value of the output: a boolean, also `0`, `1` or a string `'true'`, `'on'`, `'1'`, `'false'`, "
+    "`'off'`, `'0'`. A pulse is set by the [sequencer](" + _DOCS + "/apis/sequencer/) of the output."
+)
+
+# the params of a POST
+_document(
+    di_post_inp_schema,
+    "The params of a digital input.",
+    [{"debounce": 100}, {"counter": 0}],
+    debounce={"description": "Debounce time in milliseconds/10 (10 == 1 ms).", "examples": [100]},
+    counter={"description": "A new value of the counter.", "examples": [0]},
+    counter_mode={
+        "description": "__Deprecated__. Disabled only reports the counter as 0, the input counts "
+        "anyway. The mode is kept by Evok, it is not saved, it is Enabled again after a restart of "
+        "Evok.",
+        "examples": ["Enabled", "Disabled"],
+        "deprecated": True,
+    },
+    mode={
+        "description": "For DirectSwitch read the manual of the unit, it is not available on all inputs.",
+        "examples": ["Simple", "DirectSwitch"],
+    },
+    ds_mode={
+        "description": "Behaviour of the DirectSwitch mode, it can be set only in the DirectSwitch mode, "
+        "also together with the mode DirectSwitch.",
+        "examples": ["Simple", "Inverted", "Toggle"],
+    },
+    alias=_alias("my_input"),
+)
+_document(
+    do_post_inp_schema,
+    "The params of a digital output.",
+    [{"value": 1}, {"mode": "PWM", "pwm_duty": 25}],
+    value={"description": _OUTPUT_VALUE + " It is mutually exclusive with *pwm_duty*.", "examples": [1, True]},
+    mode={"examples": ["Simple", "PWM"]},
+    pwm_freq={
+        "description": "Frequency in Hz shared by the PWM outputs of the group, up to 50000 Hz on the "
+        "boards with a HW timer, up to 1000 Hz with the PWM of the firmware. The nearest available "
+        "frequency is set, the result has it. Setting it on an output without PWM is an error.",
+        "examples": [50, 1000, 50000],
+    },
+    pwm_duty={
+        "description": "Duty cycle in percent, a float; the state has it rounded to 0.1 (to an integer "
+        "with the PWM of the firmware). It is mutually exclusive with *value*, except 0 with value 0 "
+        "and 100 with value 1.",
+        "examples": [0, 25, 50.5, 100],
+    },
+    alias=_alias("my_output"),
+)
+_document(
+    relay_post_inp_schema,
+    "The params of a relay output.",
+    [{"value": 1}],
+    value={"description": _OUTPUT_VALUE, "examples": [0, 1, True]},
+    alias=_alias("my_relay"),
+)
+_document(
+    led_post_inp_schema,
+    "The params of a user LED.",
+    [{"value": 1}, {"value": 0}],
+    value={"description": _OUTPUT_VALUE, "examples": [1]},
+    alias=_alias("my_led"),
+)
+_document(
+    ai_post_inp_schema,
+    "The params of an analog input.",
+    [{"mode": "Voltage"}],
+    mode={
+        "description": "One of the keys of *modes* of the state, given by the [HW definition]("
+        + _DOCS
+        + "/configs/hw_definitions/), e.g. Voltage, Current or Resistance3W.",
+        "examples": ["Voltage"],
+    },
+    alias=_alias("my_analog_input"),
+)
+_document(
+    ao_post_inp_schema,
+    "The params of an analog output.",
+    [{"value": 5.5}, {"mode": "Current", "value": 10}],
+    value={
+        "description": "The value in the unit of the mode, a string is converted to a number.",
+        "examples": [0.01, 2.1, 5.5],
+    },
+    mode={
+        "description": "One of the keys of *modes* of the state, Voltage, Current or Resistance on the Neuron "
+        "boards, given by the HW definition on the other units.",
+        "examples": ["Voltage"],
+    },
+    alias=_alias("my_analog_output"),
+)
+_document(
+    wd_post_inp_schema,
+    "The params of the master watchdog of a Modbus unit.",
+    [{"value": 1, "timeout": 5000}],
+    value={
+        "description": "Enable (1) or disable (0) the master watchdog. The write clears *was_wd_reset*.",
+        "examples": [1],
+    },
+    timeout={
+        "description": "The timeout in ms, a string is converted to an integer, a value over 65535 is "
+        "clamped to 65535.",
+        "examples": [3000],
+    },
+    reset={
+        "description": "A true value (also `1` or `'true'` in a form) restarts the Modbus unit at once, only "
+        "on a unit with the reset coil in its HW definition, it is ignored on the others.",
+        "examples": [True],
+    },
+    nv_save={
+        "description": "__Deprecated__ and not supported, setting it is an error. Use the device "
+        "*nv_save* of the unit.",
+        "deprecated": True,
+    },
+    alias=_alias("my_watchdog"),
+)
+_document(
+    owire_post_inp_schema,
+    "The params of a 1-Wire sensor.",
+    [{"interval": 15}],
+    interval={
+        "description": "Period of the reads in seconds, a positive number truncated to an integer, also "
+        "a string. The default is 15 s of a sensor of the configuration, the interval of the bus of a "
+        "found sensor.",
+        "examples": [10, 30],
+    },
+    alias=_alias("my_sensor"),
+)
+_document(
+    owbus_post_inp_schema,
+    "The params of a 1-Wire bus.",
+    [{"do_scan": True}, {"interval": 30}],
+    do_scan={"description": "Start the search for new devices, also `1` or `'true'` in a form."},
+    do_reset={"description": "Reset the 1-Wire master by owpower, also `1` or `'true'` in a form."},
+    interval={
+        "description": "Period of the reads of the sensors in seconds, it is set to all sensors of the bus; "
+        "a positive number truncated to an integer, also a string.",
+        "examples": [10, 30],
+    },
+    scan_interval={
+        "description": "Period of the search for new devices in seconds, truncated to an integer, "
+        "also a string; 0 searches only after the start and on *do_scan*.",
+        "examples": [60, 300],
+    },
+)
+_document(
+    modbus_slave_post_inp_schema,
+    "The params of a Modbus unit.",
+    [{"scan_enabled": False}],
+    scan_enabled={
+        "description": "Enable or disable the periodic scan, also `1` or `'true'` in a form. `true` "
+        "also starts again a scan stopped by an error. The first scan, which creates the devices of "
+        "the unit, runs also with `false`.",
+        "examples": [False],
+    },
+    alias=_alias("unit_1"),
+)
+_document(
+    owpower_post_inp_schema,
+    "The params of the power of a 1-Wire bus.",
+    [{"value": 1}],
+    value={
+        "description": "1 (also true or '1') disables the power of the 1-Wire bus, 0 powers the bus. The "
+        "state has 0 or 1.",
+        "examples": [0, 1, True],
+    },
+    alias=_alias("my_owpower"),
+)
+_document(
+    nv_save_post_inp_schema,
+    "Save the settings of a Modbus unit to its non-volatile memory.",
+    [{"value": 1}],
+    value={
+        "description": "1 (also true or '1') saves the settings (PWM, debounce, DO, AO, DirectSwitch ...) "
+        "which the unit loads after its restart, 0 does nothing. The state has 1 for 2 s after the write, "
+        "a new write is refused (400) until then.",
+        "examples": [1, True],
+    },
+    alias=_alias("my_nv_save"),
+)
+_document(
+    register_post_inp_schema,
+    "The params of a Modbus register.",
+    [{"value": 200}],
+    value={
+        "description": "A new raw value of the register, a string is converted to a number.",
+        "examples": [0, 200, "200"],
+    },
+    alias=_alias("my_register"),
+)
+_document(data_point_post_inp_schema, "The params of a data point.", [{"value": 21.5}])
+_document(
+    run_post_inp_schema,
+    "Save or delete the aliases.",
+    [{"save": True}, {"delete": "my_relay"}],
+    save={
+        "description": "Save the aliases to the file of the aliases at once, also `1` or `'true'` in a "
+        "form; they are saved also 5 minutes after a change."
+    },
+    delete={"examples": ["my_relay"]},
+)
+_document(
+    sequencer_post_inp_schema,
+    "One of: *value* with *pulse_duration* sets the value of the output for a "
+    "pulse; *steps* (and *final*) run a sequence of changes of the output; *cancel* stops the running sequence "
+    "without its final state. See [Sequencer](" + _DOCS + "/apis/sequencer/).",
+    [
+        {"value": 1, "pulse_duration": 2},
+        {"steps": [{"value": 1}, {"delay": 0.5, "value": 0}], "final": {"value": 0}},
+        {"cancel": True},
+    ],
+    value={"description": "The value of the output for the pulse, it requires *pulse_duration*."},
+    pulse_duration={
+        "description": "Duration of the pulse in seconds, the output is set to the opposite of "
+        "*value* after it. The pulse is timed by Evok, it is ended on shutdown, but not after a "
+        "crash of Evok.",
+        "examples": [0.5, 5],
+    },
+    steps={
+        "description": "The steps of the sequence, 1 to 100: the params of the output with an optional "
+        "*delay* in seconds before the step."
+    },
+    final={"description": "The params of the output written when the sequence is ended on shutdown."},
+    cancel={"description": "Stop the running sequence without its final state."},
+    alias=_alias("pump_pulse"),
+)
+
+# the states of full()
+_COMM = {"comm": "ok", "last_comm": 0.041}
+_document(
+    di_resp_schema,
+    "The state of a digital input.",
+    [
+        {
+            "dev": "di",
+            "circuit": "1_01",
+            "value": 0,
+            "debounce": 50,
+            "counter_modes": ["Enabled", "Disabled"],
+            "counter_mode": "Enabled",
+            "counter": 0,
+            "mode": "Simple",
+            "modes": ["Simple", "DirectSwitch"],
+            **_COMM,
+        },
+        {
+            "dev": "di",
+            "circuit": "1_02",
+            "value": 1,
+            "debounce": 200,
+            "counter_modes": ["Enabled", "Disabled"],
+            "counter_mode": "Enabled",
+            "counter": 121,
+            "mode": "Simple",
+            "modes": ["Simple", "DirectSwitch"],
+            **_COMM,
+            "alias": "switch_living_room",
+        },
+    ],
+    counter_modes={"deprecated": True},
+    counter_mode={"deprecated": True},
+)
+_document(
+    do_resp_schema,
+    "The state of a digital output.",
+    [
+        {
+            "dev": "do",
+            "circuit": "1_01",
+            "value": 0,
+            "mode": "Simple",
+            "modes": ["Simple", "PWM"],
+            "pwm_freq": 4800.0,
+            "pwm_duty": 0,
+            **_COMM,
+        },
+        {
+            "dev": "do",
+            "circuit": "1_02",
+            "value": 0,
+            "mode": "PWM",
+            "modes": ["Simple", "PWM"],
+            "pwm_freq": 4800.0,
+            "pwm_duty": 10,
+            **_COMM,
+        },
+    ],
+)
+_document(ro_resp_schema, "The state of a relay output.", [{"dev": "ro", "circuit": "2_01", "value": 1, **_COMM}])
+_document(led_resp_schema, "The state of a user LED.", [{"dev": "led", "circuit": "1_01", "value": 0, **_COMM}])
+_AI_MODES = {"Voltage": {"unit": "V", "range": [0, 10]}, "Current": {"unit": "mA", "range": [0, 20]}}
+_document(
+    ai_resp_schema,
+    "The state of an analog input; its modes are given by the [HW definition](" + _DOCS + "/configs/hw_definitions/).",
+    [
+        {
+            "dev": "ai",
+            "circuit": "2_01",
+            "value": 2.2,
+            "unit": "V",
+            "mode": "Voltage",
+            "modes": _AI_MODES,
+            "range": [0, 10],
+            **_COMM,
+        },
+        {
+            "dev": "ai",
+            "circuit": "2_02",
+            "value": "NaN",
+            "unit": "mA",
+            "mode": "Current",
+            "modes": _AI_MODES,
+            "range": [0, 20],
+            **_COMM,
+        },
+    ],
+)
+_document(
+    ao_resp_schema,
+    "The state of an analog output.",
+    [
+        {
+            "dev": "ao",
+            "circuit": "2_01",
+            "value": 1.4,
+            "unit": "V",
+            "mode": "Voltage",
+            "modes": {"Voltage": {"unit": "V", "range": [0, 10]}},
+            "range": [0, 10],
+            **_COMM,
+        },
+    ],
+)
+_document(
+    wd_resp_schema,
+    "The state of the master watchdog of a Modbus unit, see the [master watchdog]("
+    "https://kb.unipi.technology/en:hw:007-patron:description-of-io:02-description-of-do#mwd).",
+    [
+        {"dev": "wd", "circuit": "1", "value": 0, "timeout": 5000, "was_wd_reset": 0, **_COMM},
+    ],
+)
+_document(
+    register_resp_schema,
+    "The raw value of a Modbus register; the feature REGISTER is deprecated, a data "
+    "point of uint16 is the same register.",
+    [{"dev": "register", "circuit": "1_1000", "value": 16256, **_COMM}],
+)
+_document(
+    data_point_resp_schema,
+    "The value of a data point of a Modbus unit, as given by its [HW definition]("
+    + _DOCS
+    + "/configs/hw_definitions/), e.g. CO2 of an IAQ sensor.",
+    [
+        {
+            "dev": "data_point",
+            "circuit": "IAQ_0",
+            "value": 458.16,
+            "writable": False,
+            "name": "CO2",
+            "unit": "ppm",
+            **_COMM,
+        },
+        {
+            "dev": "data_point",
+            "circuit": "xG18_2",
+            "value": 21.5,
+            "writable": False,
+            "name": "temperature",
+            "unit": "C",
+            **_COMM,
+            "valid": True,
+        },
+    ],
+    name={"examples": ["CO2"]},
+    unit={"examples": ["ppm"]},
+)
+_document(owpower_resp_schema, "The power of a 1-Wire bus.", [{"dev": "owpower", "circuit": "1", "value": 0, **_COMM}])
+_document(
+    nv_save_resp_schema,
+    "The saving to the non-volatile memory of a Modbus unit, value 1 for 2 s after a save.",
+    [{"dev": "nv_save", "circuit": "1", "value": 0, **_COMM}],
+)
+_document(
+    owbus_resp_schema,
+    "A 1-Wire bus read by the kernel.",
+    [
+        {
+            "dev": "owbus",
+            "circuit": "OWFS",
+            "bus": "OWFS",
+            "master": "w1_bus_master1",
+            "scan_interval": 300,
+            "interval": 60,
+            "do_scan": False,
+            "do_reset": False,
+        },
+    ],
+)
+_document(
+    temp_resp_schema,
+    "A 1-Wire thermometer.",
+    [
+        {
+            "dev": "temp",
+            "circuit": "2895DCD509000035",
+            "address": "28.95DCD5090000.35",
+            "value": 23.0,
+            "lost": False,
+            "time": 4306.778,
+            "interval": 15,
+            "type": "DS18B20",
+            **_COMM,
+        },
+    ],
+    time={"deprecated": True},
+)
+_document(
+    onewire_resp_schema,
+    "Another 1-Wire device: a DS2438 (e.g. a humidity sensor with HIH4000) or the "
+    "levels of the PIOs of a DS2408, DS2406 or DS2413.",
+    [
+        {
+            "dev": "1wdevice",
+            "circuit": "26F0A2CB01000077",
+            "humidity": 45.12,
+            "vdd": 5.02,
+            "vad": 2.13,
+            "temp": 22.5,
+            "vis": 0.0002441,
+            "lost": False,
+            "time": 4306.778,
+            "interval": 15,
+            "type": "DS2438",
+            **_COMM,
+        },
+        {
+            "dev": "1wdevice",
+            "circuit": "29.1D9F0F000000",
+            "address": "29.1D9F0F000000",
+            "value": [1, 1, 0, 1, 1, 1, 1, 1],
+            "lost": False,
+            "time": 4306.778,
+            "interval": 15,
+            "type": "DS2408",
+            **_COMM,
+        },
+    ],
+    time={"deprecated": True},
+)
+_document(
+    modbus_slave_resp_schema,
+    "A Modbus unit and its scan.",
+    [
+        {
+            "dev": "modbus_slave",
+            "circuit": "1",
+            "slave_id": 1,
+            "modbus_type": "TCP",
+            "modbus_spec": "127.0.0.1",
+            "scan_interval": 0.02,
+            "scan_enabled": True,
+            "last_comm": 0.027,
+            "scan_error": None,
+            "comm": "ok",
+        },
+    ],
+    modbus_type={"enum": ["TCP", "RTU"]},
+    modbus_spec={
+        "description": "The host of a Modbus TCP unit or the serial port of a Modbus RTU unit.",
+        "examples": ["127.0.0.1", "/dev/ttyNS0"],
+    },
+    scan_error={
+        "description": "The error of the last scan, null after a successful one. The scan of a failing "
+        "unit is slowed down up to 16 s.",
+        "examples": ["RequestRetryFailedError: Failed to get a valid response after 2 attempts", None],
+    },
+)
+_document(
+    device_info_resp_schema,
+    "The controller or a unit, as described by the configuration.",
+    [
+        {"dev": "device_info", "family": "Patron", "model": "S167", "sn": 81, "board_count": 1, "circuit": "S167"},
+    ],
+    family={"examples": ["Patron", "Neuron", "UNIPI1"]},
+    model={"examples": ["S103", "S167", "L533"]},
+)
+_document(
+    serial_bus_resp_schema,
+    "The configuration of a Modbus RTU bus, read-only.",
+    [
+        {
+            "dev": "serial_bus",
+            "circuit": "RS485_1",
+            "port": "/dev/ttyNS0",
+            "baudrate": 19200,
+            "parity": "N",
+            "stopbits": 1,
+            "timeout": 0.5,
+            "retries": 0,
+            "probe_timeout": 0.1,
+            "devices": ["xS51"],
+        },
+    ],
+)
+_document(
+    tcp_bus_resp_schema,
+    "The configuration of a Modbus TCP bus, read-only.",
+    [
+        {
+            "dev": "tcp_bus",
+            "circuit": "LOCAL_TCP",
+            "hostname": "127.0.0.1",
+            "port": 502,
+            "timeout": 1.0,
+            "connect_timeout": 2.0,
+            "retries": 0,
+            "probe_timeout": 1.0,
+            "devices": ["1", "2"],
+        },
+    ],
+)
+_document(
+    sequencer_resp_schema,
+    "The running pulse or sequence of an output (RO, DO, LED), read-only; the circuit "
+    "is the type and the circuit of the output.",
+    [
+        {
+            "dev": "sequencer",
+            "circuit": "do_1_01",
+            "output": {"dev": "do", "circuit": "1_01"},
+            "running": True,
+            "name": "pulse",
+            "step": 0,
+            "steps": 1,
+        },
+        {
+            "dev": "sequencer",
+            "circuit": "ro_2_01",
+            "output": {"dev": "ro", "circuit": "2_01"},
+            "running": False,
+            "name": None,
+            "step": None,
+            "steps": None,
+        },
+    ],
+    running={"description": "A pulse or a sequence is running, the former *pending* of the output."},
+    name={"examples": ["pulse", "sequence", None]},
+)
+_document(
+    run_resp_schema,
+    "The aliases, see [Aliases](" + _DOCS + "/configs/aliases/).",
+    [
+        {
+            "dev": "run",
+            "circuit": "alias",
+            "save": False,
+            "aliases": {"light_living_room": {"circuit": "ro_1_01", "devtype": "ro"}},
+        },
+    ],
+    save={"description": "Always false, a save is requested by the params."},
+    aliases={
+        "description": "The aliases of the registered devices by their name, with the type and the circuit "
+        "(`<type>_<circuit>`) of the device; an alias of a device which is not registered (e.g. of an offline "
+        "Modbus unit) is not listed."
+    },
+)
