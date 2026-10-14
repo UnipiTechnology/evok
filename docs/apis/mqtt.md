@@ -25,8 +25,10 @@ prefix, e.g. `evok/boiler-room`.
   a new client gets the actual state of all devices at once. The changes are merged as for the WebSocket,
   the last state of each device is published.
 - **The status** is `online` after the connection. `offline` is published when Evok stops and by the broker
-  as the last will when the connection is lost, e.g. a power failure of the unit.
-- `device_mask` of the configuration selects the published device types.
+  as the last will when the connection is lost, e.g. a power failure of the unit. When Evok stops, it publishes
+  the pending states first, also the final states of the pulses ended by the stop, then `offline`.
+- `device_mask` of the configuration selects the published device types, all types except `run` by default;
+  altnames are accepted, an unknown type is an error of the configuration.
 
 ## Commands
 
@@ -37,13 +39,17 @@ A message to `<prefix>/<device>/<circuit>/set` changes the device:
   e.g. `evok/sequencer/ro_1_01/set` with `{"value": 1, "pulse_duration": 2}`,
 - another value is the value of the device, e.g. `1`, `0`, `true` or `21.5` (`{"value": ...}`).
 
-The parameters are validated as for REST. The new state is published as the state of the device.
-A Modbus unit which does not respond refuses the change, an output refuses it while its sequencer runs.
+The parameters are validated as for REST, an unknown parameter is refused. The new state is published as the state
+of the device. A Modbus unit which does not respond refuses the change, an output refuses it while its sequencer runs.
 An error is published to `<prefix>/error`:
 
 ```json
 {"topic": "evok/ro/1_01/set", "success": false, "errors": {"DeviceNotFound": "Circuit or alias '1_01' with devtype 'ro' not found"}}
 ```
+
+A device type which cannot be changed (`serial_bus`, `tcp_bus`, `device_info`) gets the error
+`{"ValueError": "Invalid device name ..."}`, an internal error `{"Server error": "internal"}`, the details
+are in the log.
 
 With `read_only: true` Evok does not subscribe the commands.
 
@@ -64,8 +70,16 @@ integration on the same broker creates the entities, no configuration of Home As
 | `sensor` DS2438                 | `sensor` of the temperature, the humidity, VDD and VAD            |
 | `modbus_slave`                  | `binary_sensor` of the communication of the unit                  |
 
-- The entities of a Modbus unit or of a 1-Wire bus are one device of Home Assistant, e.g. `evok xS51`.
+- Only the devices of a Modbus unit or of a 1-Wire bus are announced. The other device types have no entity:
+  `watchdog`, `owpower`, `nv_save`, `register`, `sequencer`, `owbus`, `device_info`, the Modbus buses, `run`
+  and the 1-Wire sensors DS2408, DS2406 and DS2413.
+- The entities of a Modbus unit or of a 1-Wire bus are one device of Home Assistant, e.g. `evok xS51`, made
+  by Unipi, its model is the model of `device_info` of the unit if it is known.
   The name of an entity is the alias of the device, e.g. `pump`, or its type and circuit, e.g. `RO 1_01`.
+  The entities of a DS2438 are named `<name> temperature`, `<name> humidity`, `<name> VDD`, `<name> VAD`,
+  the entity of a `modbus_slave` `<name> communication` (a connectivity `binary_sensor`, on without `scan_error`).
+- A writable `data_point` is a `number` with the range ±1e9 and the step 0.001; an AO without a `range`
+  in its state has the range 0 to 10.
 - The configs are published retained to `<ha_prefix>/<component>/<node>/<object_id>/config`
   (`ha_prefix` is `homeassistant` by default, the node is the prefix of Evok with the characters other than letters, digits, `_` and `-` replaced by `_`,
   e.g. `evok` or `evok_boiler-room`) before the first state

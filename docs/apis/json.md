@@ -2,6 +2,10 @@
 
 The JSON API provides a simple interface for sending and receiving data in a stateless, cacheable communications. This protocol does not support multiple writes in one request, but it is suitable for automated requests thanks to JSON protocol, which is easily machine-processed.
 
+The routes, the replies and the errors are the same as of the [REST API](rest.md#routes) with `/json/` instead
+of `/rest/`, see [Replies and errors](rest.md#replies-and-errors). The body of a POST is a JSON object
+of the params, e.g. `{"value": 1}`; invalid JSON is `400`. A pulse of an output is set by its [sequencer](sequencer.md).
+
 ## Examples
 
 For python examples you need installed `requests` package. You can install it with this command: `pip3 install requests`.

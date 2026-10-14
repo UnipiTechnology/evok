@@ -90,10 +90,13 @@ apis:
 # notes:
 #   <bus_name>: Your choice, but cannot be duplicates!
 #   <bus_type>:
-#       - MODBUSTCP (specific settings: [hostname, port, timeout, connect_timeout, retries])
-#       - MODBUSRTU (specific settings: [port, baudrate, parity, stopbits, timeout, retries])
-#       - OWFS (specific settings: [interval, scan_interval, owpower])
+#       - MODBUSTCP (specific settings: [hostname, port, timeout, connect_timeout, retries, probe_timeout])
+#       - MODBUSRTU (specific settings: [port, baudrate, parity, stopbits, timeout, retries, probe_timeout])
+#       - OWFS (specific settings: [master, interval, scan_interval, owpower])
 #       ^ timeout of a response is 0.5 s, connect_timeout 1.0 s and retries of a request 1 by default
+#       ^ probe_timeout is the timeout of a request to a unit which does not respond,
+#       ^ by default 'timeout' on MODBUSTCP and 0.1 s (at most 'timeout') on MODBUSRTU
+#       ^ master is the 1-Wire master of the kernel, e.g. w1_bus_master1, the first one by default
 #   <device_name>: Under this name, the device will be available in the API. Cannot be duplicates!
 #   <model>: Defines a modbus register map. Source is in '.yaml' files in '/etc/evok/hw_definitions'.
 #               ^ examples [xS51, xS11, ]

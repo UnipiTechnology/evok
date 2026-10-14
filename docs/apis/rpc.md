@@ -2,7 +2,8 @@
 
 The RPC (Remote Procedure Call) API is used for invoking procedures, functions or methods across a network. It is suitable for automated request.
 
-The API uses [JSON-RPC](https://www.jsonrpc.org/specification) at `/rpc`. Params can be passed as an array in the order
+The API uses [JSON-RPC](https://www.jsonrpc.org/specification) at `/rpc`. It is enabled by default and can be disabled
+by `enabled: false` in `apis: rpc` of the [configuration](../configs/evok_configuration.md#rpc). Params can be passed as an array in the order
 of the table below or as an object with their names. A batch request (a list of calls) returns a list of the results,
 each call is done and checked by the `read_token` on its own. With a `token` in the configuration it is required as
 `Authorization: Bearer <token>` or as the password of Basic authentication, see [Security](../security.md).
@@ -34,7 +35,11 @@ each call is done and checked by the `read_token` on its own. With a `token` in 
 A value of an output is a boolean, also `0`, `1` or a string `'true'`, `'on'`, `'1'`, `'false'`, `'off'`, `'0'`. The `circuit` can be also an alias.
 The param `timeout` of `output_set_for_time` is a deprecated alias of `pulse_duration`. The pulses of RPC are set
 by the [sequencer](./sequencer.md) of the output, its state is not in the state of the output; `pending` of
-`output_get` is true during a pulse, not during another sequence.
+`output_get` is true during a pulse, not during another sequence. `relay_set_for_time` and `output_set_for_time`
+start the pulse by the sequencer, it replaces a running pulse or sequence of the output.
+
+`readtime` of `sensor_get` is the time of the event loop (a monotonic clock) of the last read, not a wall clock time,
+`0` before the first read. The value of a DS2438 is the list `[VDD, VAD, temperature, IAD]`, `IAD` is always `null`.
 
 ## Errors
 

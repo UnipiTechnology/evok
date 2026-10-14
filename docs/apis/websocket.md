@@ -4,8 +4,9 @@ The WebSocket API allows for two-way communication between the client and the se
 
 ## Connection
 
-The WebSocket is at `ws://<host>:8080/ws`. With a `token` in the configuration it is required in the header
-`Authorization: Bearer <token>`, a browser sends it as `ws://<host>:8080/ws?token=<token>`. A web page
+The WebSocket is at `ws://<host>:8080/ws`, the route exists only with `enabled: true` in the
+[configuration](../configs/evok_configuration.md#websocket) (`false` by default). With a `token`
+in the configuration it is required in the header `Authorization: Bearer <token>`, a browser sends it as `ws://<host>:8080/ws?token=<token>`. A web page
 in a browser can connect only from the address of Evok or from `allowed_origins`, see [Security](../security.md).
 With the `read_token` the command `set` gets the error `ReadOnlyAccess`.
 
@@ -37,8 +38,9 @@ a list of only unknown types is refused with `ValueError`. An empty list stops t
 
 ### all
 
-Returns the state of all devices. With `all_filtered` enabled in the [configuration](../configs/evok_configuration.md#websocket),
-only the devices passing the filter are returned, the default filter returns DI, RO, AI, AO and 1-Wire sensors.
+Returns the state of all devices, without `all_filtered` of all device types, also of the sequencers, `run`
+and the Modbus buses (`serial_bus`, `tcp_bus`), which `/rest/all` leaves out. With `all_filtered` enabled
+in the [configuration](../configs/evok_configuration.md#websocket), only the devices passing the filter are returned, the default filter returns DI, RO, AI, AO and 1-Wire sensors.
 
 ### set
 
@@ -57,7 +59,9 @@ Evok sends the states of the changed devices to every client, always as a list. 
 only the states of the device types in the filter are sent.
 
 The state of a device of a Modbus unit and of a 1-Wire sensor has `comm` (`ok`, `timeout`, `error`) and `last_comm`
-(seconds since the last successful communication with the unit). When the unit stops responding or responds again,
+(seconds since the last successful communication with the unit). The `comm` of a 1-Wire sensor is only `ok`
+or `timeout` (the sensor is lost), never `error`. Its `time` is deprecated, it is the time of the event loop
+(a monotonic clock) of the last read, use `last_comm`. When the unit stops responding or responds again,
 the states of all its devices are sent, `value` keeps the last known value and `comm` tells if it is valid.
 
 ## Errors

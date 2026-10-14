@@ -50,6 +50,9 @@ the HW definitions. The incompatible changes come first. Every change names its 
   (`/rest/sequencer/<type>_<circuit>`, `running` instead of `pending`). While it runs, a change of the output
   except its alias is refused with 409 (RPC `-32002`), cancel it by the sequencer first. The RPC methods
   `*_set_for_time` and `output_get` stay. — `a85fb14`, `57492fe`
+- **Reset and nv_save of a unit:** the coil is written once without the retries, no response is not an error,
+  Evok waits for the restart of the unit; before a timeout was retried (the reset was sent twice) and returned 503.
+  The `value` of `nv_save` stays 1 for 2 s, a new save is refused meanwhile. — `0ab8d2c`, `752616a`
 
 ### Circuits by the HW definitions
 
@@ -69,6 +72,8 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - The assignments are done by Modbus units, not in the order of the request. An error returns the results of the
   units done and of the assignments of its unit before it. — `a3f4679`
 - The `global_device_id` filter was removed. — `6cd0802`
+- `device_circuits` accepts aliases too, altnames in `device_types` (e.g. `di` and `input`) are merged, before
+  the devices were returned twice. — `854054f`
 
 ### WebSocket
 
@@ -92,9 +97,9 @@ the HW definitions. The incompatible changes come first. Every change names its 
 ## New features
 
 - **Communication of the devices:** the state of each device of a Modbus unit and of a 1-Wire sensor has `comm`
-  (`ok`, `timeout`, `error`) and `last_comm` (seconds since the last successful communication); a lost and
-  a recovered unit sends the states of all its devices, `value` is the last known one. The entities of
-  Home Assistant are unavailable without the communication. — `969798e`
+  (`ok`, `timeout`, `error`; a 1-Wire sensor only `ok`, `timeout`) and `last_comm` (seconds since the last
+  successful communication); a lost and a recovered unit sends the states of all its devices, `value` is the last
+  known one. The entities of Home Assistant are unavailable without the communication. — `969798e`
 - **Security:** an optional `token` for all APIs (Bearer, Basic, `?token=` for the WebSocket) and `allowed_origins`.
   — `763016c`, `2b7f668`
 - **Read-only token:** an optional `read_token` (requires `token`). It allows reading by REST and JSON, the queries
@@ -115,6 +120,8 @@ the HW definitions. The incompatible changes come first. Every change names its 
   - a lost and a restored communication with a unit,
   - a change of `counter_mode`, the mode and the debounce of a DI.
 - A successful bulk reply has `"success": true`. — `ba4212f`
+- `scan_error` of `modbus_slave` and the errors of an unavailable unit name the root cause, e.g. a missing serial
+  port. — `d990fe1`
 - Deleting the alias of a device which is not connected by `POST /rest/run/alias` with `delete`. — `b7cebd6`
 - `GET /rest/serial_bus/{bus}` and `/rest/tcp_bus/{bus}` return the configuration of a Modbus bus and its devices,
   before a 500 error. The buses are read-only and not in `/rest/all`. — `b40a57c`
@@ -177,6 +184,9 @@ An invalid value is an error: the unit or the feature is not created and the err
 ## Runtime and installation
 
 - Python 3.12, `tmodbus` instead of `pymodbus`. — `862d760`, `733871c`
+- `tornado` 6.5.10 instead of 6.3.3. — `1210fb1`
+- Each module logs by its own logger, e.g. `evok.modbus.client` or `evok.w1.bus`, the level of one part can be set
+  separately; the level and the log file stay on the logger `evok`. — `48ab81e`
 - 1-Wire by the kernel: the driver of the master (e.g. `ds2482`) and the modules of the sensors instead of
   the package `owserver`; no dependency `asyncowfs` and `anyio`. The package should install the udev rule
   `etc/udev/rules.d/60-evok-w1.rules` (group `evok`). — `776b371`, `9790404`, `2bb5167`
