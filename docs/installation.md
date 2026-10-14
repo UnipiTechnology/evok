@@ -1,6 +1,6 @@
 # Installation guide
 
-Evok can be installed on Unipi OS or RaspberryPi OS.
+Evok can be installed on Unipi OS or RaspberryPi OS based on Debian 13 Trixie, Evok 3.1 needs Python 3.12 or newer.
 To install Evok, you will have to [prepare the OS](#os-preparation) and then [install the package](#installing-and-updating-evok).
 
 ## OS preparation
@@ -86,28 +86,28 @@ There are several ways of getting beta version.
 === "Neuron"
 
     ```bash
-    echo "deb https://repo.unipi.technology/debian betaevok:bookworm main neuron-main neuron-test test" >> /etc/apt/sources.list.d/unipi.list
+    echo "deb https://repo.unipi.technology/debian betaevok:trixie main neuron-main neuron-test test" >> /etc/apt/sources.list.d/unipi.list
     apt update
     ```
 
 === "Patron"
 
     ```bash
-    echo "deb https://repo.unipi.technology/debian betaevok:bookworm main patron-main patron-test test" >> /etc/apt/sources.list.d/unipi.list
+    echo "deb https://repo.unipi.technology/debian betaevok:trixie main patron-main patron-test test" >> /etc/apt/sources.list.d/unipi.list
     apt update
     ```
 
 === "Gate"
 
     ```bash
-    echo "deb https://repo.unipi.technology/debian betaevok:bookworm main g1-main g1-test test" >> /etc/apt/sources.list.d/unipi.list
+    echo "deb https://repo.unipi.technology/debian betaevok:trixie main g1-main g1-test test" >> /etc/apt/sources.list.d/unipi.list
     apt update
     ```
 
 === "Unipi 1.1"
 
     ```bash
-    echo "deb https://repo.unipi.technology/debian betaevok:bookworm main unipi1-main unipi1-test test" >> /etc/apt/sources.list.d/unipi.list
+    echo "deb https://repo.unipi.technology/debian betaevok:trixie main unipi1-main unipi1-test test" >> /etc/apt/sources.list.d/unipi.list
     apt update
     ```
 
