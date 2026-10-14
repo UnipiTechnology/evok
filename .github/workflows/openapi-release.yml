@@ -1,0 +1,32 @@
+name: openapi
+
+# Build the OpenAPI document from the sources and attach it to the GitHub
+# release. The README links the asset by name:
+#   https://github.com/UnipiTechnology/evok/releases/latest/download/Evok_API_OAS.yaml
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  openapi:
+    name: build and publish the OpenAPI document
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Generate the OpenAPI document
+        run: uv run python -m evok.openapi -o Evok_API_OAS.yaml
+
+      - name: Validate the OpenAPI document
+        run: uvx --from openapi-spec-validator openapi-spec-validator Evok_API_OAS.yaml
+
+      - name: Attach the document to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" Evok_API_OAS.yaml --clobber
