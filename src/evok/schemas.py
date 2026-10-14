@@ -366,8 +366,12 @@ def _response(title, properties, required=(), description=None):
 di_resp_schema = _response(
     "Digital input",
     {
-        "value": {"type": "integer", "description": "The current level, 0 or 1.", "readOnly": True},
-        "debounce": {"type": "integer", "description": "Debounce of the input in ms."},
+        "value": {
+            "type": ["integer", "null"],
+            "description": "The current level, 0 or 1, null before the first scan.",
+            "readOnly": True,
+        },
+        "debounce": {"type": ["integer", "null"], "description": "Debounce of the input in ms."},
         "counter_modes": {
             "type": "array",
             "items": {"type": "string"},
@@ -376,7 +380,7 @@ di_resp_schema = _response(
         },
         "counter_mode": {"type": "string", "description": "Enabled or Disabled."},
         "counter": {
-            "type": "integer",
+            "type": ["integer", "null"],
             "description": "Counter value, 0 when the counter is disabled.",
             "readOnly": True,
         },
@@ -397,11 +401,19 @@ di_resp_schema = _response(
 do_resp_schema = _response(
     "Digital output",
     {
-        "value": {"type": "integer", "description": "The current state, 0 or 1."},
-        "mode": {"type": "string", "description": "Simple or PWM."},
+        "value": {"type": ["integer", "null"], "description": "The current state, 0 or 1, null before the first scan."},
+        "mode": {"type": ["string", "null"], "description": "Simple or PWM, null before the first scan."},
         "modes": {"type": "array", "items": {"type": "string"}, "description": "Supported modes.", "readOnly": True},
-        "pwm_freq": {"type": "number", "description": "PWM frequency in Hz.", "readOnly": True},
-        "pwm_duty": {"type": "number", "description": "PWM duty cycle in %.", "readOnly": True},
+        "pwm_freq": {
+            "type": ["number", "null"],
+            "description": "PWM frequency in Hz, null without PWM.",
+            "readOnly": True,
+        },
+        "pwm_duty": {
+            "type": ["number", "null"],
+            "description": "PWM duty cycle in %, null without PWM.",
+            "readOnly": True,
+        },
         "alias": _ALIAS_RESP,
     },
     required=("value", "mode", "modes"),
@@ -410,7 +422,7 @@ do_resp_schema = _response(
 ro_resp_schema = _response(
     "Relay output",
     {
-        "value": {"type": "integer", "description": "The current state, 0 or 1."},
+        "value": {"type": ["integer", "null"], "description": "The current state, 0 or 1, null before the first scan."},
         "alias": _ALIAS_RESP,
     },
     required=("value",),
@@ -419,7 +431,7 @@ ro_resp_schema = _response(
 led_resp_schema = _response(
     "User LED",
     {
-        "value": {"type": "integer", "description": "The current state, 0 or 1."},
+        "value": {"type": ["integer", "null"], "description": "The current state, 0 or 1, null before the first scan."},
         "alias": _ALIAS_RESP,
     },
     required=("value",),
@@ -428,14 +440,31 @@ led_resp_schema = _response(
 ai_resp_schema = _response(
     "Analog input",
     {
-        "value": {"type": "number", "description": "The measured value in the unit of the mode.", "readOnly": True},
-        "unit": {"type": "string", "description": "Unit of the value.", "readOnly": True},
-        "mode": {"type": "string", "description": "The current mode."},
-        "modes": {"type": "array", "items": {"type": "string"}, "description": "Supported modes.", "readOnly": True},
+        "value": {
+            "type": ["number", "string", "null"],
+            "description": "The measured value in the unit of the mode; 'NaN', 'Infinity' or '-Infinity' for a value "
+            "which is not a number, null before the first scan.",
+            "readOnly": True,
+        },
+        "unit": {
+            "type": ["string", "null"],
+            "description": "Unit of the value, null without a mode.",
+            "readOnly": True,
+        },
+        "mode": {"type": ["string", "null"], "description": "The current mode."},
+        "modes": {
+            "type": "object",
+            "description": "Supported modes with their unit and range, from the HW definition.",
+            "additionalProperties": {
+                "type": "object",
+                "properties": {"unit": {"type": "string"}, "range": {"type": "array", "items": {"type": "number"}}},
+            },
+            "readOnly": True,
+        },
         "range": {
-            "type": "array",
-            "items": {"type": ["number", "null"]},
-            "description": "Allowed range of the value in the current mode.",
+            "type": ["array", "null"],
+            "items": {"type": "number"},
+            "description": "Allowed range of the value in the current mode, null without a mode.",
             "readOnly": True,
         },
         "alias": _ALIAS_RESP,
@@ -446,14 +475,29 @@ ai_resp_schema = _response(
 ao_resp_schema = _response(
     "Analog output",
     {
-        "value": {"type": "number", "description": "The output value in the unit of the mode."},
-        "unit": {"type": "string", "description": "Unit of the value.", "readOnly": True},
-        "mode": {"type": "string", "description": "The current mode."},
-        "modes": {"type": "array", "items": {"type": "string"}, "description": "Supported modes.", "readOnly": True},
+        "value": {
+            "type": ["number", "string", "null"],
+            "description": "The output value in the unit of the mode, null before the first scan.",
+        },
+        "unit": {
+            "type": ["string", "null"],
+            "description": "Unit of the value, null without a mode.",
+            "readOnly": True,
+        },
+        "mode": {"type": ["string", "null"], "description": "The current mode."},
+        "modes": {
+            "type": "object",
+            "description": "Supported modes with their unit and range, from the HW definition.",
+            "additionalProperties": {
+                "type": "object",
+                "properties": {"unit": {"type": "string"}, "range": {"type": "array", "items": {"type": "number"}}},
+            },
+            "readOnly": True,
+        },
         "range": {
-            "type": "array",
-            "items": {"type": ["number", "null"]},
-            "description": "Allowed range of the value in the current mode.",
+            "type": ["array", "null"],
+            "items": {"type": "number"},
+            "description": "Allowed range of the value in the current mode, null without a mode.",
             "readOnly": True,
         },
         "alias": _ALIAS_RESP,
@@ -464,10 +508,10 @@ ao_resp_schema = _response(
 wd_resp_schema = _response(
     "Master watchdog",
     {
-        "value": {"type": "integer", "description": "1 when the watchdog is enabled."},
-        "timeout": {"type": "integer", "description": "Watchdog timeout in ms."},
+        "value": {"type": ["integer", "null"], "description": "1 when the watchdog is enabled."},
+        "timeout": {"type": ["integer", "null"], "description": "Watchdog timeout in ms."},
         "was_wd_reset": {
-            "type": "integer",
+            "type": ["integer", "null"],
             "description": "Binary flag indicating a restart caused by the watchdog.",
             "readOnly": True,
         },
@@ -479,7 +523,7 @@ wd_resp_schema = _response(
 register_resp_schema = _response(
     "Modbus register",
     {
-        "value": {"type": "integer", "description": "The register value."},
+        "value": {"type": ["integer", "null"], "description": "The register value, null before the first scan."},
         "alias": _ALIAS_RESP,
     },
     required=("value",),
@@ -488,11 +532,19 @@ register_resp_schema = _response(
 data_point_resp_schema = _response(
     "Data point",
     {
-        "value": {"type": ["number", "null"], "description": "The value in its unit."},
+        "value": {
+            "type": ["number", "string", "null"],
+            "description": "The value in its unit; 'NaN', 'Infinity' or '-Infinity' for a value which is not a number.",
+        },
         "writable": {"type": "boolean", "description": "The register is writable.", "readOnly": True},
         "name": {"type": "string", "description": "Name of the data point, when configured.", "readOnly": True},
         "unit": {"type": "string", "description": "Unit of the value, when configured.", "readOnly": True},
         "alias": _ALIAS_RESP,
+        "valid": {
+            "type": ["boolean", "null"],
+            "description": "The value is valid, only with valid_mask_reg (a 1-Wire thermometer of xG18).",
+            "readOnly": True,
+        },
     },
     required=("value",),
 )
@@ -520,12 +572,12 @@ owbus_resp_schema = _response(
     {
         "bus": {"type": "string", "description": "Access method to the bus.", "readOnly": True},
         "master": {
-            "type": "string",
+            "type": ["string", "null"],
             "description": "The 1-Wire master of the kernel used by the bus.",
             "readOnly": True,
         },
-        "scan_interval": {"type": "integer", "description": "Interval of a bus scan in s."},
-        "interval": {"type": "integer", "description": "Interval of the sensor reads in s."},
+        "scan_interval": {"type": "number", "description": "Interval of a bus scan in s."},
+        "interval": {"type": "number", "description": "Interval of the sensor reads in s."},
         "do_scan": {"type": "boolean", "description": "Scan the bus (write-only)."},
         "do_reset": {"type": "boolean", "description": "Reset the 1-Wire master by owpower (write-only)."},
     },
@@ -579,7 +631,11 @@ modbus_slave_resp_schema = _response(
         "slave_id": {"type": "integer", "description": "Modbus address (slave id) of the unit.", "readOnly": True},
         "modbus_type": {"type": "string", "description": "Type of the bus.", "readOnly": True},
         "modbus_spec": {"type": "string", "description": "Specification of the bus.", "readOnly": True},
-        "scan_interval": {"type": "integer", "description": "Interval of the scans in s."},
+        "scan_interval": {
+            "type": "number",
+            "description": "Interval of the scans in s, 1 / scan_frequency.",
+            "readOnly": True,
+        },
         "scan_enabled": {"type": "boolean", "description": "The scanning of the unit is enabled."},
         "scan_error": {"type": ["string", "null"], "description": "Reason of the last failed scan.", "readOnly": True},
     },
@@ -597,8 +653,44 @@ device_info_resp_schema = _response(
     required=("family", "model", "board_count"),
 )
 
-serial_bus_resp_schema = _response("Modbus RTU bus", {"devices": {"type": "array", "items": {"type": "string"}}})
-tcp_bus_resp_schema = _response("Modbus TCP bus", {"devices": {"type": "array", "items": {"type": "string"}}})
+_BUS_DEVICES = {
+    "type": "array",
+    "items": {"type": "string"},
+    "description": "The circuits of the Modbus units of the bus.",
+    "readOnly": True,
+}
+_BUS_COMMON = {
+    "timeout": {"type": "number", "description": "Timeout of a response in s.", "readOnly": True},
+    "retries": {"type": "integer", "description": "Retries of a failed request.", "readOnly": True},
+    "probe_timeout": {
+        "type": "number",
+        "description": "Timeout of the probe of a unit which does not respond, in s.",
+        "readOnly": True,
+    },
+}
+serial_bus_resp_schema = _response(
+    "Modbus RTU bus",
+    {
+        "port": {"type": "string", "description": "The serial port.", "readOnly": True},
+        "baudrate": {"type": "integer", "readOnly": True},
+        "parity": {"type": "string", "enum": ["N", "E", "O"], "readOnly": True},
+        "stopbits": {"type": "integer", "readOnly": True},
+        **_BUS_COMMON,
+        "devices": _BUS_DEVICES,
+    },
+    required=("port", "devices"),
+)
+tcp_bus_resp_schema = _response(
+    "Modbus TCP bus",
+    {
+        "hostname": {"type": "string", "description": "The Modbus TCP server.", "readOnly": True},
+        "port": {"type": "integer", "readOnly": True},
+        "connect_timeout": {"type": "number", "description": "Timeout of the connection in s.", "readOnly": True},
+        **_BUS_COMMON,
+        "devices": _BUS_DEVICES,
+    },
+    required=("hostname", "port", "devices"),
+)
 
 sequencer_resp_schema = _response(
     "Sequencer",

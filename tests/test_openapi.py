@@ -7,13 +7,14 @@ representative device of every device type and checks the schema knows every key
 it emits and requires only keys it emits.
 """
 
+import jsonschema
 import pytest
 
 from evok import devices, schemas
 from evok.blocks import SequencerDevice
 from evok.config import DeviceInfo, SerialBusDevice, TcpBusDevice
 from evok.devices import Aliases
-from evok.modbus.analog import AnalogInput, AnalogOutput, DataPoint, Register
+from evok.modbus.analog import AnalogInput, AnalogOutput, DataPoint, OwTemperature, Register
 from evok.modbus.digital import ULED, DigitalInput, DigitalOutput, Relay
 from evok.modbus.scanner import ModbusScanner
 from evok.modbus.special import NvSave, OwPower, Watchdog
@@ -53,6 +54,19 @@ def _scanner(client) -> ModbusScanner:
     return scanner
 
 
+AI_MODES = {
+    "Voltage": {"value": 0, "unit": "V", "range": [0, 10]},
+    "Current": {"value": 1, "unit": "mA", "range": [0, 20]},
+}
+
+
+def _with(device, **attributes):
+    """ The device with the attributes of a scanned state, e.g. a value which is not a number """
+    for name, value in attributes.items():
+        setattr(device, name, value)
+    return device
+
+
 def samples() -> dict[str, list]:
     """One representative device of every device type of the response schemas"""
     client = _FakeClient()
@@ -64,11 +78,14 @@ def samples() -> dict[str, list]:
         "do": [do],
         "ro": [Relay("1_01", client, 0, 0, 1)],
         "led": [ULED("1_01", client, 0, 0, 1)],
-        "ai": [AnalogInput("1_01", client, 0)],
-        "ao": [AnalogOutput("1_01", client, 0)],
+        "ai": [AnalogInput("1_01", client, 0), _with(AnalogInput("1_02", client, 0, modes=AI_MODES), value="NaN")],
+        "ao": [AnalogOutput("1_01", client, 0), AnalogOutput("1_02", client, 0, modes=AI_MODES)],
         "wd": [Watchdog("1", client, 0, 1, 2)],
         "register": [Register("1_01", client, 0)],
-        "data_point": [DataPoint("1_01", client, 0, datatype="uint16", writable=True)],
+        "data_point": [
+            DataPoint("1_01", client, 0, datatype="uint16", writable=True),
+            OwTemperature("1_02", client, 0, 1, 1, datatype="int16", name="temperature", unit="C"),
+        ],
         "owpower": [OwPower("1", client, 0)],
         "nv_save": [NvSave("1", client, 0)],
         "owbus": [OwBusDriver("OWBUS")],
@@ -76,8 +93,12 @@ def samples() -> dict[str, list]:
         "1wdevice": [DS2408("29.000001", "DS2408", bus), DS2438("26.000001", "DS2438", bus)],
         "modbus_slave": [_scanner(client)],
         "device_info": [DeviceInfo("1", "Neuron", "M103", 0, 2)],
-        "serial_bus": [SerialBusDevice("S", object())],
-        "tcp_bus": [TcpBusDevice("T", object())],
+        "serial_bus": [
+            SerialBusDevice("S", object(), port="/dev/ttyNS0", baudrate=19200, parity="N", stopbits=1, timeout=0.5,
+                            retries=0, probe_timeout=0.1)
+        ],
+        "tcp_bus": [TcpBusDevice("T", object(), hostname="127.0.0.1", port=502, timeout=1.0, connect_timeout=2.0,
+                                 retries=0, probe_timeout=1.0)],
         "sequencer": [SequencerDevice(do)],
         "run": [Aliases({})],
     }
@@ -105,6 +126,13 @@ def test_response_schema_matches_full(dev):
         )
         missing = required - set(state)
         assert not missing, f"{dev} ({type(device).__name__}): full() does not emit the required {sorted(missing)}"
+
+
+@pytest.mark.parametrize("dev", sorted(schemas.responses))
+def test_full_is_valid_by_the_response_schema(dev):
+    """ The types of the values, also of a device before its first scan (null) and of a value which is not a number """
+    for device in samples()[dev]:
+        jsonschema.validate(device.full(), schemas.responses[dev])
 
 
 # The devtype list is not duplicated: RESPONSE_DEVTYPES in the registry is the single
