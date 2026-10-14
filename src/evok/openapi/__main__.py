@@ -18,8 +18,15 @@ from . import build_openapi
 DEFAULT_OUTPUT = "Evok_API_OAS.yaml"
 
 
+class _Dumper(yaml.SafeDumper):
+    """ The shared dicts of the schemas are written in full, without the anchors and aliases of YAML """
+
+    def ignore_aliases(self, data):
+        return True
+
+
 def render() -> str:
-    return yaml.safe_dump(build_openapi(), sort_keys=False, allow_unicode=True, width=120)
+    return yaml.dump(build_openapi(), Dumper=_Dumper, sort_keys=False, allow_unicode=True, width=120)
 
 
 def main() -> int:
