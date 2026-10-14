@@ -95,6 +95,36 @@ apis:
     prefix: evok/boiler-room
 ```
 
+### Example
+
+All the sections of the APIs are in `apis`. Without a section its defaults are used.
+
+```yaml title="API settings"
+apis:
+  port: 8080
+  address: ''                     # all interfaces, 127.0.0.1 if the option is missing
+  token: 3f6c2a8e5b1d4f7a9c0e2b4d6f8a1c3e5b7d9f0a2c4e6b8d0f1a3c5e7b9d2f4a
+  read_token: 9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b
+  allowed_origins: ["http://192.168.1.10:1880"]
+  rpc:
+    enabled: true                 # default true
+  websocket:
+    enabled: true                 # default false
+    all_filtered: false
+  webhook:
+    enabled: true                 # default false
+    address: http://192.168.1.20:8181
+    device_mask: ["di", "ro", "sensor"]
+    complex_events: true
+    min_interval: 1.0
+  mqtt:
+    enabled: false
+```
+
+!!! warning
+
+    The tokens above are only examples, make your own, e.g. by `openssl rand -hex 32`.
+
 ## Hardware configuration
 
 The hardware configuration is represented by a device tree with this structure:
@@ -244,6 +274,59 @@ TEMPM:
   interval: 10
   scan_interval: 60
   owpower: 1
+```
+
+## Complete example
+
+A `config.yaml` without autogen, e.g. prepared for a controller in advance: the local I/Os of a Patron
+by its Modbus TCP server, two extensions on the RS485 bus and a thermometer on the 1-Wire bus.
+The commented template is [`examples/config.yaml`](https://github.com/UnipiTechnology/evok/blob/dev-3.1/examples/config.yaml).
+
+```yaml title="config.yaml"
+autogen: false
+
+logging:
+  level: INFO
+
+apis:
+  port: 8080
+  address: 127.0.0.1
+  websocket:
+    enabled: true
+
+comm_channels:
+  LOCAL_TCP:
+    type: MODBUSTCP
+    hostname: 127.0.0.1
+    port: 502
+    device_info:
+      family: Patron
+      model: S167
+      board_count: 1
+    devices:
+      '1':
+        slave-id: 1
+        model: '00'
+  RS485_1:
+    type: MODBUSRTU
+    port: /dev/ttyNS0
+    baudrate: 19200
+    parity: 'N'
+    devices:
+      xS51:
+        slave-id: 1
+        model: xS51
+      xS11:
+        slave-id: 15
+        model: xS11
+  OWFS:
+    type: OWFS
+    interval: 15
+    scan_interval: 300
+    devices:
+      room:
+        type: DS18B20
+        address: 28.95DCD5090000.35
 ```
 
 ## Autogen
