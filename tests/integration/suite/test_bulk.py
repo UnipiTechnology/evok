@@ -32,17 +32,13 @@ def test_bulk_individual_assignments(http):
 
 
 def test_bulk_group_queries(http):
-    # BUG #1 (see FINDINGS.md): as of v3.0.6 the server's group_queries path uses
-    # map() (lazy) which is not JSON-serializable, so it returns an error
-    # envelope. This test encodes the CURRENT (buggy) behavior so replay passes;
-    # if the bug is fixed (wrap map() in list()), re-record and flip this to
-    # assert success.
-    payload = {"group_queries": [{"device_types": ["di", "ro"]}]}
+    # BUG #1 (see FINDINGS.md) is FIXED: group_queries used map() (lazy), which
+    # is not JSON-serializable, and returned an error envelope. Now each query
+    # returns the list of the states of its devices, in the order of the queries.
+    payload = {"group_queries": [{"device_types": ["di"]}, {"device_types": ["ro"]}]}
     r = http.post_json("/bulk/", payload)
     assert r.status == 200, r.raw_text
     body = r.body
-    # Either a successful group_queries list, or the known error envelope.
-    if "group_queries" in body:
-        assert isinstance(body["group_queries"], list)
-    else:
-        assert body.get("success") is False and "errors" in body
+    assert "group_queries" in body, body
+    assert isinstance(body["group_queries"], list)
+    assert len(body["group_queries"]) == 2

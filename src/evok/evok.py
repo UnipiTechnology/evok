@@ -105,14 +105,28 @@ class WhHandler:
             self.send_task = None
 
 
+def json_params(body: bytes) -> dict:
+    """ The params of a JSON body, ValueError (400) if it is not a JSON object """
+    kw = json.loads(body)
+    if not isinstance(kw, dict):
+        raise ValueError("The params must be a JSON object")
+    return kw
+
+
 class LegacyRestHandler(EvokWebHandlerBase):
     def _get_kw(self) -> dict:
+        """ The params of a form, or of a JSON object: with Content-Type application/json or a body starting with {,
+            which curl -d sends as a form; an empty body sets nothing
+        """
+        body = self.request.body.strip()
+        if self.request.headers.get('Content-Type', '').startswith('application/json') or body.startswith(b'{'):
+            return json_params(body)
         return {k: v[0].decode() for (k, v) in self.request.body_arguments.items()}
 
 
 class LegacyJsonHandler(EvokWebHandlerBase):
     def _get_kw(self) -> dict:
-        return json.loads(self.request.body)
+        return json_params(self.request.body)
 
 
 class LoadAllHandler(EvokWebHandlerBase):
