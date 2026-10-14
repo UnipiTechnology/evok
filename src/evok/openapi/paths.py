@@ -76,6 +76,7 @@ def _read_operation(device: DeviceType) -> dict:
     return {
         "tags": [device.tag],
         "summary": device.summary_get,
+        "description": device.get_description,
         "operationId": f"read-{device.segment}-object",
         "responses": {
             "200": {"description": "OK", "content": _content(_device_schema(device))},
@@ -91,6 +92,7 @@ def _write_operation(device: DeviceType) -> dict:
     return {
         "tags": [device.tag],
         "summary": device.summary_post,
+        "description": device.post_description,
         "operationId": f"post-rest-{device.segment}-circuit",
         "requestBody": _request_body(f"{device.component}_params"),
         "responses": {
