@@ -7,7 +7,7 @@ on:
   pull_request:
     paths:
       - 'tests/integration/**'
-      - 'evok/**'
+      - 'src/**'
       - '.github/workflows/lint.yml'
 
 concurrency:
@@ -57,12 +57,8 @@ jobs:
         # repo-relative files (ruff emits absolute paths).
         run: |
           set -o pipefail
-          uvx ruff check --output-format=github evok/ 2>&1 \
+          uvx ruff check --output-format=github src/ 2>&1 \
             | sed "s#file=$GITHUB_WORKSPACE/#file=#g"
-
-      - name: ruff format --check (evok, advisory)
-        run: |
-          uvx ruff format --check evok/ 2>&1
 
   evok-format:
     name: evok format check
@@ -75,4 +71,4 @@ jobs:
 
       - name: ruff format --check (evok, advisory)
         run: |
-          uvx ruff format --check evok/ 2>&1
+          uvx ruff format --check src/ 2>&1
