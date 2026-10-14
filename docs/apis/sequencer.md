@@ -21,10 +21,24 @@ the output stays in its state.
 
 - `running` - a pulse or a sequence is running, the former `pending` of the output
 - `name` - `pulse` or `sequence`, `null` when nothing runs
-- `step` / `steps` - the number of the done steps and of all steps of the running sequence
+- `step` / `steps` - the number of the done steps and of all steps of the running sequence, `null` when nothing runs
+- `alias` - the alias of the sequencer, if it has one; it is set by `alias` in the POST as of other devices
 
 An event of the sequencer is sent when a pulse or a sequence starts, does a step and ends, the changes
 of the output are sent as its own events.
+
+## Request
+
+A POST sets one of a pulse (`value` with `pulse_duration`), a sequence (`steps`) or `cancel`, more of them
+in one request are refused with `400`. The whole request is checked before any change:
+
+- `value` without `pulse_duration` is refused, the value of the output is set by the output itself,
+  `pulse_duration` without `value` too; `pulse_duration` must be greater than 0,
+- `final` requires `steps`, `steps` is a list of 1 to 100 steps,
+- the `delay` of a step must not be negative, a step and `final` must change the output, not contain `alias`.
+
+A new pulse or sequence replaces the running one without writing its `final`. The RPC methods
+`relay_set_for_time` and `output_set_for_time` start a pulse by the sequencer too.
 
 ## Pulse
 

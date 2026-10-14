@@ -6,6 +6,13 @@ info:
   summary: A web services API for Unipi products
   description: |
     ### <i class="fa-light fa-cubes"></i> Welcome to Evok REST API documentation <i class="fa-light fa-cubes">
+
+    This specification describes the REST API (the paths /rest/... and /json/...). The other APIs of Evok,
+    /bulk (several reads and writes in one request), /rpc (JSON-RPC) and /ws (WebSocket), are documented in
+    the pages [Bulk](https://evok.readthedocs.io/en/stable/apis/bulk/),
+    [RPC](https://evok.readthedocs.io/en/stable/apis/rpc/) and
+    [WebSocket](https://evok.readthedocs.io/en/stable/apis/websocket/) (docs/apis/bulk.md, rpc.md and
+    websocket.md in the repository).
   contact:
     name: Evok support
     email: support@unipi.technology
@@ -13,7 +20,7 @@ info:
   license:
     name: Apache 2.0
     url: 'https://www.apache.org/licenses/LICENSE-2.0.html'
-  version: 3.0.2
+  version: 3.1.0
   termsOfService: 'https://evok.readthedocs.io/'
 servers:
   - url: 'http://{unipi_device}:{port}'
@@ -276,7 +283,10 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
       operationId: get-all-circuits
-      description: Retrieve the full information dump of all circuits inside the system.
+      description: Retrieve the full information dump of all circuits inside the system - the states of the
+        devices of the types di, ro, do, ai, ao, sensor (temp), led, watchdog, modbus_slave, owpower, nv_save,
+        register, data_point, owbus and device_info. It leaves out serial_bus, tcp_bus, sequencer and run (the
+        aliases), read them by /{format}/{device_type}/all.
       x-stoplight:
         id: m7p89alenp2u3
       tags:
@@ -294,13 +304,7 @@ paths:
             - rest
           default: json
         description: Content type - use "json" for application/json OR "rest" for text/html.
-      - name: device_type
-        description: Device type
-        in: path
-        required: true
-        schema:
-          type: string
-          examples: ['ro', 'do', 'di', 'ai', 'ao', 'temp']
+      - $ref: '#/components/parameters/device_type'
     get:
       summary: Get all circuits of device type
       description: Read all devices of the same type present in the whole system.
@@ -357,29 +361,68 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                x-examples:
-                  Example 1:
-                    value: 0
-                properties:
+                oneOf:
+                  - type: object
+                    description: 'The parameter of one device, {"<parameter>": <its value>}'
+                    minProperties: 1
+                    maxProperties: 1
+                    additionalProperties: true
+                  - type: array
+                    description: With the circuit "all" the parameter of all devices of the type, the devices
+                      without the parameter are skipped
+                    items:
+                      type: object
+                      properties:
+                        circuit:
+                          type: string
+                      additionalProperties: true
+              examples:
+                one:
                   value:
-                    type: integer
-                    examples: [0]
+                    value: 0
+                all:
+                  value:
+                    - circuit: '1_01'
+                      value: 0
+                    - circuit: '1_02'
+                      value: 1
             text/html:
               schema:
-                type: object
-                x-examples:
-                  Example 1:
-                    value: 0
-                properties:
+                oneOf:
+                  - type: object
+                    description: 'The parameter of one device, {"<parameter>": <its value>}'
+                    minProperties: 1
+                    maxProperties: 1
+                    additionalProperties: true
+                  - type: array
+                    description: With the circuit "all" the parameter of all devices of the type, the devices
+                      without the parameter are skipped
+                    items:
+                      type: object
+                      properties:
+                        circuit:
+                          type: string
+                      additionalProperties: true
+              examples:
+                one:
                   value:
-                    type: integer
-                    examples: [0]
+                    value: 0
+                all:
+                  value:
+                    - circuit: '1_01'
+                      value: 0
+                    - circuit: '1_02'
+                      value: 1
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-      description: Retrieve specify parameter from specify (or all) device_type.
+        '500':
+          $ref: '#/components/responses/ServerError'
+      description: Retrieve a parameter (a property of the state, e.g. value, mode or alias) of one device,
+                   or with the circuit "all" of all devices of the type. The value has the type of the property
+                   in the state of the device. An unknown parameter is 404, with "all" only when no device of
+                   the type has it.
                    This is commonly used to quickly obtain the value without requiring additional data.
                    **It's recommended to use this endpoint as getter in most applications.**
       operationId: read-input-object-parameter
@@ -404,14 +447,7 @@ paths:
         in: path
         required: true
         description: Name of retrieved parameter
-      - schema:
-          type: string
-          examples: ['ro', 'do', 'di', 'ai', 'ao', 'temp']
-          default: 'do'
-        name: device_type
-        in: path
-        required: true
-        description: Name of retrieved parameter
+      - $ref: '#/components/parameters/device_type'
   /version:
     get:
       summary: Get version
@@ -425,7 +461,7 @@ paths:
             text/html:
               examples:
                 version:
-                  value: "v3.0.1"
+                  value: "v3.1.0"
       # for monitoring, the token is not required
       security:
         - {}
@@ -701,6 +737,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: post-rest-input-circuit
       x-stoplight:
         id: 3qe4b8bqygqvu
@@ -823,6 +861,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: post-rest-owpower
       parameters: []
       requestBody:
@@ -954,6 +994,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: post-rest-owbus-circuit
       parameters: []
       requestBody:
@@ -1050,7 +1092,9 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '503':
-          description: The Modbus unit of the output is not available.
+          $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: post-rest-sequencer-circuit
       requestBody:
         content:
@@ -1085,10 +1129,16 @@ paths:
             text/html:
               schema:
                 anyOf:
-                  - $ref: '#/components/schemas/Temp'
+                  - oneOf:
+                      - $ref: '#/components/schemas/Temp'
+                      - $ref: '#/components/schemas/Ow_ds2438'
+                      - $ref: '#/components/schemas/Ow_pio'
                   - type: array
                     items:
-                      $ref: '#/components/schemas/Temp'
+                      oneOf:
+                        - $ref: '#/components/schemas/Temp'
+                        - $ref: '#/components/schemas/Ow_ds2438'
+                        - $ref: '#/components/schemas/Ow_pio'
               examples:
                 2895DCD509000035:
                   value:
@@ -1117,10 +1167,16 @@ paths:
             application/json:
               schema:
                 anyOf:
-                  - $ref: '#/components/schemas/Temp'
+                  - oneOf:
+                      - $ref: '#/components/schemas/Temp'
+                      - $ref: '#/components/schemas/Ow_ds2438'
+                      - $ref: '#/components/schemas/Ow_pio'
                   - type: array
                     items:
-                      $ref: '#/components/schemas/Temp'
+                      oneOf:
+                        - $ref: '#/components/schemas/Temp'
+                        - $ref: '#/components/schemas/Ow_ds2438'
+                        - $ref: '#/components/schemas/Ow_pio'
               examples:
                 2895DCD509000035:
                   value:
@@ -1150,7 +1206,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-      description: Get all properties of 1-Wire temperature sensor
+      description: Get all properties of a 1-Wire sensor (or of all of them). The paths /{format}/sensor/{circuit}
+        and /{format}/1wdevice/{circuit} are the same, *sensor* and *1wdevice* are altnames of *temp*. Besides
+        the thermometers (DS18B20, DS18S20, dev *temp*) it returns the other 1-Wire devices - DS2438 and
+        DS2408, DS2406, DS2413 (dev *1wdevice*).
       operationId: read-temp-object
       tags:
         - 1-Wire bus
@@ -1188,8 +1247,11 @@ paths:
                 properties:
                   success:
                     $ref: '#/components/schemas/Status'
-                  temp:
-                    $ref: '#/components/schemas/Temp'
+                  result:
+                    oneOf:
+                      - $ref: '#/components/schemas/Temp'
+                      - $ref: '#/components/schemas/Ow_ds2438'
+                      - $ref: '#/components/schemas/Ow_pio'
                     x-stoplight:
                       id: u38ddede1rpq5
         '401':
@@ -1200,6 +1262,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: post-rest-temp-circuit
       parameters: []
       requestBody:
@@ -1210,7 +1274,7 @@ paths:
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/Temp_params'
-      description: Set reading interval.
+      description: Set the reading interval or the alias of a 1-Wire sensor (also of DS2438, DS2408, DS2406, DS2413).
       tags:
         - 1-Wire bus
         - Setter
@@ -1427,6 +1491,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: post-rest-modbus_slave-circuit
       parameters: []
       requestBody:
@@ -1771,6 +1837,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
       requestBody:
         content:
           application/json:
@@ -2052,6 +2120,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
       requestBody:
         content:
           application/json:
@@ -2232,6 +2302,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: post-rest-watchdog-circuit
       parameters: []
       requestBody:
@@ -2400,9 +2472,11 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: A sequence of the sequencer of the output runs, cancel it there first.
+          $ref: '#/components/responses/SequenceRunning'
         '503':
           $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: post-rest-relay-circuit
       parameters: []
       requestBody:
@@ -2643,9 +2717,11 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: A sequence of the sequencer of the output runs, cancel it there first.
+          $ref: '#/components/responses/SequenceRunning'
         '503':
           $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: post-rest-output-circuit
       parameters: []
       requestBody:
@@ -2814,9 +2890,11 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: A sequence of the sequencer of the output runs, cancel it there first.
+          $ref: '#/components/responses/SequenceRunning'
         '503':
           $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: post-rest-led-circuit
       requestBody:
         content:
@@ -3068,6 +3146,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: set-analog-output-circuit
       parameters: []
       requestBody:
@@ -3334,6 +3414,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: set-analog-input-circuit
       parameters: []
       requestBody:
@@ -3350,6 +3432,76 @@ paths:
       x-stoplight:
         id: nsu0vflqu8uxy
   '/{format}/nv_save/{circuit}':
+    get:
+      summary: Read non-volatile memory
+      responses:
+        '200':
+          description: OK
+          content:
+            text/html:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/NvSave'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/NvSave'
+              examples:
+                1:
+                  value:
+                    dev: nv_save
+                    circuit: '1'
+                    value: 0
+                    comm: ok
+                    last_comm: 0.041
+                all:
+                  value:
+                    - dev: nv_save
+                      circuit: '1'
+                      value: 0
+                      comm: ok
+                      last_comm: 0.041
+                    - dev: nv_save
+                      circuit: '2'
+                      value: 0
+                      comm: ok
+                      last_comm: 0.041
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/NvSave'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/NvSave'
+              examples:
+                1:
+                  value:
+                    dev: nv_save
+                    circuit: '1'
+                    value: 0
+                    comm: ok
+                    last_comm: 0.041
+                all:
+                  value:
+                    - dev: nv_save
+                      circuit: '1'
+                      value: 0
+                      comm: ok
+                      last_comm: 0.041
+                    - dev: nv_save
+                      circuit: '2'
+                      value: 0
+                      comm: ok
+                      last_comm: 0.041
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      description: Get the state of the saving to the non-volatile memory of a Modbus unit (or of all of them),
+        value 1 for 2 s after a save.
+      operationId: read-nvsave-object
+      tags:
+        - Non-volatile memory
+        - Getter
     post:
       summary: Save non-volatile memory
       description: Variable NV_save serves for saving the actual group settings as a default settings.
@@ -3382,6 +3534,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: post-rest-nvsave-circuit
       requestBody:
         content:
@@ -3429,44 +3583,44 @@ paths:
               examples:
                 Empty:
                   value:
-                    dev: dev
+                    dev: run
                     circuit: 'alias'
                     save: false
                     aliases: {}
                 Fill:
                   value:
-                    dev: dev
+                    dev: run
                     circuit: 'alias'
                     save: false
                     aliases:
                       light_living_room:
+                        circuit: "ro_1_01"
                         devtype: "ro"
-                        circuit: "1_01"
                       switch_living_room:
+                        circuit: "di_1_01"
                         devtype: "di"
-                        circuit: "1_01"
             application/json:
               schema:
                 $ref: '#/components/schemas/Aliases'
               examples:
                 Empty:
                   value:
-                    dev: dev
+                    dev: run
                     circuit: 'alias'
                     save: false
                     aliases: {}
                 Fill:
                   value:
-                    dev: dev
+                    dev: run
                     circuit: 'alias'
                     save: false
                     aliases:
                       light_living_room:
+                        circuit: "ro_1_01"
                         devtype: "ro"
-                        circuit: "1_01"
                       switch_living_room:
+                        circuit: "di_1_01"
                         devtype: "di"
-                        circuit: "1_01"
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -3510,24 +3664,17 @@ paths:
                     x-stoplight:
                       id: fl852484v6831
               examples:
-                Empty:
+                Saved:
                   value:
-                    dev: dev
-                    circuit: 'alias'
-                    save: false
-                    aliases: {}
-                Fill:
-                  value:
-                    dev: dev
-                    circuit: 'alias'
-                    save: false
-                    aliases:
-                      light_living_room:
-                        devtype: "ro"
-                        circuit: "1_01"
-                      switch_living_room:
-                        devtype: "di"
-                        circuit: "1_01"
+                    success: true
+                    result:
+                      dev: run
+                      circuit: 'alias'
+                      save: false
+                      aliases:
+                        light_living_room:
+                          circuit: "ro_1_01"
+                          devtype: "ro"
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -3536,6 +3683,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
       operationId: post-force-save-aliases
       x-stoplight:
         id: ciz2wu1ha8oic
@@ -3558,41 +3707,43 @@ paths:
             application/json:
               schema:
                 type: object
-                x-examples:
-                  Example 1:
-                    value: 0
                 properties:
-                  value:
-                    type: integer
-                    examples: [0]
+                  success:
+                    $ref: '#/components/schemas/Status'
+                  result:
+                    type: object
+                    description: The state of the device with its new alias, as by GET of the device
               examples:
                 LED:
                   value:
-                    dev: led
-                    circuit: 1_01
-                    value: 0
-                    comm: ok
-                    last_comm: 0.041
-                    alias: "debug-led"
+                    success: true
+                    result:
+                      dev: led
+                      circuit: 1_01
+                      value: 0
+                      comm: ok
+                      last_comm: 0.041
+                      alias: "debug-led"
             text/html:
               schema:
                 type: object
-                x-examples:
-                  Example 1:
-                    value: 0
                 properties:
-                  value:
-                    type: integer
-                    examples: [0]
+                  success:
+                    $ref: '#/components/schemas/Status'
+                  result:
+                    type: object
+                    description: The state of the device with its new alias, as by GET of the device
               examples:
                 LED:
                   value:
-                    dev: led
-                    circuit: 1_01
-                    value: 0
-                    comm: ok
-                    last_comm: 0.041
-                    alias: "debug-led"
+                    success: true
+                    result:
+                      dev: led
+                      circuit: 1_01
+                      value: 0
+                      comm: ok
+                      last_comm: 0.041
+                      alias: "debug-led"
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -3601,6 +3752,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
       requestBody:
         content:
           application/json:
@@ -3632,20 +3785,13 @@ paths:
     parameters:
       - schema:
           type: string
-          examples: ['1_01', '1_02', '2_01', 'all']
+          examples: ['1_01', '1_02', '2_01']
         name: circuit
         in: path
         required: true
-        description: Device circuit (or "all"). You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
+        description: Device circuit or its current alias, not "all". You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
       - $ref: '#/components/parameters/format'
-      - schema:
-          type: string
-          examples: ['ro', 'do', 'di', 'ai', 'ao', 'temp']
-          default: 'do'
-        name: device_type
-        in: path
-        required: true
-        description: Name of retrieved parameter
+      - $ref: '#/components/parameters/device_type'
 components:
   schemas:
     Relay_output:
@@ -3685,6 +3831,11 @@ components:
       description: User-configurable parameters of relay output device.
       type: object
       properties:
+        alias:
+          type: string
+          maxLength: 64
+          examples: [my_relay]
+          description: Alias of the device, an empty string deletes it
         value:
           examples: [0, 1, false, true]
           type:
@@ -3745,18 +3896,27 @@ components:
       description: User-configurable parameters of single digital output device.
       type: object
       properties:
+        alias:
+          type: string
+          maxLength: 64
+          examples: [my_output]
+          description: Alias of the device, an empty string deletes it
         pwm_freq:
-          type: number
+          type: [number, string, 'null']
           examples: [50, 1000, 50000]
           description: Frequency in Hz shared by the PWM outputs of the group, up to 50000 Hz on the boards
             with a HW timer, up to 1000 Hz with the PWM of the firmware. The nearest available frequency is set,
-            the result has it.
+            the result has it. A string is converted to a number. Null in the state of an output without PWM,
+            setting it there is an error.
         pwm_duty:
-          type: integer
-          examples: [0, 25, 50, 100]
+          type: [number, string, 'null']
+          examples: [0, 25, 50.5, 100]
           minimum: 0
           maximum: 100
-          description: Parameter is mutually exclusive with *value*
+          description: Duty cycle in percent, a float; the state has it rounded to 0.1 (to an integer with the PWM
+            of the firmware). Parameter is mutually exclusive with *value*, except 0 with value 0 and 100 with
+            value 1. A string is converted to a number. Null in the state of an output without PWM, setting it
+            there is an error.
         value:
           examples: [1]
           type:
@@ -3847,6 +4007,11 @@ components:
       type: object
       description: User-configurable parameters of single digital input device.
       properties:
+        alias:
+          type: string
+          maxLength: 64
+          examples: [my_input]
+          description: Alias of the device, an empty string deletes it
         debounce:
           type: integer
           description: Debounce time in milliseconds/10 (10 == 1ms).
@@ -3884,22 +4049,25 @@ components:
       type: object
       description: User-defined params of any single analog output.
       properties:
+        alias:
+          type: string
+          maxLength: 64
+          examples: [my_analog_output]
+          description: Alias of the device, an empty string deletes it
         value:
-          type: number
+          type: [number, string]
           x-stoplight:
             id: 10dcjsr141agy
           format: float
+          minimum: 0
           examples: [0.01, 2.1, 3, 5.5]
-          description: Desired/actual value of the output
+          description: Desired/actual value of the output in the unit of its mode, a string is converted to a number
         mode:
           x-stoplight:
             id: a6vbzc22akz0m
-          description: Actual mode of the analog output. Not all modes are available on every input - see *modes* property.
-          enum:
-            - Voltage
-            - Current
-            - Resistance
-          default: Voltage
+          type: [string, 'null']
+          description: Actual mode of the analog output, one of the keys of its *modes* property - Voltage, Current
+            or Resistance on the Neuron boards, given by the HW definition on the other units. Null in an unknown mode.
           examples: [Voltage]
     Analog_input_params:
       title: Analog inputs params
@@ -3908,16 +4076,16 @@ components:
       type: object
       description: User-defined params of any single analog input.
       properties:
+        alias:
+          type: string
+          maxLength: 64
+          examples: [my_analog_input]
+          description: Alias of the device, an empty string deletes it
         mode:
-          description: Actual mode of the analog input. Not all modes are available on every input - see *modes* property.
-          enum:
-            - Disabled
-            - Voltage
-            - Voltage2V5
-            - Current
-            - Resistance3W
-            - Resistance2W
-          default: Voltage
+          type: [string, 'null']
+          description: Actual mode of the analog input, one of the keys of its *modes* property, which are given
+            by the [HW definition](https://evok.readthedocs.io/en/stable/configs/hw_definitions/), e.g. Disabled,
+            Voltage, Voltage2V5, Current, Resistance3W or Resistance2W. Null in an unknown mode.
           examples: [Voltage]
     Analog_output:
       title: Analog output
@@ -3936,6 +4104,20 @@ components:
               type: string
               examples: ['1_01', '2_01', '2_02']
               description: Device circuit (or "all"). You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
+              readOnly: true
+            unit:
+              type: [string, 'null']
+              examples: [V]
+              description: Unit of the current mode, null in an unknown mode or in a mode without a unit
+              readOnly: true
+            range:
+              type: [array, 'null']
+              examples: [[0, 10]]
+              description: Range of the current mode, null in an unknown mode or in a mode without a range
+              minItems: 2
+              maxItems: 2
+              items:
+                type: number
               readOnly: true
             modes:
               readOnly: true
@@ -3966,7 +4148,7 @@ components:
                     minItems: 2
                     maxItems: 2
                     items:
-                      type: integer
+                      type: number
         - $ref: '#/components/schemas/Analog_output_params'
           x-stoplight:
             id: g7ylrfaz0x44y
@@ -4007,6 +4189,20 @@ components:
               examples: [2.2, 'NaN', null]
               description: Value in the unit of the mode, 'NaN', 'Infinity' or '-Infinity' for a float value which is not finite, null in an unknown mode or before the first read
               readOnly: true
+            unit:
+              type: [string, 'null']
+              examples: [V]
+              description: Unit of the current mode, null in an unknown mode or in a mode without a unit
+              readOnly: true
+            range:
+              type: [array, 'null']
+              examples: [[0, 10]]
+              description: Range of the current mode, null in an unknown mode or in a mode without a range
+              minItems: 2
+              maxItems: 2
+              items:
+                type: number
+              readOnly: true
             modes:
               readOnly: true
               description: Supported modes of the analog input with their unit and range.
@@ -4043,7 +4239,7 @@ components:
                     minItems: 2
                     maxItems: 2
                     items:
-                      type: integer
+                      type: number
         - $ref: '#/components/schemas/Analog_input_params'
       examples:
         - circuit: 2_01
@@ -4084,6 +4280,11 @@ components:
         id: kzm0bs4t8n0ma
       type: object
       properties:
+        alias:
+          type: string
+          maxLength: 64
+          examples: [my_led]
+          description: Alias of the device, an empty string deletes it
         value:
           type:
             - string
@@ -4127,18 +4328,32 @@ components:
           value: 1
           timeout: 5000
       properties:
+        alias:
+          type: string
+          maxLength: 64
+          examples: [my_watchdog]
+          description: Alias of the device, an empty string deletes it
         value:
           type:
             - string
             - number
+            - boolean
           description: Enable (1) or disable (0) master watchdog timer. The write clears *was_wd_reset*.
           default: 0
           examples: [1]
         timeout:
-          type: integer
-          description: Master watchdog timeout in msec
+          type: [integer, string]
+          minimum: 0
+          description: Master watchdog timeout in msec, a string is converted to an integer, a value over 65535
+            is clamped to 65535
           default: 5000
           examples: [3000]
+        reset:
+          type: [boolean, integer, string]
+          writeOnly: true
+          examples: [true]
+          description: A true value (also `1` or `'true'` in a form) restarts the Modbus unit at once,
+            only on a unit with the reset coil in its HW definition, it is ignored on the others.
         nv_save:
           deprecated: true
           description: __Deprecated__ and not supported, setting it returns an error. Use the device
@@ -4220,11 +4435,17 @@ components:
                 id: hyjcu9yzunw7k
               description: Modbus address (unit-ID)
               readOnly: true
+            modbus_spec:
+              type: string
+              examples: ['127.0.0.1', '/dev/ttyNS0']
+              description: The host of a Modbus TCP slave or the serial port of a Modbus RTU slave
+              readOnly: true
             scan_interval:
               type: number
               x-stoplight:
                 id: 1r78ymgsba7ij
-              description: 'Period of slave scanning [seconds]'
+              description: 'Period of slave scanning [seconds], given by scan_frequency in the configuration'
+              readOnly: true
             scan_enabled:
               type: boolean
               description: The slave is scanned periodically, without it the values of its devices are changed
@@ -4283,7 +4504,8 @@ components:
               examples: [S103, S167, L533]
               default: S167
             sn:
-              type: integer
+              type: [integer, 'null']
+              description: Serial number, null when it is not known
               x-stoplight:
                 id: jht5fxwjjthbz
               examples: [81, 44, 685]
@@ -4498,12 +4720,15 @@ components:
         1:
           value: 1
       properties:
+        alias:
+          type: string
+          maxLength: 64
+          examples: [my_owpower]
+          description: Alias of the device, an empty string deletes it
         value:
-          enum:
-            - 1
-            - 0
-          examples: [0]
-          description: Set 1 to disable 1-Wire bus power, 0 powers the bus
+          type: [integer, string, boolean]
+          examples: [0, 1, true]
+          description: Set 1 (also true or '1') to disable 1-Wire bus power, 0 powers the bus. The state has 0 or 1.
     NvSave:
       title: Non-volatile memory
       x-stoplight:
@@ -4540,13 +4765,17 @@ components:
         1:
           value: 1
       properties:
+        alias:
+          type: string
+          maxLength: 64
+          examples: [my_nv_save]
+          description: Alias of the device, an empty string deletes it
         value:
-          enum:
-            - 0
-            - 1
-          examples: [1]
+          type: [integer, string, boolean]
+          examples: [1, true]
           default: 1
-          description: Set 1 to save to non-volatile memory.
+          description: Set 1 (also true or '1') to save the settings to the non-volatile memory, 0 does nothing.
+            The state has 1 for 2 s after the write, a new write is refused (400) until then.
     Modbus_slave_params:
       title: Modbus slave params
       type: object
@@ -4568,11 +4797,13 @@ components:
       type: object
       properties:
         interval:
-          type: number
+          type: [integer, string]
           x-stoplight:
             id: oe0zf1uu764jp
           examples: [10, 20, 30]
-          default: 10
+          default: 60
+          description: 'Default polling period of the found sensors [seconds], a positive number truncated to an
+            integer, also a string'
         do_scan:
           type: [boolean, integer, string]
           x-stoplight:
@@ -4586,11 +4817,13 @@ components:
           default: false
           description: Reset the 1-Wire master by owpower, also `1` or `'true'` in a form
         scan_interval:
-          type: number
+          type: [integer, string]
           x-stoplight:
             id: hr153xbhtdbgp
           examples: [60, 120, 600]
-          default: 60
+          default: 300
+          description: 'Period of the search for new devices [seconds], truncated to an integer, also a string;
+            0 searches only after the start and on *do_scan*'
     Owbus:
       title: 1-Wire bus
       x-stoplight:
@@ -4639,13 +4872,19 @@ components:
         id: grevutt2c5wsh
       type: object
       properties:
+        alias:
+          type: string
+          maxLength: 64
+          examples: [my_sensor]
+          description: Alias of the device, an empty string deletes it
         interval:
-          type: number
+          type: [integer, string]
           x-stoplight:
             id: k6iqij8wvobw8
           examples: [10, 20, 30]
-          default: 10
-          description: 'polling period [seconds]'
+          default: 15
+          description: 'Polling period [seconds], a positive number truncated to an integer, also a string. The default
+            is 15 s for a sensor of the configuration, the interval of the bus for a found sensor.'
     Temp:
       title: Temperature sensor
       x-examples:
@@ -4677,17 +4916,19 @@ components:
               description: Device circuit (or "all"). You can learn more about the circuit parameter in [documentation](https://evok.readthedocs.io/en/stable/circuit/).
               readOnly: true
             value:
-              type: number
+              type: [number, 'null']
               x-stoplight:
                 id: 2lexx5i71c7wz
               examples: [21.5]
-              description: temperature in Celsius degrees
+              description: temperature in Celsius degrees, null before the first read
               readOnly: true
             time:
               type: number
               x-stoplight:
                 id: 1w88mzucuc8uc
-              description: the timestamp of the last captured valid value (is considered from the system boot).
+              deprecated: true
+              description: __Deprecated__, use *last_comm*. The monotonic time of the event loop of the last
+                successful read in seconds (counted from the system boot), 0 before it.
               examples: [4171.72855072]
               readOnly: true
             address:
@@ -4723,6 +4964,135 @@ components:
           time: 4306.778
           interval: 10
           type: DS18B20
+          comm: ok
+          last_comm: 0.041
+    Ow_ds2438:
+      title: 1-Wire DS2438 battery monitor
+      description: A DS2438 (e.g. a 1-Wire humidity sensor with HIH4000), the values are null before the first
+        read. The state of a GET of temp, sensor or 1wdevice.
+      allOf:
+        - $ref: '#/components/schemas/Comm'
+        - type: object
+          properties:
+            dev:
+              type: string
+              examples: ['1wdevice']
+              description: Device type, 1wdevice is an altname of temp.
+              readOnly: true
+            circuit:
+              type: string
+              examples: ['26F0A2CB01000077']
+              description: Device circuit, the address without the dots or the name in the configuration.
+              readOnly: true
+            humidity:
+              type: [number, 'null']
+              examples: [45.12]
+              description: Relative humidity of a HIH4000 at VAD in percent, computed from vad, vdd and temp
+              readOnly: true
+            vdd:
+              type: [number, 'null']
+              examples: [5.02]
+              description: Supply voltage in V
+              readOnly: true
+            vad:
+              type: [number, 'null']
+              examples: [2.13]
+              description: Voltage of the A/D input in V
+              readOnly: true
+            temp:
+              type: [number, 'null']
+              examples: [22.5]
+              description: Temperature in Celsius degrees
+              readOnly: true
+            vis:
+              type: [number, 'null']
+              examples: [0.0002441]
+              description: Voltage of the current sense resistor in V
+              readOnly: true
+            lost:
+              type: boolean
+              description: 'if true, the values are not actual (last device reading failed)'
+              readOnly: true
+            time:
+              type: number
+              deprecated: true
+              description: __Deprecated__, use *last_comm*. The monotonic time of the event loop of the last
+                successful read in seconds, 0 before it.
+              readOnly: true
+            type:
+              type: string
+              examples: [DS2438]
+              readOnly: true
+        - $ref: '#/components/schemas/Temp_params'
+      examples:
+        - dev: 1wdevice
+          circuit: 26F0A2CB01000077
+          humidity: 45.12
+          vdd: 5.02
+          vad: 2.13
+          temp: 22.5
+          vis: 0.0002441
+          lost: false
+          time: 4306.778
+          interval: 15
+          type: DS2438
+          comm: ok
+          last_comm: 0.041
+    Ow_pio:
+      title: 1-Wire DS2408, DS2406 or DS2413 switch
+      description: The levels of the PIOs of a DS2408, DS2406 or DS2413, read-only. The state of a GET of temp,
+        sensor or 1wdevice.
+      allOf:
+        - $ref: '#/components/schemas/Comm'
+        - type: object
+          properties:
+            dev:
+              type: string
+              examples: ['1wdevice']
+              description: Device type, 1wdevice is an altname of temp.
+              readOnly: true
+            circuit:
+              type: string
+              examples: ['29.1D9F0F000000']
+              description: Device circuit, the address with the dot of a found device or the name in the configuration.
+              readOnly: true
+            address:
+              type: string
+              examples: ['29.1D9F0F000000']
+              readOnly: true
+            value:
+              type: [array, 'null']
+              items:
+                type: integer
+                enum: [0, 1]
+              examples: [[1, 1, 0, 1, 1, 1, 1, 1]]
+              description: Levels of the PIOs, the first one first - 8 of a DS2408, 2 of a DS2406 or DS2413;
+                null before the first read
+              readOnly: true
+            lost:
+              type: boolean
+              description: 'if true, the values are not actual (last device reading failed)'
+              readOnly: true
+            time:
+              type: number
+              deprecated: true
+              description: __Deprecated__, use *last_comm*. The monotonic time of the event loop of the last
+                successful read in seconds, 0 before it.
+              readOnly: true
+            type:
+              type: string
+              enum: [DS2408, DS2406, DS2413]
+              readOnly: true
+        - $ref: '#/components/schemas/Temp_params'
+      examples:
+        - dev: 1wdevice
+          circuit: 29.1D9F0F000000
+          address: 29.1D9F0F000000
+          value: [1, 1, 0, 1, 1, 1, 1, 1]
+          lost: false
+          time: 4306.778
+          interval: 15
+          type: DS2408
           comm: ok
           last_comm: 0.041
     Register_params:
@@ -4873,30 +5243,40 @@ components:
               type: object
               x-stoplight:
                 id: lxso4vefmsdpd
+              description: The aliases of the registered devices by their name; an alias loaded from the file
+                of a device which is not registered (e.g. an offline Modbus unit) is not listed.
+              readOnly: true
               additionalProperties:
                 x-stoplight:
                   id: hxfaoodapkxym
                 type: object
-                examples: [kujda]
+                properties:
+                  circuit:
+                    type: string
+                    examples: [ro_1_01]
+                    description: The device type and the circuit of the device, '<devtype>_<circuit>'
+                  devtype:
+                    type: string
+                    examples: [ro]
                 readOnly: true
         - $ref: '#/components/schemas/Aliases_params'
           x-stoplight:
             id: 98p7fkz6odr1g
       examples:
-        - dev: dev
+        - dev: run
           circuit: 'alias'
           save: false
           aliases: {}
-        - dev: dev
+        - dev: run
           circuit: 'alias'
           save: false
           aliases:
             light_living_room:
+              circuit: "ro_1_01"
               devtype: "ro"
-              circuit: "1_01"
             switch_living_room:
+              circuit: "di_1_01"
               devtype: "di"
-              circuit: "1_01"
     Aliases_params:
       title: Alias params
       x-stoplight:
@@ -4904,10 +5284,11 @@ components:
       type: object
       properties:
         save:
-          type: boolean
+          type: [boolean, integer, string]
           x-stoplight:
             id: p20kj1i60jljw
-          description: Force saves actual aliases list to non-volatile memory
+          description: Force saves actual aliases list to the file of the aliases, also `1` or `'true'` in a form.
+            The state has always false.
           default: true  # It is true for force save example.
         delete:
           type: string
@@ -4990,7 +5371,32 @@ components:
               value:
                 success: false
                 errors:
-                  ValueError: "invalid literal for int() with base 10: 'on'"
+                  ValueError: "Invalid boolean value 'high'"
+    SequenceRunning:
+      description: A sequence of the sequencer of the output runs, cancel it there first. The output is
+        not changed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            sequence-running:
+              value:
+                success: false
+                errors:
+                  SequenceRunning: 'RO 2_01: a sequence of its sequencer ro_2_01 runs, cancel it there'
+    ServerError:
+      description: An internal error of Evok, the details are in its log
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            internal:
+              value:
+                success: false
+                errors:
+                  Server error: internal
     Unavailable:
       description: The Modbus unit of the device failed its last scan, the device is not changed
         (UnitUnavailable), or a request of the change failed, the writes before it are done
@@ -5048,12 +5454,15 @@ components:
         default: json
     device_type:
       name: device_type
-      description: Device type
+      description: 'Device type, one of: ro, do, di, ai, ao, led, watchdog, register, data_point, modbus_slave,
+        device_info, serial_bus, tcp_bus, owpower, nv_save, sequencer, owbus, sensor (the 1-Wire devices), run
+        (the aliases, circuit alias). Altnames: relay = ro; output, digitaloutput = do; input, digitalinput = di;
+        analoginput = ai; analogoutput = ao; wd = watchdog; temp, 1wdevice = sensor. An unknown type is 404.'
       in: path
       required: true
       schema:
         type: string
-        examples: [ai, ao di, do, wd, led]
+        examples: [ai, ao, di, do, ro, wd, led, temp]
 tags:
   - name: General
     description: Other commands not directly couped with any specific device type

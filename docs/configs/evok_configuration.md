@@ -8,11 +8,24 @@ The configuration directory (with `config.yaml`, `hw_definitions/` and optional 
 evok --config-dir ./my-config --alias-file ./alias.yaml
 ```
 
+## Logging
+
+- `level` - minimum severity of the logged messages (`CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`,
+  default `INFO`), the option `-d` on the command line sets `DEBUG`
+- `file` - an optional log file, it is rotated daily and 7 old files are kept. Without it `GET /log`
+  returns `404`.
+
+```yaml title="Logging"
+logging:
+  level: WARNING
+  file: /var/log/evok.log
+```
+
 ## API settings
 
 In this section you can configure address and port for API listening. These settings will be applied to protocols [REST](../apis/rest.md), [JSON](../apis/json.md), [BULK](../apis/bulk.md), [RPC](../apis/rpc.md), [WebSocket](../apis/websocket.md). The [Webhook](../apis/webhook.md) sends requests to its address and the [MQTT](../apis/mqtt.md) API connects to a broker, see their sections.
 
-- `port` - port for API listening, needs to be changed in `/etc/nginx/sites-available/evok` too
+- `port` - port for API listening (default `8080`), needs to be changed in `/etc/nginx/sites-available/evok` too
 - `address` - address of the interface for API listening, `127.0.0.1` if the parameter is missing,
   set it to an empty value to listen on all interfaces
 - `token` - an optional token required by all APIs except `/version`, a long random string,
@@ -31,39 +44,46 @@ In this section you can configure address and port for API listening. These sett
 
 ### Websocket
 
-- `enabled` - enables websocket API (`true` / `false`)
-- `all_filtered` - all WebSocket requests will be subject to the filtering set by 'filter' (`true` / `false`)
+- `enabled` - enables websocket API (`true` / `false`, default `false`)
+- `all_filtered` - all WebSocket requests will be subject to the filtering set by 'filter' (`true` / `false`,
+  default `false`)
 
 ### Webhook
 
-- `enabled` - enables webhook notifications (`true` / `false`)
-- `address` - address (with port) to which notifications should be sent
-- `device_mask` - list of the device types to notify on, e.g. `["di", "wd"]`; the alternative names as `input`, `wd`
-  or `temp` are accepted
+- `enabled` - enables webhook notifications (`true` / `false`, default `false`)
+- `address` - address (with port) to which notifications should be sent (default `http://127.0.0.1:80/index.html`)
+- `device_mask` - list of the device types to notify on, e.g. `["di", "wd"]` (default `["di", "sensor", "watchdog"]`);
+  the alternative names as `input`, `wd` or `temp` are accepted
 - `complex_events` - Evok will send POST requests with the same data as WebSocket, rather than an empty GET request
+  without the states (`true` / `false`, default `false`)
 - `min_interval` - minimum time between two requests in seconds (default `1.0`). The changes in the meantime are merged
-  into one request with the last state of each device, only one request is sent at a time
+  into one request with the last state of each device, only one request is sent at a time.
+  A failed request is not repeated, the next change is sent.
 
 ### MQTT
 
-The [MQTT](../apis/mqtt.md) API, a client of a broker. Evok does not start with an invalid option.
+The [MQTT](../apis/mqtt.md) API, a client of a broker. The options are checked only if it is enabled,
+Evok does not start with an invalid or unknown option.
 
 - `enabled` - enables the MQTT API (`true` / `false`, default `false`)
 - `hostname` - hostname of the broker (default `127.0.0.1`)
 - `port` - port of the broker (default `1883`, `8883` with TLS)
-- `username`, `password` - an optional user of the broker
+- `username`, `password` - an optional user of the broker, `password` requires `username`.
+  Without `username` and `read_only` Evok logs a warning that the commands are accepted from any client of the broker.
 - `tls` - connects by TLS with the certificates of the system (`true` / `false`, default `false`)
 - `ca_file` - an optional file of the certificate authority of the broker, it enables TLS
-- `cert_file`, `key_file` - an optional certificate and key of the client, they enable TLS
+- `cert_file`, `key_file` - an optional certificate and key of the client, they enable TLS, `key_file` requires `cert_file`
 - `client_id` - client identifier (default `evok-<hostname of the unit>`), it must be unique on the broker
-- `prefix` - the first part of the topics (default `evok`), e.g. `evok/boiler-room` for more units on one broker
+- `prefix` - the first part of the topics (default `evok`), e.g. `evok/boiler-room` for more units on one broker;
+  it must not contain `+` or `#` and must not start or end with `/`
 - `qos` - QoS of the published states and the commands (`0`, `1`, `2`, default `0`)
 - `keepalive` - keepalive interval in seconds (default `60`), a lost connection is detected after 1.5 times it
-- `device_mask` - list of the published device types (default all), e.g. `["di", "ro", "sensor"]`
+- `device_mask` - list of the published device types (default all), e.g. `["di", "ro", "sensor"]`,
+  an unknown device type is an error
 - `read_only` - Evok does not receive the commands (`true` / `false`, default `false`)
 - `ha_discovery` - announces the devices to Home Assistant by the MQTT discovery (`true` / `false`, default `false`),
   see [Home Assistant](../apis/mqtt.md#home-assistant)
-- `ha_prefix` - the discovery prefix of Home Assistant (default `homeassistant`)
+- `ha_prefix` - the discovery prefix of Home Assistant (default `homeassistant`), the same rules as `prefix`
 
 ```yaml title="MQTT"
 apis:
@@ -130,7 +150,8 @@ comm_channels:
         - `master` - the 1-Wire master of the kernel, e.g. `w1_bus_master1` (Default is the first one).
           Each OWFS bus needs its own master, the second bus with the same master is not created
           and the error is logged.
-        - `interval` - interval of values updating in seconds, a positive number (Default value is `60`)
+        - `interval` - interval of values updating in seconds, a positive number (Default value is `60`).
+          A change by the API sets the interval of all sensors of the bus.
         - `scan_interval` - interval in seconds of taking the devices found by the kernel, which searches the bus
           every 10 s; `0` takes them only after the start and on request (`do_scan`) (Default value is `300`).
           A change by the API applies at once.
@@ -172,7 +193,8 @@ comm_channels:
 
 #### OWFS
 
-- `type` - 1-Wire sensor type, options: [`DS18B20`, `DS18S20`, `DS2438`, `DS2408`, `DS2406`, `DS2413`].
+- `type` - 1-Wire sensor type, required, options: [`DS18B20`, `DS18S20`, `DS2438`, `DS2408`, `DS2406`, `DS2413`].
+  A sensor with a missing or unknown type is not created and the error is logged.
   The `value` of a DS2406 is the state of its channel flip-flops, the kernel does not give the sensed levels.
 - `address` - 1-Wire device address, the family and the serial number as listed by owserver, e.g. `28.4E2025090000`;
   the CRC (`28.4E2025090000.FF`), the dots and the case are not significant. The name of the device in sysfs
@@ -232,6 +254,8 @@ but it works only for Unipi controllers.
 You can enable this feature with `autogen: true` in config.
 If this feature is enabled, Evok includes the file `autogen.yaml` from the configuration directory (`/etc/evok/autogen.yaml` by default).
 This file contains the hardware configuration of the running device.
+`autogen.yaml` is loaded first and `config.yaml` overrides it: the sections are merged key by key,
+a value of `config.yaml` (also a list) replaces the value of `autogen.yaml`.
 `unipi-os-configurator` generates this file if a hardware change has been detected.
 You can force the creation of this file using this command:
 

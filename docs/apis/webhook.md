@@ -6,6 +6,11 @@ Evok sends at most one request per `min_interval` seconds (1 s by default) and w
 the next request. The changes in the meantime are merged into one request, which contains the last state
 of each changed device, always as a list.
 
+- With `complex_events: true` the states are sent by POST as a JSON list. Without it (the default) Evok sends
+  only an empty GET without the states, the client reads them by another API.
+- `device_mask` is `["di", "sensor", "watchdog"]` by default, altnames such as `input` or `relay` are accepted.
+- A failed request is not retried, its states are not sent again, the next change is sent.
+
 ## Examples
 
 For python examples you need installed `flask` package. You can install it with this command: `pip3 install flask`.
