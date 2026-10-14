@@ -60,11 +60,11 @@ def _result(schema: dict) -> dict:
 
 
 def _request_body(component: str) -> dict:
-    """The params of a POST: a form of /rest, a JSON object of /json"""
+    """The params of a POST: a form or a JSON object of /rest, a JSON object of /json"""
     return {
         "required": True,
-        "description": "The params as a form (`application/x-www-form-urlencoded`) of the format *rest*, "
-        "as a JSON object of the format *json*.",
+        "description": "The params as a form (`application/x-www-form-urlencoded`) or a JSON object of the format "
+        "*rest*, as a JSON object of the format *json*.",
         "content": {
             "application/x-www-form-urlencoded": {"schema": _ref(component)},
             "application/json": {"schema": _ref(component)},

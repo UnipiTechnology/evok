@@ -111,7 +111,8 @@ PARAMETERS: dict[str, dict] = {
         "in": "path",
         "required": True,
         "schema": {"type": "string", "enum": ["json", "rest"], "examples": ["json"]},
-        "description": "Both return JSON; a POST of *rest* takes the params as a form, of *json* as a JSON object.",
+        "description": "Both return JSON; a POST of *rest* takes the params as a form or a JSON object, "
+        "of *json* as a JSON object.",
     },
     "device_type": {
         "name": "device_type",

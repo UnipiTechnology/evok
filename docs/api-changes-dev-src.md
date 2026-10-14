@@ -66,6 +66,9 @@ the HW definitions. The incompatible changes come first. Every change names its 
   token, 503 unavailable unit, 500 internal error. — `4b36483`, `a3f4679`, `9f9482c`
 - `POST /rest/all` returns 405, a POST with another part of the URL than `/alias` returns 404. — `3c8f58e`, `34bdcd2`
 - The alias `all` is reserved, an alias has at most 64 characters. — `34bdcd2`, `3bae093`
+- `/rest/*` reads also a JSON object (`Content-Type: application/json` or a body starting with `{`), its params are
+  validated; before a JSON body was ignored and the POST returned 200 without a change. A JSON body which is not
+  an object is refused with 400 on `/rest/*` and `/json/*`, it was a 500. — `23831b4`
 
 ### Bulk
 

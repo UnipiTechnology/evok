@@ -62,6 +62,9 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
   jen pro čtení, 503 nedostupná jednotka, 500 interní chyba. — `4b36483`, `a3f4679`, `9f9482c`
 - `POST /rest/all` vrací 405, POST s jinou částí URL než `/alias` vrací 404. — `3c8f58e`, `34bdcd2`
 - Alias `all` je rezervovaný, alias má nejvýš 64 znaků. — `34bdcd2`, `3bae093`
+- `/rest/*` čte i JSON objekt (`Content-Type: application/json` nebo tělo začínající `{`) a kontroluje jeho
+  parametry; dřív se JSON tělo ignorovalo a POST vrátil 200 beze změny. JSON tělo, které není objekt, se na
+  `/rest/*` i `/json/*` odmítne s 400, dřív 500. — `23831b4`
 
 ### Bulk
 
