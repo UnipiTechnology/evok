@@ -8,16 +8,17 @@ document the bug inline and will need re-recording once fixed.
 Status legend:
   - [pinned]    harness records the buggy behavior; fix → re-record the cassette
   - [quirk]     arguably intended/by-design, but surprising; documented
+  - [FIXED]     fixed in Evok 3.1, the test asserts the corrected behavior
 
 ---
 
-## 1. Bulk `group_queries` / `group_assignments` crash on JSON serialization
+## 1. [FIXED] Bulk `group_queries` / `group_assignments` crash on JSON serialization
 
-**Severity:** functional bug (the endpoint is broken for its primary use case)
-**Location:** `evok/evok.py:329, 331, 355, 357` (`JSONBulkHandler.post`)
-**Pinned by:** `tests/integration/suite/test_bulk.py::test_bulk_group_queries`
+**Status:** fixed in Evok 3.1 (`cd5622b`, the handler is `evok/bulk_handler.py`): each query of `group_queries`
+returns the list of the states of its devices, in the order of the queries; `group_assignments` sets the devices.
+Pinned by `tests/integration/suite/test_bulk.py::test_bulk_group_queries` (two queries, two lists).
 
-The handler builds the response with `map(methodcaller('full'), all_devs)`
+**Originally** (v3.0.6, `evok/evok.py:329, 331, 355, 357`, `JSONBulkHandler.post`): the handler builds the response with `map(methodcaller('full'), all_devs)`
 (lazy iterator) instead of `list(map(...))`. When `json.dumps(result)` runs, the
 `map` object is not JSON-serializable, so the whole request fails with:
 
@@ -28,10 +29,7 @@ The handler builds the response with `map(methodcaller('full'), all_devs)`
 Both `group_queries` and `group_assignments` are affected (4 call sites). The
 `individual_assignments` path uses a list and works.
 
-**Fix:** wrap each `map(...)` in `list(...)`:
-```python
-result["group_queries"] = [list(map(methodcaller("full"), all_devs))]
-```
+The fix builds the lists of the states, one per query.
 
 ---
 
@@ -54,13 +52,17 @@ keys real attributes (option (b): `unit_name` → `unit` and the like).
 
 ---
 
-## 3. REST (`/rest/*`) silently no-ops JSON POST bodies
+## 3. [FIXED] REST (`/rest/*`) silently no-ops JSON POST bodies
 
-**Severity:** moderate (silent data loss; validation bypass)
-**Location:** `evok/handlers_base.py` (`LegacyRestHandler._get_kw`) + `evok/evok.py`
-**Pinned by:** `tests/integration/suite/test_errors.py::test_error_ao_value_below_minimum`
+**Status:** fixed in Evok 3.1 (`LegacyRestHandler._get_kw` in `evok/evok.py`): `/rest/*` reads a JSON object
+with `Content-Type: application/json` or a body starting with `{` (as `curl -d` sends it, with the form content
+type), otherwise the form; an empty body sets nothing. A JSON body which is not an object is refused with 400
+on `/rest/*` and `/json/*`. The params of a JSON body are validated as on `/json/*`: `POST /rest/ao/1_01/
+{"value": -1}` returns 400. The range of the schema is checked also for the strings of a form.
+Pinned by `tests/integration/suite/test_errors.py::test_error_rest_silently_noops_json_body` (the name is kept
+for its cassette) and `test_error_ao_value_below_minimum`.
 
-`LegacyRestHandler._get_kw` reads `self.request.body_arguments` (form-encoded
+**Originally:** `LegacyRestHandler._get_kw` reads `self.request.body_arguments` (form-encoded
 key/value pairs). A client POSTing a JSON body (`Content-Type: application/json`,
 body `{"value": -1}`) gets an **empty dict** because there are no form fields,
 so `device.set(**{})` runs with no arguments and the device is unchanged —
@@ -76,10 +78,7 @@ So the same write behaves differently on `/rest/*` vs `/json/*`: one silently
 no-ops, the other validates. A client using `/rest/*` with JSON bodies gets
 silent failures and no validation.
 
-**Fix:** in `LegacyRestHandler._get_kw`, fall back to `json.loads(self.request.body)`
-when `body_arguments` is empty and the body is non-empty JSON (as `LegacyJsonHandler`
-already does). Or document that `/rest/*` is form-encoded only and reject JSON
-bodies with a 415.
+The fix reads the JSON body on `/rest/*` too, as `LegacyJsonHandler` does.
 
 ---
 
@@ -113,13 +112,15 @@ write value or adds a read-after-stable endpoint, the boundary tests in
 Each bug has a test that records the **current** behavior into a golden cassette
 and asserts on it. The tests carry inline notes:
 
-- `test_bulk.py::test_bulk_group_queries` — asserts the error envelope (the
-  crash), with a comment explaining the `map()` bug and "if the bug is fixed,
-  re-record."
+- `test_bulk.py::test_bulk_group_queries` — asserts the FIXED behavior (§1): two
+  queries return two lists of states.
 - `test_errors.py::test_error_property_read_unit` — asserts the FIXED behavior
   (`unit` now readable, HTTP 200).
-- `test_errors.py::test_error_ao_value_below_minimum` — uses `/json/` (where
-  validation works) and comments that `/rest/` would silently no-op.
+- `test_errors.py::test_error_ao_value_below_minimum` and
+  `test_error_rest_silently_noops_json_body` — assert the FIXED behavior (§3): a
+  value out of the range is refused with 400 on `/json/` and `/rest/`.
+- `test_errors.py::test_error_ai_unknown_mode` — an unknown AI mode is refused
+  with 400.
 - `test_boundaries.py` (REMOVED) — the clamp mechanism is documented here in §4; the tests were dead (always-skipped) because the contract is not black-box-observable in one round-trip. Re-add as device-gated poll-to-stable tests if the clamps need exercising.
 
 **Re-recording after a fix:** once any of these is fixed, run

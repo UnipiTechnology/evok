@@ -35,31 +35,22 @@ def test_error_unknown_circuit(http):
 
 
 def test_error_ao_value_below_minimum(http):
-    # BUG #3 (see FINDINGS.md): schema validation (jsonschema `minimum: 0`) fires
-    # ONLY on the JSON endpoint (/json/*), where the body is parsed as real JSON
-    # types. The form-encoded /rest/* endpoint receives values as strings, which
-    # bypass `minimum`, so this test deliberately uses /json/ to exercise the
-    # validation contract. (Posting JSON to /rest/* silently no-ops instead —
-    # see test_error_rest_silently_noops_json_body.)
+    # The range of the schema (`minimum: 0` of ao.value) is checked on both
+    # endpoints, also for the strings of a form of /rest/*; a value out of the
+    # range is refused before any write. This test uses /json/, the same JSON body
+    # to /rest/* is covered by test_error_rest_silently_noops_json_body.
     r = http.post_json("/json/ao/1_01/", {"value": -1})
     assert r.status in (404, 400), r.raw_text
     _assert_error_envelope(r.body)
 
 
 def test_error_ai_unknown_mode(http):
-    # AI schema allows `mode` as a free string (no enum), so jsonschema passes;
-    # the device's set() silently ignores a mode not in self.modes. Record the
-    # ACTUAL behavior (likely success:true with no mode change) rather than
-    # assuming a rejection.
+    # The AI schema allows `mode` as a free string (no enum), so jsonschema
+    # passes; the device refuses a mode which is not in its `modes` (ValueError
+    # "unknown mode") with 400 before any write.
     r = http.post_json("/rest/ai/1_01/", {"mode": "BogusMode"})
-    assert r.status == 200, r.raw_text
-    # restore real mode
-    http.post_json("/rest/ai/1_01/", {"mode": "Voltage"})
-    # Assert the observed contract: unknown mode is silently accepted/ignored.
-    assert isinstance(r.body, dict)
-    assert r.body.get("success") is True, (
-        f"expected silent-accept of unknown AI mode (current behavior); got {r.body!r}"
-    )
+    assert r.status == 400, r.raw_text
+    _assert_error_envelope(r.body)
 
 
 def test_error_invalid_property_underscore(http):
@@ -70,14 +61,15 @@ def test_error_invalid_property_underscore(http):
 
 
 def test_error_rest_silently_noops_json_body(http):
-    # BUG #3 (see FINDINGS.md): POSTing a JSON body to the form-encoded /rest/*
-    # endpoint yields an empty kw dict (body_arguments is empty for JSON), so
-    # set(**{}) runs with no args and the device is unchanged -> 200/success with
-    # the current state. Compare against /json/ which actually validates (see
-    # test_error_ao_value_below_minimum). This pins the silent-no-op behavior.
+    # BUG #3 (see FINDINGS.md) is FIXED (the name of the test is kept for its
+    # cassette): a JSON body to /rest/* gave an empty kw dict (body_arguments is
+    # empty for JSON), set(**{}) changed nothing and returned 200/success. /rest/*
+    # now reads a JSON body when there are no form fields, so the params are
+    # validated as on /json/ (see test_error_ao_value_below_minimum): -1 is
+    # refused with 400.
     r = http.post_json("/rest/ao/1_01/", {"value": -1})
-    assert r.status == 200, r.raw_text
-    assert r.body.get("success") is True, f"expected silent success (current bug); got {r.body!r}"
+    assert r.status == 400, r.raw_text
+    _assert_error_envelope(r.body)
 
 
 def test_error_property_read_unit(http):

@@ -21,9 +21,9 @@ async def fetch():
     ]))
     server.add_sockets([sock])
 
-    async def request(path, method='GET', body=None):
+    async def request(path, method='GET', body=None, headers=None):
         response = await tornado.httpclient.AsyncHTTPClient().fetch(
-            f"http://127.0.0.1:{port}{path}", method=method, body=body, raise_error=False)
+            f"http://127.0.0.1:{port}{path}", method=method, body=body, headers=headers, raise_error=False)
         return response.code, json.loads(response.body)
     yield request
     server.stop()
@@ -64,6 +64,36 @@ async def test_owbus_flags_in_json(fetch, owbus):
 async def test_owbus_invalid_flag(fetch, owbus):
     code, _reply = await fetch('/rest/owbus/OWFS', 'POST', urlencode({'do_reset': 'maybe'}))
     assert code == 400
+    assert owbus == []
+
+
+@pytest.mark.parametrize('headers', [{'Content-Type': 'application/json'}, None])
+async def test_rest_reads_json_body(fetch, owbus, headers):
+    """ A JSON body to /rest was read as a form without fields and set nothing; without the header as curl -d """
+    code, _ = await fetch('/rest/owbus/OWFS', 'POST', json.dumps({'do_scan': True}), headers)
+    assert code == 200
+    assert owbus == ['scan']
+
+
+async def test_rest_json_body_is_validated(fetch, owbus):
+    code, reply = await fetch('/rest/owbus/OWFS', 'POST', json.dumps({'do_reset': 'maybe'}),
+                              {'Content-Type': 'application/json'})
+    assert (code, reply['success']) == (400, False)
+    assert owbus == []
+
+
+async def test_rest_empty_body_sets_nothing(fetch, owbus):
+    code, reply = await fetch('/rest/owbus/OWFS', 'POST', '')
+    assert (code, reply['success']) == (200, True)
+    assert owbus == []
+
+
+@pytest.mark.parametrize('path', ['/rest/owbus/OWFS', '/json/owbus/OWFS'])
+@pytest.mark.parametrize('body', ['[1]', '"do_scan"', 'not json'])
+async def test_json_body_must_be_object(fetch, owbus, path, body):
+    """ A JSON body which is not an object was a 500 (set(**list)) """
+    code, reply = await fetch(path, 'POST', body, {'Content-Type': 'application/json'})
+    assert code == 400 and set(reply['errors']) <= {'ValueError', 'JSONDecodeError'}, reply
     assert owbus == []
 
 
