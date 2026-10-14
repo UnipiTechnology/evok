@@ -6,6 +6,7 @@ the path parameters and the document header (info, servers, tags).
 
 from importlib.metadata import PackageNotFoundError, version
 
+from ..devices import devtype_altnames
 from ..schemas import COMM_PROPERTIES
 
 try:
@@ -56,6 +57,19 @@ SHARED_SCHEMAS: dict[str, dict] = {
     "Status": STATUS,
 }
 
+
+def _error(description: str, error: str, message: str) -> dict:
+    return {
+        "description": description,
+        "content": {
+            "application/json": {
+                "schema": {"$ref": "#/components/schemas/Error"},
+                "example": {"success": False, "errors": {error: message}},
+            }
+        },
+    }
+
+
 # the error responses referenced by the operations
 SHARED_RESPONSES: dict[str, dict] = {
     "Unauthorized": {
@@ -78,6 +92,12 @@ SHARED_RESPONSES: dict[str, dict] = {
         "description": "The circuit, the alias or the parameter does not exist.",
         "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}},
     },
+    "SequenceRunning": _error(
+        "The output cannot be changed while a pulse or a sequence of its sequencer runs, cancel it there.",
+        "SequenceRunning",
+        "RO 2_01: a sequence of its sequencer ro_2_01 runs, cancel it there",
+    ),
+    "ServerError": _error("An internal error, the details are in the log of Evok.", "Server error", "internal"),
 }
 
 SECURITY_SCHEMES: dict[str, dict] = {
@@ -91,14 +111,16 @@ PARAMETERS: dict[str, dict] = {
         "in": "path",
         "required": True,
         "schema": {"type": "string", "enum": ["json", "rest"], "examples": ["json"]},
-        "description": "The REST API returns JSON and the JSON API accepts a JSON body; both return the same.",
+        "description": "Both return JSON; a POST of *rest* takes the params as a form, of *json* as a JSON object.",
     },
     "device_type": {
         "name": "device_type",
         "in": "path",
         "required": True,
         "schema": {"type": "string", "examples": ["di"]},
-        "description": "The device type, e.g. di, do, ro, ai, temp.",
+        "description": "The device type, e.g. di, do, ro, ai, temp. Other names of the types: "
+        + ", ".join(f"*{name}* ({devtype})" for name, devtype in devtype_altnames.items())
+        + ".",
     },
     "circuit": {
         "name": "circuit",

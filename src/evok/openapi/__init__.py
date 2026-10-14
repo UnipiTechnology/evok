@@ -27,6 +27,8 @@ def _device_schemas() -> dict:
     components: dict[str, dict] = dict(shared.SHARED_SCHEMAS)
     for device in DEVICES:
         components[device.component] = _without_schema(schemas.responses[device.response])
+        for component, response in device.alternatives:
+            components[component] = _without_schema(schemas.responses[response])
         if device.input is not None:
             components[f"{device.component}_params"] = _without_schema(schemas.schemas[device.input][0])
     components["Aliases"] = _without_schema(schemas.responses["run"])

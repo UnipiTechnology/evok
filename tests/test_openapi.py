@@ -18,6 +18,8 @@ from evok.modbus.analog import AnalogInput, AnalogOutput, DataPoint, OwTemperatu
 from evok.modbus.digital import ULED, DigitalInput, DigitalOutput, Relay
 from evok.modbus.scanner import ModbusScanner
 from evok.modbus.special import NvSave, OwPower, Watchdog
+from evok.openapi import build_openapi
+from evok.openapi.__main__ import render
 from evok.openapi.registry import DEVICES, INTERNAL_DEVTYPES, RESPONSE_DEVTYPES
 from evok.w1 import DS18B20, DS2408, DS2438, OwBusDriver
 
@@ -154,3 +156,31 @@ def test_every_runtime_devtype_is_exposed_or_internal():
 def test_registry_devs_are_api_devtypes():
     """Every device type of a REST path is a known API device type"""
     assert {device.dev for device in DEVICES} <= set(RESPONSE_DEVTYPES)
+
+
+def _refs(node):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "$ref":
+                yield value
+            else:
+                yield from _refs(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _refs(item)
+
+
+def test_every_ref_of_the_document_exists():
+    """ A reference to a missing component breaks the document """
+    document = build_openapi()
+    for ref in set(_refs(document)):
+        node = document
+        for part in ref.removeprefix("#/").split("/"):
+            assert part in node, f"{ref} does not exist"
+            node = node[part]
+
+
+def test_the_document_has_no_yaml_aliases():
+    """ The shared schemas are written in full, some tools do not read the anchors and aliases of YAML """
+    text = render()
+    assert "&id" not in text and "*id" not in text

@@ -23,6 +23,10 @@ class DeviceType:
     gettable: bool = True
     summary_get: str = ""
     summary_post: str = ""
+    # the other shapes of the state on the same path: (component, the key in evok.schemas.responses)
+    alternatives: tuple[tuple[str, str], ...] = ()
+    sequenced: bool = False  # an output of a sequencer, a POST is refused while its sequence runs (409)
+    description: str = ""
 
 
 DEVICES: list[DeviceType] = [
@@ -49,11 +53,24 @@ DEVICES: list[DeviceType] = [
         True,
         "Read digital output",
         "Set output properties",
+        sequenced=True,
     ),
     DeviceType(
-        "ro", "ro", "Relay_output", "Relay output", "ro", "ro", True, True, "Read relay output", "Set relay value"
+        "ro",
+        "ro",
+        "Relay_output",
+        "Relay output",
+        "ro",
+        "ro",
+        True,
+        True,
+        "Read relay output",
+        "Set relay value",
+        sequenced=True,
     ),
-    DeviceType("led", "led", "Led", "User LED", "led", "led", True, True, "Read user LED", "Set LED properties"),
+    DeviceType(
+        "led", "led", "Led", "User LED", "led", "led", True, True, "Read user LED", "Set LED properties", sequenced=True
+    ),
     DeviceType(
         "ai", "ai", "Analog_input", "Analog input", "ai", "ai", True, True, "Read analog input", "Set analog input mode"
     ),
@@ -116,6 +133,9 @@ DEVICES: list[DeviceType] = [
         True,
         "Read 1-Wire sensor",
         "Set 1-Wire sensor interval",
+        alternatives=(("Onewire_device", "1wdevice"),),
+        description="The 1-Wire sensors: a thermometer (dev *temp*) or another 1-Wire device (dev *1wdevice*, "
+        "DS2438, DS2408, DS2406, DS2413). The device types *sensor* and *1wdevice* are other names of the path.",
     ),
     DeviceType(
         "nv_save",
