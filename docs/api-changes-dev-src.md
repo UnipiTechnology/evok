@@ -1,6 +1,6 @@
-# API changes in the dev-src branch
+# API changes in the dev-3.1 branch
 
-Evok · branch `dev-src` against `main` (`b2e241c`) · up to `4003436` · 135 commits
+Evok · branch `dev-3.1` against `main` (`b2e241c`)
 
 The changes which affect the clients of REST, JSON, Bulk, WebSocket, RPC and the webhook, the configuration and
 the HW definitions. The incompatible changes come first. Every change names its commits
@@ -43,7 +43,7 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - NaN and infinite values of AIs and data points are returned as the strings `'NaN'`, `'Infinity'`, `'-Infinity'`.
   — `5f15f41`
 - `last_comm` of a unit is `null` before the first communication, before about 1.7e9 s. — `2f323f0`
-- **1-Wire sensors of the configuration:** no `lost: true` event right after the start or a reconnection to owserver,
+- **1-Wire sensors of the configuration:** no `lost: true` event right after the start or a restart of the bus,
   a sensor is read after the bus finds it. A sensor which the search of the bus has not found is reported lost.
   — `5fa3eca`
 - **RO, DO, LED:** no `pulse_duration`, `timeout` (DO) and `pending`, a pulse is set by the sequencer of the output
@@ -82,6 +82,10 @@ the HW definitions. The incompatible changes come first. Every change names its 
   internal error `-32603` without the text of the exception. — `cb94d9f`, `c8a92a4`, `4003436`
 
 ### Other
+
+- **OWFS bus:** `hostname` / `port` of owserver are an error of the configuration, the bus is not created, use
+  `master` (see Configuration). One master serves one OWFS bus, a second bus with the same master is not created.
+  — `776b371`, `dc7b1ee`
 
 - `print_log` of `modbus_slave` was replaced by `GET /log`. — `54fe858`
 
@@ -181,6 +185,6 @@ An invalid value is an error: the unit or the feature is not created and the err
 
 ---
 
-Compiled from the messages of 135 commits between `main` and `dev-src` (up to `4003436`) and from the changes of
+Compiled from the messages of the commits between `main` and `dev-3.1` and from the changes of
 the API documentation. The code of `main` was not compared line by line, details which the commit messages do not
 describe may be missing.

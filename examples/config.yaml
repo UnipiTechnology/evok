@@ -23,12 +23,12 @@ apis:
   port: 8080
   # ^ API listen port
   # ^ only change if you are certain you know what you are doing
-  # ^ FOR OUR WEB INTERFACE THE PORT SHOULD BE CHANGED IN "etc/nginx/sites-available/evok" TOO !!!
+  # ^ FOR OUR WEB INTERFACE THE PORT SHOULD BE CHANGED IN "/etc/nginx/sites-available/evok" TOO !!!
 
   address: 127.0.0.1
   # ^ API listen address
   # ^ to listen on all interfaces set this parameter to empty, 127.0.0.1 is used if it is missing
-  # ^ FOR OUR WEB INTERFACE THE PORT SHOULD BE CHANGED IN "etc/nginx/sites-available/evok" TOO !!!
+  # ^ FOR OUR WEB INTERFACE THE PORT SHOULD BE CHANGED IN "/etc/nginx/sites-available/evok" TOO !!!
 
   # token: <a long random string, e.g. made by: openssl rand -hex 32>
   # ^ required by all APIs except /version, as 'Authorization: Bearer <token>', the password of Basic auth,
@@ -131,7 +131,7 @@ apis:
 #    devices:
 #      my_device_name_3:
 #        slave-id: 1
-#        model: 00
+#        model: '00'
 #  MY_TCP:
 #    type: MODBUSTCP
 #    hostname: 192.168.0.55
