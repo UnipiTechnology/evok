@@ -8,3 +8,10 @@ hw_definitions/
 venv/
 *.egg-info/
 __pycache__/
+.lock
+uv.lock
+.spyproject/
+
+# the generated OpenAPI document, built as a release artifact by `python -m evok.openapi`
+Evok_API_OAS.yaml
+dist/
