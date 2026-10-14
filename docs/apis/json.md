@@ -2,6 +2,10 @@
 
 The JSON API provides a simple interface for sending and receiving data in a stateless, cacheable communications. This protocol does not support multiple writes in one request, but it is suitable for automated requests thanks to JSON protocol, which is easily machine-processed.
 
+The routes, the replies and the errors are the same as of the [REST API](rest.md#routes) with `/json/` instead
+of `/rest/`, see [Replies and errors](rest.md#replies-and-errors). The body of a POST is a JSON object
+of the params, e.g. `{"value": 1}`; invalid JSON is `400`. A pulse of an output is set by its [sequencer](sequencer.md).
+
 ## Examples
 
 For python examples you need installed `requests` package. You can install it with this command: `pip3 install requests`.
@@ -31,7 +35,7 @@ Value of DI 1.01 will be returned.
     ```
 
 ```rs title="Output"
-{"dev": "di", "circuit": "1_01", "value": 0, "debounce": 50, "counter_modes": ["Enabled", "Disabled"], "counter_mode": "Enabled", "counter": 0, "mode": "Simple", "modes": ["Simple", "DirectSwitch"]}
+{"dev": "di", "circuit": "1_01", "value": 0, "debounce": 50, "counter_modes": ["Enabled", "Disabled"], "counter_mode": "Enabled", "counter": 0, "mode": "Simple", "modes": ["Simple", "DirectSwitch"], "comm": "ok", "last_comm": 0.041}
 ```
 
 ### Setting DO
@@ -60,7 +64,7 @@ DO 1.01 will be set to HIGH.
     ```
 
 ```rs title="Output"
-{'success': True, 'result': {'dev': 'do', 'circuit': '1_01', 'value': 0, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0}}
+{'success': True, 'result': {'dev': 'do', 'circuit': '1_01', 'value': 1, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'pwm_freq': 4800.0, 'pwm_duty': 0, 'comm': 'ok', 'last_comm': 0.041}}
 ```
 
 !!! tip

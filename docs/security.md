@@ -21,7 +21,9 @@ Keep the token secret, it gives the full access to the APIs, and restrict the ac
 ### Sending the token
 
 All APIs require the token except `/version` and the preflight `OPTIONS` of a browser. A request without
-the token gets the status `401`.
+the token or with a wrong one gets the status `401` with the headers `WWW-Authenticate: Bearer realm="evok"` and
+`WWW-Authenticate: Basic realm="evok"` and the body
+`{"success": false, "errors": {"Unauthorized": "Missing or invalid token"}}`.
 
 | Client                          | How                                                                       |
 |---------------------------------|---------------------------------------------------------------------------|
@@ -89,11 +91,14 @@ apis:
 ```
 
 A WebSocket from a client which is not a browser (Node-RED nodes, Python) sends no origin, it is not checked.
+An origin without the scheme, as Node-RED may send it, is compared with the host of the request as `host:port`,
+without the default port of a scheme.
 
 ### Behind a reverse proxy
 
 A WebSocket from a browser through a reverse proxy, e.g. nginx, is accepted when the proxy passes the host
-of the request, otherwise the origin of the page does not match the host and the connection is refused:
+of the request in `Host` or in `X-Forwarded-Host` (its first value), otherwise the origin of the page does not
+match the host and the connection is refused:
 
 ```nginx
 location /ws {

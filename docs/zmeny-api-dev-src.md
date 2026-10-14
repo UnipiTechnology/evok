@@ -46,6 +46,9 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
   (`/rest/sequencer/<typ>_<okruh>`, `running` místo `pending`). Během něj se změna výstupu kromě aliasu odmítne
   s 409 (RPC `-32002`), nejdřív ho zrušte přes sequencer. RPC metody `*_set_for_time` a `output_get` zůstávají.
   — `a85fb14`, `57492fe`
+- **Reset a nv_save jednotky:** coil se zapíše jednou bez retries, chybějící odpověď není chyba, Evok počká
+  na restart jednotky; dřív se timeout opakoval (reset se poslal dvakrát) a vrátil 503. `value` u `nv_save` zůstane
+  2 s na 1, další uložení se mezitím odmítne. — `0ab8d2c`, `752616a`
 
 ### Okruhy podle HW definic
 
@@ -65,6 +68,8 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - Změny se provádějí po Modbus jednotkách, ne v pořadí požadavku. Při chybě vrátí výsledky hotových jednotek a změn
   chybné jednotky před chybou. — `a3f4679`
 - Filtr `global_device_id` byl odstraněn. — `6cd0802`
+- `device_circuits` přijímá i aliasy, alternativní názvy v `device_types` (např. `di` a `input`) se sloučí, dřív
+  se zařízení vrátila dvakrát. — `854054f`
 
 ### WebSocket
 
@@ -88,8 +93,8 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 ## Nové funkce
 
 - **Komunikace zařízení:** stav každého zařízení Modbus jednotky a 1-Wire čidla obsahuje `comm` (`ok`, `timeout`,
-  `error`) a `last_comm` (sekundy od poslední úspěšné komunikace); ztráta a obnovení jednotky pošle stavy všech
-  jejích zařízení, `value` je poslední známá. Entity Home Assistantu jsou bez komunikace nedostupné. — `969798e`
+  `error`; 1-Wire čidlo jen `ok`, `timeout`) a `last_comm` (sekundy od poslední úspěšné komunikace); ztráta
+  a obnovení jednotky pošle stavy všech jejích zařízení, `value` je poslední známá. Entity Home Assistantu jsou bez komunikace nedostupné. — `969798e`
 - **Zabezpečení:** volitelný `token` pro všechna API (Bearer, Basic, `?token=` u WebSocketu) a `allowed_origins`.
   — `763016c`, `2b7f668`
 - **Token jen pro čtení:** volitelný `read_token` (vyžaduje `token`). Povolí čtení REST a JSON, dotazy bulk, `all`,
@@ -109,6 +114,8 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
   - ztráta a obnovení komunikace s jednotkou,
   - změna `counter_mode`, režimu a debounce DI.
 - Úspěšná odpověď bulk obsahuje `"success": true`. — `ba4212f`
+- `scan_error` u `modbus_slave` a chyby nedostupné jednotky uvádějí původní příčinu, např. chybějící sériový port.
+  — `d990fe1`
 - Smazání aliasu nepřipojeného zařízení přes `POST /rest/run/alias` s `delete`. — `b7cebd6`
 - `GET /rest/serial_bus/{bus}` a `/rest/tcp_bus/{bus}` vrací konfiguraci Modbus sběrnice a její zařízení, dřív chybu
   500. Sběrnice jsou jen pro čtení a nejsou v `/rest/all`. — `b40a57c`
@@ -166,6 +173,9 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
 ## Běh a instalace
 
 - Python 3.12, `tmodbus` místo `pymodbus`. — `862d760`, `733871c`
+- `tornado` 6.5.10 místo 6.3.3. — `1210fb1`
+- Každý modul loguje vlastním loggerem, např. `evok.modbus.client` nebo `evok.w1.bus`, úroveň jedné části jde
+  nastavit zvlášť; úroveň a soubor logu zůstávají na loggeru `evok`. — `48ab81e`
 - 1-Wire přes jádro: ovladač masteru (např. `ds2482`) a moduly čidel místo balíčku `owserver`; bez závislostí
   `asyncowfs` a `anyio`. Balíček by měl instalovat udev pravidlo `etc/udev/rules.d/60-evok-w1.rules` (skupina
   `evok`). — `776b371`, `9790404`, `2bb5167`
