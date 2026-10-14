@@ -18,7 +18,7 @@ Besides that, Evok also supports sending notifications via webhook.
 ## Documentation
 Installation, basic usage examples, configuration and further information can be found on [https://evok.readthedocs.io/](https://evok.readthedocs.io/)
 
-Complete API documentation (REST and JSON API) including syntax of all other APIs can be found on [https://unipitechnology.stoplight.io/docs/evok](https://unipitechnology.stoplight.io/docs/evok) and is also released in OpenAPI format [Evok_API_OAS.yaml](docs/apis/Evok_API_OAS.yaml?raw=1)
+The OpenAPI document of the REST and JSON API is generated from the sources (`python -m evok.openapi`) and published with every release: [Evok_API_OAS.yaml](https://github.com/UnipiTechnology/evok/releases/latest/download/Evok_API_OAS.yaml). The other APIs are described in the [documentation](https://evok.readthedocs.io/).
 
 ## Major changes between Evok v2 and v3
 
@@ -27,7 +27,7 @@ Complete API documentation (REST and JSON API) including syntax of all other API
     - Relay entities are excluded from the `output` endpoint and have a separate endpoint `ro`.  Alternate access via `relay` is still available.
     - Digital output entities are excluded from the `output` endpoint and have a separate endpoint `do`. Alternate access via `output` is still available.
     - Digital input entities are excluded from the `input` endpoint and have a separate endpoint `di`. Alternate access via `input` is still available.
-    - Modified methods of setting analog input `ai` and analog output `ao` modes - mode and range are unified into one parameter. For more information see Analog input and Analog output modes in [API documentation](https://unipitechnology.stoplight.io/docs/evok).
+    - Modified methods of setting analog input `ai` and analog output `ao` modes - mode and range are unified into one parameter. For more information see Analog input and Analog output in the [OpenAPI document](https://github.com/UnipiTechnology/evok/releases/latest/download/Evok_API_OAS.yaml).
     - Renamed `unit_register` entity to `data_point`.
 - Updating Evok from v2 to v3 is unsupported as well as migration from Debian 10 is unsupported - it's recommended to start from a fresh operating system.
 - The configuration of Evok has been completely rewritten to yaml based on tree structure(old .conf structure is no longer supported). See more information in the [Evok configuration](https://evok.readthedocs.io/en/latest/configs/evok_configuration/).
