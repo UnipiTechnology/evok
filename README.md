@@ -26,7 +26,7 @@ Besides that, Evok also supports sending notifications via webhook.
 
 [evok-web] is a simple demo web application using Evok demonstrating its usage and allowing easy control of the devices configured in Evok.
 
-Natively supported hardware: [NEURON], [PATRON], [GATE] and [Unipi 1.1] including [Extension modules].
+Natively supported hardware: [Neuron], [Patron], [Gate] and [Unipi 1.1] including [Extension modules].
 Other devices that communicate via Modbus can be described using configuration files.
 
 If you develop your own control application where the real-time behaviour matters, the application should
@@ -65,9 +65,9 @@ Do you feel like contributing to Evok, or perhaps have a neat idea for an improv
 
 Apache License, Version 2.0
 
-[NEURON]:https://www.unipi.technology/products/unipi-neuron-3?categoryId=2
-[PATRON]:https://www.unipi.technology/products/unipi-patron-374
-[GATE]:https://www.unipi.technology/products/unipi-gate-388
+[Neuron]:https://www.unipi.technology/products/unipi-neuron-3?categoryId=2
+[Patron]:https://www.unipi.technology/products/unipi-patron-374
+[Gate]:https://www.unipi.technology/products/unipi-gate-388
 [Unipi 1.1]:https://www.unipi.technology/products/unipi-1-1-1-1-lite-19?categoryId=1
 [Evok-web]:https://github.com/UnipiTechnology/evok-web-jq
 [Extension modules]:https://www.unipi.technology/products?category=32
