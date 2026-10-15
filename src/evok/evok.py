@@ -27,22 +27,22 @@ logging.basicConfig(level=logging.WARNING)
 package_logger.setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONFIG_DIR = '/etc/evok'
-MAX_BODY_SIZE = 1024 * 1024     # a body of a request of the API, a bulk of hundreds of assignments has tens of kB
-DEFAULT_ALIAS_FILE = '/var/lib/evok/alias.yaml'
+DEFAULT_CONFIG_DIR = "/etc/evok"
+MAX_BODY_SIZE = 1024 * 1024  # a body of a request of the API, a bulk of hundreds of assignments has tens of kB
+DEFAULT_ALIAS_FILE = "/var/lib/evok/alias.yaml"
 
 try:
-    evok_version = 'v' + version("evok")
+    evok_version = "v" + version("evok")
 except PackageNotFoundError:
     logger.error("Cannot detect evok version.")
-    evok_version = 'unknown'
+    evok_version = "unknown"
 
 
 class WhHandler:
-    """ Notifies the webhook about the changed devices
+    """Notifies the webhook about the changed devices
 
-        At most one request is sent per min_interval seconds and only one request at a time.
-        The changes in the meantime are merged, only the last state of each device is sent.
+    At most one request is sent per min_interval seconds and only one request at a time.
+    The changes in the meantime are merged, only the last state of each device is sent.
     """
 
     def __init__(self, url, allowed_types, complex_events, min_interval=1.0):
@@ -52,8 +52,8 @@ class WhHandler:
         self.allowed_types = [devtype_of(str(name)) for name in allowed_types]
         self.complex_events = complex_events
         self.min_interval = float(min_interval)
-        self.pending: dict[tuple, dict] = {}    # the last state of each changed device
-        self.last_sent = None                   # loop time of the last request
+        self.pending: dict[tuple, dict] = {}  # the last state of each changed device
+        self.last_sent = None  # loop time of the last request
         self.send_task: asyncio.Task | None = None
 
     def open(self):
@@ -63,25 +63,25 @@ class WhHandler:
         registered_ws["all"].add(self)
 
     def on_event(self, device):
-        """ Queue the changed devices of the allowed types for the next request
+        """Queue the changed devices of the allowed types for the next request
 
-            A change of Modbus devices comes as a Proxy with a list of states,
-            a change of a 1-Wire sensor as the sensor with its state.
+        A change of Modbus devices comes as a Proxy with a list of states,
+        a change of a 1-Wire sensor as the sensor with its state.
         """
         try:
             states = device.full()
             if isinstance(states, dict):
                 states = [states]
             for state in states:
-                if devtype_of(state['dev']) in self.allowed_types:
-                    self.pending[(state['dev'], state.get('circuit'))] = state
+                if devtype_of(state["dev"]) in self.allowed_types:
+                    self.pending[(state["dev"], state.get("circuit"))] = state
             if self.pending and self.send_task is None:
                 self.send_task = asyncio.create_task(self._send())
         except Exception:
             logger.exception("WhHandler error in event")
 
     async def _send(self):
-        """ Send the pending states, wait min_interval since the last request """
+        """Send the pending states, wait min_interval since the last request"""
         loop = asyncio.get_running_loop()
         try:
             while self.pending:
@@ -92,12 +92,16 @@ class WhHandler:
                 self.last_sent = loop.time()
                 try:
                     if not self.complex_events:
-                        await self.http_client.fetch(self.url, method="GET",
-                                                     headers={"Content-Type": "application/json"})
+                        await self.http_client.fetch(
+                            self.url, method="GET", headers={"Content-Type": "application/json"}
+                        )
                     else:
-                        await self.http_client.fetch(self.url, method="POST",
-                                                     headers={"Content-Type": "application/json"},
-                                                     body=json.dumps(states))
+                        await self.http_client.fetch(
+                            self.url,
+                            method="POST",
+                            headers={"Content-Type": "application/json"},
+                            body=json.dumps(states),
+                        )
                 except Exception as E:  # noqa: BLE001
                     # the states are not sent again, the next change is sent
                     logger.error(f"WhHandler error in request to {self.url}: {E}")
@@ -106,7 +110,7 @@ class WhHandler:
 
 
 def json_params(body: bytes) -> dict:
-    """ The params of a JSON body, ValueError (400) if it is not a JSON object """
+    """The params of a JSON body, ValueError (400) if it is not a JSON object"""
     kw = json.loads(body)
     if not isinstance(kw, dict):
         raise ValueError("The params must be a JSON object")
@@ -115,11 +119,11 @@ def json_params(body: bytes) -> dict:
 
 class LegacyRestHandler(EvokWebHandlerBase):
     def _get_kw(self) -> dict:
-        """ The params of a form, or of a JSON object: with Content-Type application/json or a body starting with {,
-            which curl -d sends as a form; an empty body sets nothing
+        """The params of a form, or of a JSON object: with Content-Type application/json or a body starting with {,
+        which curl -d sends as a form; an empty body sets nothing
         """
         body = self.request.body.strip()
-        if self.request.headers.get('Content-Type', '').startswith('application/json') or body.startswith(b'{'):
+        if self.request.headers.get("Content-Type", "").startswith("application/json") or body.startswith(b"{"):
             return json_params(body)
         return {k: v[0].decode() for (k, v) in self.request.body_arguments.items()}
 
@@ -137,16 +141,15 @@ class LoadAllHandler(EvokWebHandlerBase):
         """This function returns a heterogeneous list of all devices exposed via the REST API"""
         result = self._get_all()
         self.write(json.dumps(result))
-        self.set_header('Content-Type', 'application/json')
+        self.set_header("Content-Type", "application/json")
         await self.finish()
 
 
 class VersionHandler(TokenAuth, tornado.web.RequestHandler):
-
-    auth_exempt = True      # for monitoring, it tells only the version
+    auth_exempt = True  # for monitoring, it tells only the version
 
     def initialize(self):
-        self.set_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        self.set_header("Access-Control-Allow-Methods", "GET, OPTIONS")
 
     def get(self):
         self.write(evok_version)
@@ -154,7 +157,7 @@ class VersionHandler(TokenAuth, tornado.web.RequestHandler):
 
 
 class LogHandler(TokenAuth, tornado.web.RequestHandler):
-    """ GET /log?lines=N returns the last N lines of the log file as plain text """
+    """GET /log?lines=N returns the last N lines of the log file as plain text"""
 
     DEFAULT_LINES = 255
     MAX_LINES = 1000
@@ -164,14 +167,14 @@ class LogHandler(TokenAuth, tornado.web.RequestHandler):
 
     async def get(self):
         if self.log_file is None:
-            raise tornado.web.HTTPError(404, 'Logging to a file is not configured')
+            raise tornado.web.HTTPError(404, "Logging to a file is not configured")
         try:
-            lines = int(self.get_argument('lines', str(self.DEFAULT_LINES)))
+            lines = int(self.get_argument("lines", str(self.DEFAULT_LINES)))
         except ValueError:
-            raise tornado.web.HTTPError(400, 'Invalid number of lines') from None
+            raise tornado.web.HTTPError(400, "Invalid number of lines") from None
         lines = max(1, min(lines, self.MAX_LINES))
         text = await asyncio.to_thread(read_log_tail, self.log_file, lines)
-        self.set_header('Content-Type', 'text/plain; charset=utf-8')
+        self.set_header("Content-Type", "text/plain; charset=utf-8")
         self.write(text)
 
 
@@ -204,7 +207,7 @@ class AliasTask:
         return self.aliases.get_dict_to_save()
 
     async def work(self):
-        """ Wait for Event generated on setting alias and save aliases to file (in thread)"""
+        """Wait for Event generated on setting alias and save aliases to file (in thread)"""
         try:
             while True:
                 await self.dirty_trigger.wait()
@@ -228,24 +231,35 @@ class AliasTask:
 
 def status_cb(device, *args):
     # a copy, a client could be removed while the event is sent
-    for x in list(registered_ws.get('all', ())):
+    for x in list(registered_ws.get("all", ())):
         x.on_event(device)
 
 
 # ---- MAIN ----
 
+
 async def main():
-    arg_parser = argparse.ArgumentParser(prog='evok', description='')
-    arg_parser.add_argument('-d', '--debug', action='count', default=0,
-                            help='Debug logging, -dd also the debug messages of tmodbus and the raw Modbus traffic')
-    arg_parser.add_argument('-v', '--version', action='store_true', default=False, help='Print evok version')
-    arg_parser.add_argument('-c', '--config-dir',
-                            default=os.environ.get('EVOK_CONFIG_DIR', DEFAULT_CONFIG_DIR),
-                            help='Directory with config.yaml and hw_definitions/ '
-                                 f'(env EVOK_CONFIG_DIR, default {DEFAULT_CONFIG_DIR})')
-    arg_parser.add_argument('-a', '--alias-file',
-                            default=os.environ.get('EVOK_ALIAS_FILE', DEFAULT_ALIAS_FILE),
-                            help=f'File for storing aliases (env EVOK_ALIAS_FILE, default {DEFAULT_ALIAS_FILE})')
+    arg_parser = argparse.ArgumentParser(prog="evok", description="")
+    arg_parser.add_argument(
+        "-d",
+        "--debug",
+        action="count",
+        default=0,
+        help="Debug logging, -dd also the debug messages of tmodbus and the raw Modbus traffic",
+    )
+    arg_parser.add_argument("-v", "--version", action="store_true", default=False, help="Print evok version")
+    arg_parser.add_argument(
+        "-c",
+        "--config-dir",
+        default=os.environ.get("EVOK_CONFIG_DIR", DEFAULT_CONFIG_DIR),
+        help=f"Directory with config.yaml and hw_definitions/ (env EVOK_CONFIG_DIR, default {DEFAULT_CONFIG_DIR})",
+    )
+    arg_parser.add_argument(
+        "-a",
+        "--alias-file",
+        default=os.environ.get("EVOK_ALIAS_FILE", DEFAULT_ALIAS_FILE),
+        help=f"File for storing aliases (env EVOK_ALIAS_FILE, default {DEFAULT_ALIAS_FILE})",
+    )
 
     args = arg_parser.parse_args()
 
@@ -253,16 +267,18 @@ async def main():
         print(evok_version)
         sys.exit(0)
 
-    config_path = args.config_dir.rstrip('/') or '/'
+    config_path = args.config_dir.rstrip("/") or "/"
     alias_file = args.alias_file
-    if not os.path.isfile(os.path.join(config_path, 'config.yaml')):  # noqa: ASYNC240
-        sys.exit(f"evok: config file '{os.path.join(config_path, 'config.yaml')}' not found "
-                 "(use --config-dir or EVOK_CONFIG_DIR)")
+    if not os.path.isfile(os.path.join(config_path, "config.yaml")):  # noqa: ASYNC240
+        sys.exit(
+            f"evok: config file '{os.path.join(config_path, 'config.yaml')}' not found "
+            "(use --config-dir or EVOK_CONFIG_DIR)"
+        )
     evok_config = config.EvokConfig(config_path)
 
     log_level = evok_config.logging.get("level", "INFO").upper()
     if args.debug:
-        log_level = 'DEBUG'
+        log_level = "DEBUG"
 
     logger.info(f"Starting Evok {evok_version} using config directory '{config_path}'.")
     logger.info(f"Setting logging level to '{log_level}'.")
@@ -270,25 +286,25 @@ async def main():
     package_logger.setLevel(log_level)
     # the root logger is already configured on import, force applies the level to the other libraries too
     logging.basicConfig(level=log_level, force=True)
-    if log_level != 'DEBUG':
+    if log_level != "DEBUG":
         # a line for every request only in the debug level
-        logging.getLogger('tornado.access').setLevel(logging.WARNING)
+        logging.getLogger("tornado.access").setLevel(logging.WARNING)
         # every attempt to connect a unit, the connection is reported by the scanner of the unit
-        logging.getLogger('tmodbus').setLevel(logging.WARNING)
-        logging.getLogger('tmodbus.transport.async_smart').setLevel(logging.ERROR)
+        logging.getLogger("tmodbus").setLevel(logging.WARNING)
+        logging.getLogger("tmodbus.transport.async_smart").setLevel(logging.ERROR)
     elif args.debug < 2:
         # the traceback of every failed attempt to connect and every Modbus frame only with -dd
-        logging.getLogger('tmodbus').setLevel(logging.INFO)
+        logging.getLogger("tmodbus").setLevel(logging.INFO)
     log_file = evok_config.logging.get("file", None)
     if log_file is not None:
         # rotating file handler
-        filelog_handler = logging.handlers.TimedRotatingFileHandler(filename=log_file, when='D', backupCount=7)
-        log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        filelog_handler = logging.handlers.TimedRotatingFileHandler(filename=log_file, when="D", backupCount=7)
+        log_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         filelog_handler.setFormatter(log_formatter)
         filelog_handler.setLevel(log_level)
         package_logger.addHandler(filelog_handler)
 
-    hw_dict = config.HWDict(dir_paths=[f'{config_path}/hw_definitions/'])
+    hw_dict = config.HWDict(dir_paths=[f"{config_path}/hw_definitions/"])
     config.load_aliases(alias_file)
     # only the local interface by default, an empty address listens on all interfaces
     address_api = evok_config.apis.get("address", "127.0.0.1") or None
@@ -298,13 +314,15 @@ async def main():
     except ValueError as E:
         sys.exit(f"evok: {E}")
     if auth.is_enabled():
-        logger.info("The API requires the token of the configuration"
-                    + (", the read_token allows only reading" if evok_config.apis.get("read_token") else ""))
+        logger.info(
+            "The API requires the token of the configuration"
+            + (", the read_token allows only reading" if evok_config.apis.get("read_token") else "")
+        )
     else:
         logger.info("The API is not authenticated, set 'token' in 'apis' for an access from the network")
-    mqtt_config = evok_config.apis.get('mqtt') or {}
+    mqtt_config = evok_config.apis.get("mqtt") or {}
     mqtt = None
-    if mqtt_config.get('enabled', False):
+    if mqtt_config.get("enabled", False):
         try:
             mqtt = MqttHandler(MqttSettings(mqtt_config))
         except ValueError as E:
@@ -319,23 +337,20 @@ async def main():
         (r"/json/all/?", LoadAllHandler),
         (r"/json/([^/]+)/([^/]+)/?([^/]+)?/?", LegacyJsonHandler),
         (r"/version/?", VersionHandler),
-        (r"/log/?", LogHandler, {'log_file': log_file}),
+        (r"/log/?", LogHandler, {"log_file": log_file}),
     ]
 
     # enabled if the section is missing, it was always enabled before the option was added
-    if (evok_config.apis.get('rpc') or {}).get('enabled', True):
+    if (evok_config.apis.get("rpc") or {}).get("enabled", True):
         api_routes.append((r"/rpc/?", rpc_handler.Handler))
     else:
         logger.info("RPC API is disabled")
 
-    if evok_config.get_api('websocket').get('enabled', False):
-        all_filtered = evok_config.get_api('websocket').get("all_filtered", False)
-        api_routes.append((r"/ws/?", WsHandler, {'all_filtered': all_filtered}))
+    if evok_config.get_api("websocket").get("enabled", False):
+        all_filtered = evok_config.get_api("websocket").get("all_filtered", False)
+        api_routes.append((r"/ws/?", WsHandler, {"all_filtered": all_filtered}))
 
-    app = tornado.web.Application(
-        handlers=api_routes,
-        **WEBSOCKET_SETTINGS
-    )
+    app = tornado.web.Application(handlers=api_routes, **WEBSOCKET_SETTINGS)
 
     # ---- prepare http server ----
     # the body is read into the memory before its check, the default of Tornado is 100 MB
@@ -343,7 +358,7 @@ async def main():
     httpServerApi.listen(port_api, address=address_api)
     logger.info(f"HTTP server API listening on {address_api or 'all interfaces'}:{port_api}")
 
-    webhook_config = evok_config.get_api('webhook')
+    webhook_config = evok_config.get_api("webhook")
     if webhook_config.get("enabled", False):
         wh_address = webhook_config.get("address", "http://127.0.0.1:80/index.html")
         wh_types = webhook_config.get("device_mask", ["di", "sensor", "watchdog"])

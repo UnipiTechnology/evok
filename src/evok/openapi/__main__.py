@@ -19,7 +19,7 @@ DEFAULT_OUTPUT = "Evok_API_OAS.yaml"
 
 
 class _Dumper(yaml.SafeDumper):
-    """ The shared dicts of the schemas are written in full, without the anchors and aliases of YAML """
+    """The shared dicts of the schemas are written in full, without the anchors and aliases of YAML"""
 
     def ignore_aliases(self, data):
         return True

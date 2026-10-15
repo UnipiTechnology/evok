@@ -16,24 +16,27 @@ logger = logging.getLogger(__name__)
 
 
 class UnitUnavailableError(InvalidParams):
-    """ The Modbus unit failed its last scan or a request of the change failed
+    """The Modbus unit failed its last scan or a request of the change failed
 
-        A subclass of InvalidParams only for tornado_jsonrpc2, it returns any other error as InternalError,
-        the error was -32603; the code and the message are its own.
+    A subclass of InvalidParams only for tornado_jsonrpc2, it returns any other error as InternalError,
+    the error was -32603; the code and the message are its own.
     """
-    error_code = -32000         # a server error defined by the implementation
+
+    error_code = -32000  # a server error defined by the implementation
     short_message = "Unit unavailable"
 
 
 class ReadOnlyAccessError(InvalidParams):
-    """ The read_token of the configuration allows only the methods which read, a subclass as UnitUnavailableError """
-    error_code = -32001         # a server error defined by the implementation
+    """The read_token of the configuration allows only the methods which read, a subclass as UnitUnavailableError"""
+
+    error_code = -32001  # a server error defined by the implementation
     short_message = "Forbidden"
 
 
 class SequenceRunningError(InvalidParams):
-    """ A change of an output while a sequence of its sequencer runs, a subclass as UnitUnavailableError """
-    error_code = -32002         # a server error defined by the implementation
+    """A change of an output while a sequence of its sequencer runs, a subclass as UnitUnavailableError"""
+
+    error_code = -32002  # a server error defined by the implementation
     short_message = "Sequence running"
 
 
@@ -41,11 +44,11 @@ async def create_response(request, backend):
     if request.method not in backend.RPC_METHODS:
         raise MethodNotFound(f"Method '{request.method}' not found!")
     # the access of the request is set by TokenAuth.prepare()
-    if getattr(backend, 'access', WRITE) != WRITE and request.method not in backend.RPC_READ_METHODS:
+    if getattr(backend, "access", WRITE) != WRITE and request.method not in backend.RPC_READ_METHODS:
         raise ReadOnlyAccessError("The token allows only reading")
     method = getattr(backend, request.method)
 
-    params = getattr(request, 'params', [])
+    params = getattr(request, "params", [])
     if isinstance(params, list):
         args, kwargs = params, {}
     elif isinstance(params, dict):
@@ -76,42 +79,46 @@ async def create_response(request, backend):
 
 
 class Handler(TokenAuth, JSONRPCHandler):
-    """ JSON-RPC, the requests are authenticated by TokenAuth """
+    """JSON-RPC, the requests are authenticated by TokenAuth"""
 
     # methods callable via JSON-RPC, other attributes of the handler are not exposed
-    RPC_METHODS = frozenset((
-        'input_get',
-        'input_get_value',
-        'input_set',
-        'relay_get',
-        'relay_set',
-        'relay_set_for_time',
-        'output_get',
-        'output_set',
-        'output_set_for_time',
-        'ai_get',
-        'ao_set_value',
-        'ao_set',
-        'owbus_get',
-        'owbus_set',
-        'owbus_scan',
-        'owbus_list',
-        'sensor_set',
-        'sensor_get',
-        'sensor_get_value',
-    ))
+    RPC_METHODS = frozenset(
+        (
+            "input_get",
+            "input_get_value",
+            "input_set",
+            "relay_get",
+            "relay_set",
+            "relay_set_for_time",
+            "output_get",
+            "output_set",
+            "output_set_for_time",
+            "ai_get",
+            "ao_set_value",
+            "ao_set",
+            "owbus_get",
+            "owbus_set",
+            "owbus_scan",
+            "owbus_list",
+            "sensor_set",
+            "sensor_get",
+            "sensor_get_value",
+        )
+    )
     # the methods allowed with the read_token of the configuration
-    RPC_READ_METHODS = frozenset((
-        'input_get',
-        'input_get_value',
-        'relay_get',
-        'output_get',
-        'ai_get',
-        'owbus_get',
-        'owbus_list',
-        'sensor_get',
-        'sensor_get_value',
-    ))
+    RPC_READ_METHODS = frozenset(
+        (
+            "input_get",
+            "input_get_value",
+            "relay_get",
+            "output_get",
+            "ai_get",
+            "owbus_get",
+            "owbus_list",
+            "sensor_get",
+            "sensor_get_value",
+        )
+    )
 
     def initialize(self, response_creator: Awaitable | None = None, version: str | None = None):
         if response_creator is None:
@@ -122,21 +129,21 @@ class Handler(TokenAuth, JSONRPCHandler):
     def input_get(self, circuit):
         inp = Devices.by_name(DI, circuit)
         state = inp.get()
-        return state['value'], state['debounce']
+        return state["value"], state["debounce"]
 
     def input_get_value(self, circuit):
         inp = Devices.by_name(DI, circuit)
-        return inp.get()['value']
+        return inp.get()["value"]
 
     async def input_set(self, circuit, debounce):
         inp = Devices.by_name(DI, circuit)
-        state, = await set_devices([(inp, {"debounce": debounce})])
+        (state,) = await set_devices([(inp, {"debounce": debounce})])
         return state
 
     # ---- Relay ----
     def relay_get(self, circuit):
         relay = Devices.by_name(RO, circuit)
-        return relay.get()['value']
+        return relay.get()["value"]
 
     async def relay_set(self, circuit, value):
         relay = Devices.by_name(RO, circuit)
@@ -146,7 +153,7 @@ class Handler(TokenAuth, JSONRPCHandler):
         return value
 
     async def relay_set_for_time(self, circuit, value, pulse_duration):
-        """ A pulse by the sequencer of blocks """
+        """A pulse by the sequencer of blocks"""
         relay = Devices.by_name(RO, circuit)
         return await start_pulse(relay, value, pulse_duration)
 
@@ -154,7 +161,7 @@ class Handler(TokenAuth, JSONRPCHandler):
         relay = Devices.by_name(DO, circuit)
         # pending is the running pulse of the sequencer of blocks, not another sequence
         sequence = sequencer.sequence(relay)
-        return relay.get()['value'], sequence is not None and sequence.name == 'pulse'
+        return relay.get()["value"], sequence is not None and sequence.name == "pulse"
 
     async def output_set(self, circuit, value):
         relay = Devices.by_name(DO, circuit)
@@ -163,9 +170,9 @@ class Handler(TokenAuth, JSONRPCHandler):
         return value
 
     async def output_set_for_time(self, circuit, value, pulse_duration=None, timeout=None):
-        """ timeout is a deprecated alias of pulse_duration """
+        """timeout is a deprecated alias of pulse_duration"""
         if (pulse_duration is None) == (timeout is None):
-            raise ValueError('Exactly one of pulse_duration and its deprecated alias timeout is required')
+            raise ValueError("Exactly one of pulse_duration and its deprecated alias timeout is required")
         if pulse_duration is None:
             pulse_duration = timeout
         relay = Devices.by_name(DO, circuit)
@@ -184,12 +191,13 @@ class Handler(TokenAuth, JSONRPCHandler):
 
         async def operation():
             written.append(await ao.set_value(value))
+
         await ao.client.change(operation)
         return written[0]
 
     async def ao_set(self, circuit, value, mode):
         ao = Devices.by_name(AO, circuit)
-        state, = await set_devices([(ao, {"value": value, "mode": mode})])
+        (state,) = await set_devices([(ao, {"value": value, "mode": mode})])
         return state
 
     # ---- OwBus (1wire bus) ----

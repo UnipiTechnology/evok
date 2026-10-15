@@ -234,44 +234,71 @@ _SET = " The state after the change is returned. The params are validated by the
 
 # the descriptions of the operations by the segment of the path: (GET, POST)
 _DESCRIPTIONS: dict[str, tuple[str, str]] = {
-    "di": ("The state of a digital input, its value, counter and debounce." + _ALL,
-           "Set the debounce, the counter or the mode of a digital input." + _SET),
-    "do": ("The state of a digital output, its value and PWM." + _ALL,
-           "Set the value or the PWM of a digital output; refused with 409 while its sequencer runs." + _SET),
-    "ro": ("The state of a relay output." + _ALL,
-           "Set the value of a relay output; refused with 409 while its sequencer runs." + _SET),
-    "led": ("The state of a user LED." + _ALL,
-            "Set the value of a user LED; refused with 409 while its sequencer runs." + _SET),
-    "ai": ("The state of an analog input, its value in the unit of its mode." + _ALL,
-           "Set the mode of an analog input." + _SET),
-    "ao": ("The state of an analog output, its value in the unit of its mode." + _ALL,
-           "Set the value or the mode of an analog output." + _SET),
-    "wd": ("The state of the master watchdog of a Modbus unit." + _ALL,
-           "Enable or disable the master watchdog, set its timeout or restart the unit." + _SET),
+    "di": (
+        "The state of a digital input, its value, counter and debounce." + _ALL,
+        "Set the debounce, the counter or the mode of a digital input." + _SET,
+    ),
+    "do": (
+        "The state of a digital output, its value and PWM." + _ALL,
+        "Set the value or the PWM of a digital output; refused with 409 while its sequencer runs." + _SET,
+    ),
+    "ro": (
+        "The state of a relay output." + _ALL,
+        "Set the value of a relay output; refused with 409 while its sequencer runs." + _SET,
+    ),
+    "led": (
+        "The state of a user LED." + _ALL,
+        "Set the value of a user LED; refused with 409 while its sequencer runs." + _SET,
+    ),
+    "ai": (
+        "The state of an analog input, its value in the unit of its mode." + _ALL,
+        "Set the mode of an analog input." + _SET,
+    ),
+    "ao": (
+        "The state of an analog output, its value in the unit of its mode." + _ALL,
+        "Set the value or the mode of an analog output." + _SET,
+    ),
+    "wd": (
+        "The state of the master watchdog of a Modbus unit." + _ALL,
+        "Enable or disable the master watchdog, set its timeout or restart the unit." + _SET,
+    ),
     "owpower": ("The power of a 1-Wire bus." + _ALL, "Switch the power of a 1-Wire bus." + _SET),
-    "owbus": ("The state of a 1-Wire bus read by the kernel." + _ALL,
-              "Set the intervals of a 1-Wire bus, start a search or reset its master." + _SET),
+    "owbus": (
+        "The state of a 1-Wire bus read by the kernel." + _ALL,
+        "Set the intervals of a 1-Wire bus, start a search or reset its master." + _SET,
+    ),
     "temp": ("The state of a 1-Wire sensor." + _ALL, "Set the interval of the reads of a 1-Wire sensor." + _SET),
-    "nv_save": ("The saving to the non-volatile memory of a Modbus unit, value 1 for 2 s after a save." + _ALL,
-                "Save the settings of a Modbus unit to its non-volatile memory, the unit loads them after its "
-                "restart." + _SET),
-    "register": ("The raw value of a Modbus register of a custom Modbus device." + _ALL,
-                 "Write the raw value of a Modbus register." + _SET),
-    "data_point": ("The value of a data point of a Modbus unit." + _ALL,
-                   "Write the value of a data point; only a data point with `writable: true` in its HW definition "
-                   "in a holding register can be written, the value is converted to the register by the inverse of "
-                   "its transformation, `(value - offset) / factor`." + _SET),
-    "sequencer": ("The running pulse or sequence of an output (RO, DO, LED), the circuit is the type and the circuit "
-                  "of the output, e.g. `do_1_01`." + _ALL,
-                  "Start a pulse or a sequence of an output, or cancel it." + _SET),
-    "modbus_slave": ("The state of a Modbus unit and its scan." + _ALL,
-                     "Enable or disable the periodic scan of a Modbus unit." + _SET),
+    "nv_save": (
+        "The saving to the non-volatile memory of a Modbus unit, value 1 for 2 s after a save." + _ALL,
+        "Save the settings of a Modbus unit to its non-volatile memory, the unit loads them after its restart." + _SET,
+    ),
+    "register": (
+        "The raw value of a Modbus register of a custom Modbus device." + _ALL,
+        "Write the raw value of a Modbus register." + _SET,
+    ),
+    "data_point": (
+        "The value of a data point of a Modbus unit." + _ALL,
+        "Write the value of a data point; only a data point with `writable: true` in its HW definition "
+        "in a holding register can be written, the value is converted to the register by the inverse of "
+        "its transformation, `(value - offset) / factor`." + _SET,
+    ),
+    "sequencer": (
+        "The running pulse or sequence of an output (RO, DO, LED), the circuit is the type and the circuit "
+        "of the output, e.g. `do_1_01`." + _ALL,
+        "Start a pulse or a sequence of an output, or cancel it." + _SET,
+    ),
+    "modbus_slave": (
+        "The state of a Modbus unit and its scan." + _ALL,
+        "Enable or disable the periodic scan of a Modbus unit." + _SET,
+    ),
     "device_info": ("The description of the controller or a unit." + _ALL, ""),
     "serial_bus": ("The configuration and the Modbus units of a Modbus RTU bus, it cannot be set." + _ALL, ""),
     "tcp_bus": ("The configuration and the Modbus units of a Modbus TCP bus, it cannot be set." + _ALL, ""),
 }
-DEVICES = [replace(device, get_description=_DESCRIPTIONS[device.segment][0],
-                   post_description=_DESCRIPTIONS[device.segment][1]) for device in DEVICES]
+DEVICES = [
+    replace(device, get_description=_DESCRIPTIONS[device.segment][0], post_description=_DESCRIPTIONS[device.segment][1])
+    for device in DEVICES
+]
 
 
 # The runtime device type (evok.devices) of every response schema key. The API name

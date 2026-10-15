@@ -22,15 +22,14 @@ WEBSOCKET_SETTINGS = {"websocket_ping_interval": 10, "websocket_ping_timeout": 1
 
 
 class WsHandler(TokenAuth, websocket.WebSocketHandler):
-
-    query_token = True      # a browser cannot set a header of a WebSocket
+    query_token = True  # a browser cannot set a header of a WebSocket
 
     def initialize(self, all_filtered=False):
         self.all_filtered = all_filtered
 
     def check_origin(self, origin):
-        """ A web page of the same host or of allowed_origins, every web page in a browser could control the IOs;
-            a client without the header Origin, e.g. Node-RED or Python, is not checked by Tornado
+        """A web page of the same host or of allowed_origins, every web page in a browser could control the IOs;
+        a client without the header Origin, e.g. Node-RED or Python, is not checked by Tornado
         """
         allowed = is_same_origin(origin, self.request) or is_allowed_origin(origin)
         if not allowed:
@@ -39,7 +38,7 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
 
     def open(self):
         self.filter = ["default"]
-        self.pending: dict[tuple, dict] = {}            # the last state of each changed device not sent yet
+        self.pending: dict[tuple, dict] = {}  # the last state of each changed device not sent yet
         self.send_task: asyncio.Task | None = None
         logger.debug("New WebSocket client connected")
         if "all" not in registered_ws:
@@ -47,19 +46,19 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
         registered_ws["all"].add(self)
 
     def on_event(self, device):
-        """ Send the states of the changed devices, always as a list
+        """Send the states of the changed devices, always as a list
 
-            A change of Modbus devices comes as a Proxy with a list of states,
-            a change of a 1-Wire sensor as the sensor with its state.
+        A change of Modbus devices comes as a Proxy with a list of states,
+        a change of a 1-Wire sensor as the sensor with its state.
         """
         try:
             states = device.full()
             if isinstance(states, dict):
                 states = [states]
             if not self._is_default_filter():
-                states = [state for state in states if devtype_of(state['dev']) in self.filter]
+                states = [state for state in states if devtype_of(state["dev"]) in self.filter]
             for state in states:
-                self.pending[(state['dev'], state.get('circuit'))] = state
+                self.pending[(state["dev"], state.get("circuit"))] = state
             if self.pending and self.send_task is None:
                 self.send_task = asyncio.create_task(self._send())
         except Exception as E:
@@ -67,10 +66,10 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
             logger.debug("WsHandler error in event", exc_info=True)
 
     async def _send(self):
-        """ Send the pending states, one message at a time
+        """Send the pending states, one message at a time
 
-            The messages of a slow or lost client were buffered without a limit, every event was written
-            at once. The changes while a message is sent are merged, the last state of each device is sent.
+        The messages of a slow or lost client were buffered without a limit, every event was written
+        at once. The changes while a message is sent are merged, the last state of each device is sent.
         """
         try:
             while self.pending:
@@ -115,18 +114,18 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
             await self._send_error(errors)
         except Exception:
             logger.exception("WS")
-            await self._send_error({'Server error': 'internal'})
+            await self._send_error({"Server error": "internal"})
 
     async def _send_error(self, errors: dict):
-        """ Errors are sent only to the requesting client, in the format of REST """
+        """Errors are sent only to the requesting client, in the format of REST"""
         with contextlib.suppress(websocket.WebSocketClosedError):
-            await self.write_message(json.dumps({'success': False, 'errors': errors}))
+            await self.write_message(json.dumps({"success": False, "errors": errors}))
 
     def _is_default_filter(self) -> bool:
         return self.filter == ["default"]
 
     def _all(self) -> list:
-        """ State of all devices, with all_filtered only of the devices passing the filter """
+        """State of all devices, with all_filtered only of the devices passing the filter"""
         if self.all_filtered and self._is_default_filter():
             devtypes = [DI, RO, AI, AO, SENSOR]
         elif self.all_filtered:
@@ -136,8 +135,8 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
         return [dev.full() for devtype in devtypes for dev in Devices.by_name(devtype)]
 
     def _set_filter(self, names):
-        """ Device types sent in events, altnames are converted to the device types,
-            unknown types are skipped, ["default"] restores the default filter
+        """Device types sent in events, altnames are converted to the device types,
+        unknown types are skipped, ["default"] restores the default filter
         """
         if not isinstance(names, list):
             raise ValueError("Command 'filter' requires a list in 'devices'")
@@ -152,8 +151,8 @@ class WsHandler(TokenAuth, websocket.WebSocketHandler):
 
     @staticmethod
     def _set_params(dev, message) -> dict:
-        """ Params of set() as in REST: other keys of the message, a dict in 'value' or 'value' itself,
-            validated by the schema of the device type
+        """Params of set() as in REST: other keys of the message, a dict in 'value' or 'value' itself,
+        validated by the schema of the device type
         """
         kw = {key: val for (key, val) in message.items() if key not in ("circuit", "value", "cmd", "dev")}
         value = message.get("value")

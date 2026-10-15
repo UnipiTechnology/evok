@@ -150,8 +150,8 @@ def generic_paths() -> dict:
             "get": {
                 "tags": ["Getter"],
                 "summary": "Read one property of a device",
-                "description": "`{\"<parameter>\": <value>}` of a device; with the circuit *all* the list of "
-                "`{\"circuit\": ..., \"<parameter>\": ...}`, the devices without the property are skipped.",
+                "description": '`{"<parameter>": <value>}` of a device; with the circuit *all* the list of '
+                '`{"circuit": ..., "<parameter>": ...}`, the devices without the property are skipped.',
                 "operationId": "read-device-parameter",
                 "responses": {
                     "200": {

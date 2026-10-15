@@ -9,8 +9,8 @@ from .cache import ENoCacheRegister, EUnknownRegister
 from .scanner import ModbusScanner
 
 __all__ = [
-    'ENoCacheRegister',
-    'EUnknownRegister',
-    'ModbusScanner',
-    'set_devices',
+    "ENoCacheRegister",
+    "EUnknownRegister",
+    "ModbusScanner",
+    "set_devices",
 ]
