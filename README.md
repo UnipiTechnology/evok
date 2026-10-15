@@ -1,6 +1,17 @@
 # Evok - the Unipi API
 
-Evok is the primary API for accessing I/Os of [NEURON], [PATRON], [GATE] and [Unipi 1.1] devices including [Extension modules] by [Unipi technology].
+Evok is a bridge between the hardware of [Unipi technology] and the applications. It turns the Modbus registers of the Unipi
+units and the 1-Wire sensors into named devices with a clear state, e.g. the digital input `di 1_01`, the relay
+`ro 2_03` or a thermometer `temp`, so the applications do not need to know Modbus or the register maps.
+
+- **Abstraction of the hardware:** the devices are created by the HW definitions of the units, their values
+  are in the units of their modes, with checked modes and ranges.
+- **One state:** Evok scans the units and keeps the actual state of every device, also the quality
+  of the communication (`comm`, `last_comm`); the changes are sent as events.
+- **One way of writing:** a change from any API is validated, written under the lock of the unit and read back;
+  the pulses and sequences of the outputs are timed by the sequencer.
+- **Integration:** the same devices for web applications, Node-RED and Home Assistant, with tokens and CORS
+  for the remote clients.
 
 It provides multiple ways to easily access the I/Os of the devices, including:
 
@@ -15,6 +26,9 @@ Besides that, Evok also supports sending notifications via webhook.
 
 [evok-web] is a simple demo web application using Evok demonstrating its usage and allowing easy control of the devices configured in Evok.
 
+Natively supported hardware: [NEURON], [PATRON], [GATE] and [Unipi 1.1] including [Extension modules].
+Other devices that communicate via Modbus can be described using configuration files.
+
 ## Documentation
 Installation, basic usage examples, configuration and further information can be found on [https://evok.readthedocs.io/](https://evok.readthedocs.io/)
 
@@ -26,18 +40,18 @@ The OpenAPI document of the REST and JSON API is generated from the sources (`py
   environment by pip.
 - **Security:** the API listens on `127.0.0.1` by default, an optional `token` and a read-only `read_token`
   for all APIs, CORS and the WebSocket from a browser only for `allowed_origins`.
+- **Stricter checks:** invalid values and configurations are refused with an error instead of being processed
+  silently; the errors have the HTTP statuses 400, 401, 403, 404, 409, 503 and 500.
 - **MQTT API** with the Home Assistant discovery.
-- **Sequencer:** the pulses and sequences of RO, DO and LED are set by the device `sequencer` of the output,
-  the outputs have no `pulse_duration`, `timeout` and `pending`.
 - **Communication of the devices:** every state of a device of a Modbus unit and of a 1-Wire sensor has `comm`
   and `last_comm`; a unit which does not respond does not slow down the others on the bus.
 - **1-Wire by the kernel** instead of owserver, an OWFS bus is configured by its `master`.
-- **Stricter checks:** invalid values and configurations are refused with an error instead of being processed
-  silently; the errors have the HTTP statuses 400, 401, 403, 404, 409, 503 and 500.
+- **Sequencer:** the pulses and sequences of RO, DO and LED are set by the device `sequencer` of the output,
+  the outputs have no `pulse_duration`, `timeout` and `pending`.
 - **OpenAPI document** generated from the sources and attached to every release.
 
 The complete list, with the incompatible changes first and the commits of each change, is in
-[docs/api-changes-dev-src.md](docs/api-changes-dev-src.md) (in Czech [docs/zmeny-api-dev-src.md](docs/zmeny-api-dev-src.md)).
+[docs/api-changes-dev-src.md](docs/api-changes-dev-src.md).
 
 ## Developer Note
 
