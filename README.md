@@ -29,6 +29,10 @@ Besides that, Evok also supports sending notifications via webhook.
 Natively supported hardware: [NEURON], [PATRON], [GATE] and [Unipi 1.1] including [Extension modules].
 Other devices that communicate via Modbus can be described using configuration files.
 
+If you develop your own control application where the real-time behaviour matters, the application should
+use the Modbus protocol directly or the library of [unipi-tools], which communicates with the kernel driver
+via unipichannel.
+
 ## Documentation
 Installation, basic usage examples, configuration and further information can be found on [https://evok.readthedocs.io/](https://evok.readthedocs.io/)
 
@@ -68,3 +72,4 @@ Apache License, Version 2.0
 [Evok-web]:https://github.com/UnipiTechnology/evok-web-jq
 [Extension modules]:https://www.unipi.technology/products?category=32
 [Unipi technology]:https://www.unipi.technology/
+[unipi-tools]:https://github.com/UnipiTechnology/unipi-tools
