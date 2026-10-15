@@ -4,7 +4,8 @@ The REST API provides a simple interface for sending and receiving data in a sta
 
 ## Routes
 
-`<fmt>` is `rest` or `json`, both return JSON. The POST of `rest` takes the params as a form, of `json` as a JSON object.
+`<fmt>` is `rest` or `json`, both return JSON. The POST of `rest` takes the params as a form or as a JSON object (with `Content-Type: application/json`
+or a body starting with `{`), of `json` as a JSON object.
 
 | Route                                  | Reply                                                                         |
 |----------------------------------------|-------------------------------------------------------------------------------|

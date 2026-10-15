@@ -5,9 +5,9 @@ from .client import Client
 
 
 class IODevice:
-    """ Base class of the IO devices on a Modbus unit
+    """Base class of the IO devices on a Modbus unit
 
-        Subclasses set `devtype` and implement full() and set()
+    Subclasses set `devtype` and implement full() and set()
     """
 
     devtype = None
@@ -19,54 +19,54 @@ class IODevice:
         self.major_group = major_group
 
     def full(self) -> dict:
-        """ Return the complete state of the device """
+        """Return the complete state of the device"""
         raise NotImplementedError
 
     def get(self):
         return self.full()
 
     async def set(self, alias=None, **kwargs) -> None:
-        """ Change the device settings, the caller reads the new state by full() """
+        """Change the device settings, the caller reads the new state by full()"""
         raise NotImplementedError
 
     def set_alias(self, alias):
-        """ Set the alias if it is given """
+        """Set the alias if it is given"""
         if alias is not None:
             Devices.set_alias(alias, self)
 
     def _with_alias(self, ret: dict) -> dict:
-        """ Add the alias to a state dict if the device has one """
-        if self.alias != '':
-            ret['alias'] = self.alias
+        """Add the alias to a state dict if the device has one"""
+        if self.alias != "":
+            ret["alias"] = self.alias
         return ret
 
     def _with_common(self, ret: dict) -> dict:
-        """ Add the communication with the unit of the device (comm, last_comm) and its alias, the last items
-            of the state; the value of a unit which does not respond is the last known one, comm tells it
+        """Add the communication with the unit of the device (comm, last_comm) and its alias, the last items
+        of the state; the value of a unit which does not respond is the last known one, comm tells it
         """
-        comm = getattr(self.client, 'comm', None)
+        comm = getattr(self.client, "comm", None)
         if comm is not None:
-            ret['comm'] = comm()
-            ret['last_comm'] = self.client.last_comm()
+            ret["comm"] = comm()
+            ret["last_comm"] = self.client.last_comm()
         return self._with_alias(ret)
 
 
 async def set_devices(assignments: list[tuple], states: dict | None = None) -> list[dict]:
-    """ Set the devices by the params of assignments [(device, kw)], return their states in the same order
+    """Set the devices by the params of assignments [(device, kw)], return their states in the same order
 
-        The devices of a Modbus unit are set under the lock of the unit by Client.change(), the unit
-        is read and the states follow the writes. The units are set one after another, in the order
-        of their first assignment, the other devices one by one. A change of only the alias does not
-        write the unit, it is set also on an unavailable unit.
+    The devices of a Modbus unit are set under the lock of the unit by Client.change(), the unit
+    is read and the states follow the writes. The units are set one after another, in the order
+    of their first assignment, the other devices one by one. A change of only the alias does not
+    write the unit, it is set also on an unavailable unit.
 
-        On an error, states (index of the assignment: state) has the states of the assignments done
-        before it, also of its unit, the units after it are not set.
+    On an error, states (index of the assignment: state) has the states of the assignments done
+    before it, also of its unit, the units after it are not set.
 
-        set() of a device on a Modbus unit runs under the lock of its unit, it must not call set_devices()
-        or Client.change() of the same unit: the lock is not reentrant, it would wait for itself forever.
+    set() of a device on a Modbus unit runs under the lock of its unit, it must not call set_devices()
+    or Client.change() of the same unit: the lock is not reentrant, it would wait for itself forever.
 
-        A change of a device other than its alias is refused by SequenceRunning while a sequence of the sequencer
-        of blocks runs for it, e.g. a pulse; it is cancelled by the sequencer device.
+    A change of a device other than its alias is refused by SequenceRunning while a sequence of the sequencer
+    of blocks runs for it, e.g. a pulse; it is cancelled by the sequencer device.
     """
     states = {} if states is None else states
     units: dict = {}
@@ -80,14 +80,17 @@ async def set_devices(assignments: list[tuple], states: dict | None = None) -> l
         async def operation():
             for index, device, kw in items:
                 # under the lock of the unit, as the steps of the sequence
-                if set(kw) - {'alias'} and sequencer.is_running(device):
-                    raise SequenceRunning(f"{str(device.devtype).upper()} {device.circuit}: a sequence of "
-                                          f"its sequencer {device.devtype}_{device.circuit} runs, cancel it there")
+                if set(kw) - {"alias"} and sequencer.is_running(device):
+                    raise SequenceRunning(
+                        f"{str(device.devtype).upper()} {device.circuit}: a sequence of "
+                        f"its sequencer {device.devtype}_{device.circuit} runs, cancel it there"
+                    )
                 await device.set(**kw)
                 done.append((index, device))
+
         try:
             if isinstance(unit, Client):
-                writes = any(set(kw) - {'alias'} for _, _, kw in items)
+                writes = any(set(kw) - {"alias"} for _, _, kw in items)
                 await unit.change(operation, check_available=writes, read=writes)
             else:
                 await operation()

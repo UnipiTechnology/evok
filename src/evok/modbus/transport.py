@@ -6,21 +6,21 @@ from tmodbus import AsyncSmartTransport
 
 
 class BusTransport(AsyncSmartTransport):
-    """ The transport of a Modbus bus, shared by its units
+    """The transport of a Modbus bus, shared by its units
 
-        A unit which does not respond (its scan failed) is probed by one request with probe_timeout,
-        without the retries. Every scan of a missing unit locked the bus for (retries + 1) * timeout
-        and the other units of the bus waited, e.g. 1 s with the defaults.
+    A unit which does not respond (its scan failed) is probed by one request with probe_timeout,
+    without the retries. Every scan of a missing unit locked the bus for (retries + 1) * timeout
+    and the other units of the bus waited, e.g. 1 s with the defaults.
 
-        The probe uses the lock of the bus and the reconnection of AsyncSmartTransport (tmodbus 0.6.2),
-        a cancelled request is discarded by the transport as a timed out one, its late response too.
+    The probe uses the lock of the bus and the reconnection of AsyncSmartTransport (tmodbus 0.6.2),
+    a cancelled request is discarded by the transport as a timed out one, its late response too.
     """
 
     def __init__(self, base_transport, *, probe_timeout: float, **kwargs):
         super().__init__(base_transport, **kwargs)
         self.probe_timeout = probe_timeout
-        self.failing_units: set[int] = set()    # the unit ids probed by one request, set by ModbusScanner
-        self._single_units: set[int] = set()    # the unit ids sent one request, see single_request()
+        self.failing_units: set[int] = set()  # the unit ids probed by one request, set by ModbusScanner
+        self._single_units: set[int] = set()  # the unit ids sent one request, see single_request()
 
     def set_failing(self, unit_id: int, failing: bool):
         if failing:
@@ -30,8 +30,8 @@ class BusTransport(AsyncSmartTransport):
 
     @contextlib.contextmanager
     def single_request(self, unit_id: int):
-        """ The requests of the unit are sent once with probe_timeout, without the retries, e.g. a write after
-            which the unit restarts and does not respond; a retry repeated the restart
+        """The requests of the unit are sent once with probe_timeout, without the retries, e.g. a write after
+        which the unit restarts and does not respond; a retry repeated the restart
         """
         self._single_units.add(unit_id)
         try:

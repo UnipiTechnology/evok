@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class OwPower(IODevice):
-    """ The coil disables the power of the 1-Wire bus, value 1 is the bus without power """
+    """The coil disables the power of the 1-Wire bus, value 1 is the bus without power"""
 
     devtype = OWPOWER
 
@@ -19,25 +19,24 @@ class OwPower(IODevice):
         self.value = 0
 
     def full(self):
-        ret = {'dev': 'owpower', 'circuit': self.circuit, 'value': self.value}
+        ret = {"dev": "owpower", "circuit": self.circuit, "value": self.value}
         self._with_common(ret)
         return ret
 
     async def set(self, value=None, alias=None):
-        """ Sets new on/off status.
-        """
+        """Sets new on/off status."""
         self.set_alias(alias)
         if value is not None:
-            value = int(to_bool(value))     # full() reports 0/1 as the other devices, not true/false
+            value = int(to_bool(value))  # full() reports 0/1 as the other devices, not true/false
             await self.client.mb_client.write_single_coil(self.coil, bool(value))
             self.value = value
 
 
 class NvSave(IODevice):
-    """ Writing value=1 schedules writing of startup data in firmware
+    """Writing value=1 schedules writing of startup data in firmware
 
-        The value is held at 1 for HOLD_TIME seconds after the write,
-        a new write is refused until then.
+    The value is held at 1 for HOLD_TIME seconds after the write,
+    a new write is refused until then.
     """
 
     devtype = NV_SAVE
@@ -51,12 +50,12 @@ class NvSave(IODevice):
         self.hold_task: asyncio.Task | None = None
 
     def full(self):
-        ret = {'dev': 'nv_save', 'circuit': self.circuit, 'value': self.value}
+        ret = {"dev": "nv_save", "circuit": self.circuit, "value": self.value}
         self._with_common(ret)
         return ret
 
     async def _hold(self):
-        """ Keep the value at 1 for HOLD_TIME, then return it to 0 """
+        """Keep the value at 1 for HOLD_TIME, then return it to 0"""
         try:
             await asyncio.sleep(self.HOLD_TIME)
         finally:
@@ -66,7 +65,7 @@ class NvSave(IODevice):
                 self.hold_task = None
 
     async def set(self, value=None, alias=None):
-        """ Schedule writing of startup data in firmware if value=1 """
+        """Schedule writing of startup data in firmware if value=1"""
         self.set_alias(alias)
         if value is not None and to_bool(value):
             if self.hold_task is not None:
@@ -86,7 +85,6 @@ class NvSave(IODevice):
 
 
 class Watchdog(IODevice):
-
     devtype = WATCHDOG
 
     def __init__(self, circuit, client: Client, reg, timeout_reg, reset_coil, major_group=0):
@@ -102,17 +100,18 @@ class Watchdog(IODevice):
         self.was_wd_boot_value = None
 
     def full(self):
-        ret = {'dev': 'wd',
-               'circuit': self.circuit,
-               'value': self.value,
-               'timeout': self.timeout,
-               'was_wd_reset': self.was_wd_boot_value,
-               }
+        ret = {
+            "dev": "wd",
+            "circuit": self.circuit,
+            "value": self.value,
+            "timeout": self.timeout,
+            "was_wd_reset": self.was_wd_boot_value,
+        }
         self._with_common(ret)
         return ret
 
     async def check_new_data(self):
-        """ Bit 0 of the register enables the watchdog, bit 1 is a restart by the watchdog """
+        """Bit 0 of the register enables the watchdog, bit 1 is a restart by the watchdog"""
         old_state = (self.value, self.was_wd_boot_value)
         register = self.accessor.read(self.client)
         self.value = register & 0b01
@@ -121,14 +120,15 @@ class Watchdog(IODevice):
         return old_state != (self.value, self.was_wd_boot_value)
 
     async def set(self, value=None, timeout=None, reset=None, nv_save=None, alias=None):
-        """ Sets new on/off status. Disable pending timeouts
+        """Sets new on/off status. Disable pending timeouts
 
-            nv_save is deprecated and not supported, it is rejected before any change: nv_save=0
-            saved the settings too, the device nv_save of the unit saves them.
+        nv_save is deprecated and not supported, it is rejected before any change: nv_save=0
+        saved the settings too, the device nv_save of the unit saves them.
         """
         if nv_save is not None:
-            raise ValueError(f"WD {self.circuit}: nv_save is deprecated and not supported, "
-                             f"use the device nv_save {self.major_group}")
+            raise ValueError(
+                f"WD {self.circuit}: nv_save is deprecated and not supported, use the device nv_save {self.major_group}"
+            )
         self.set_alias(alias)
 
         if value is not None:

@@ -21,19 +21,19 @@ Device = Any
 
 
 def to_bool(value) -> bool:
-    """ A flag from JSON (true, 1) or from a form of REST ('true', '1'), the string '0' is false """
+    """A flag from JSON (true, 1) or from a form of REST ('true', '1'), the string '0' is false"""
     if isinstance(value, str):
         text = value.strip().lower()
-        if text in ('true', 'yes', 'on', '1'):
+        if text in ("true", "yes", "on", "1"):
             return True
-        if text in ('false', 'no', 'off', '0', ''):
+        if text in ("false", "no", "off", "0", ""):
             return False
         raise ValueError(f"Invalid boolean value '{value}'")
     return bool(value)
 
 
 def to_float(value) -> float:
-    """ A number from JSON or a form, NaN and infinity are rejected, they would pass any range check """
+    """A number from JSON or a form, NaN and infinity are rejected, they would pass any range check"""
     result = float(value)
     if not math.isfinite(result):
         raise ValueError(f"Invalid number {value}")
@@ -41,17 +41,16 @@ def to_float(value) -> float:
 
 
 class Aliases:
-
     def __init__(self, initial_dict: dict[str, dict[str, str]]):
-        self.devtype = 'run'
-        self.circuit = 'alias'
+        self.devtype = "run"
+        self.circuit = "alias"
         self.alias_dict: dict[str, Device] = {}
         self.initial_dict: dict[str, dict[str, str]] = {}
         for key, value in initial_dict.items():
             if not isinstance(value, dict):
                 logger.warning(f"Aliases: Invalid record of alias '{key}', skipped")
                 continue
-            devtype = value.get('devtype')
+            devtype = value.get("devtype")
             if devtype is None:
                 # kept in the file, but it is never assigned to a device
                 logger.warning(f"Aliases: Missing devtype of alias '{key}'")
@@ -60,7 +59,7 @@ class Aliases:
                 if name is None:
                     logger.warning(f"Aliases: Unknown devtype {devtype} of alias '{key}'")
                 else:
-                    value['devtype'] = name
+                    value["devtype"] = name
                     logger.warning(f"Aliases: Detected old devtype '{key}'! Upgrading...")
             self.initial_dict[key] = value
         self.dirty_callback: Callable | None = None
@@ -95,13 +94,13 @@ class Aliases:
             raise ValueError(f"Duplicate alias {alias}")
         # an alias loaded from the file belongs to its device, even when the device is not registered yet
         rec = self.initial_dict.get(alias)
-        if rec is not None and (rec.get('devtype') != device.devtype or rec.get('circuit') != str(device.circuit)):
+        if rec is not None and (rec.get("devtype") != device.devtype or rec.get("circuit") != str(device.circuit)):
             raise ValueError(f"Alias {alias} belongs to {rec.get('devtype')} {rec.get('circuit')}")
         # check alias name, the length as in the schemas, which are not used by every API
         if not re.fullmatch(r"[A-Za-z0-9._-]+", alias) or len(alias) > MAX_ALIAS_LENGTH:
             raise ValueError(f"Invalid alias {alias}")
         # GET /rest/<dev>/all returns all devices of the type, such alias would never be used
-        if alias == 'all':
+        if alias == "all":
             raise ValueError("Alias all is reserved")
 
     def add(self, alias: str, device: Device, file_update: bool = False):
@@ -137,37 +136,34 @@ class Aliases:
                 self.set_dirty()
 
     def remove(self, alias: str) -> None:
-        """ Delete an alias of a registered device or an alias loaded from the file """
+        """Delete an alias of a registered device or an alias loaded from the file"""
         if alias not in self.alias_dict and alias not in self.initial_dict:
             raise ValueError(f"Unknown alias {alias}")
         device = self.alias_dict.get(alias)
         if device is not None:
-            device.alias = ''
+            device.alias = ""
         self.delete(alias)
 
     def get_aliases_by_circuit(self, devtype: str, circuit: str):
-        return [alias for alias, rec in self.initial_dict.items()
-                if rec.get("devtype", None) == devtype and rec.get("circuit", None) == circuit]
+        return [
+            alias
+            for alias, rec in self.initial_dict.items()
+            if rec.get("devtype", None) == devtype and rec.get("circuit", None) == circuit
+        ]
 
     def get_dict_to_save(self) -> dict[str, dict[str, str]]:
         aliases = deepcopy(self.initial_dict)
-        aliases.update({alias: {"circuit": device.circuit, "devtype": device.devtype}
-                        for alias, device in self.alias_dict.items()})
+        aliases.update(
+            {alias: {"circuit": device.circuit, "devtype": device.devtype} for alias, device in self.alias_dict.items()}
+        )
         return aliases
 
     @property
     def aliases(self) -> dict:
-        return {k: {"circuit": f"{v.devtype}_{v.circuit}",
-                    "devtype": v.devtype}
-                for k, v in self.alias_dict.items()}
+        return {k: {"circuit": f"{v.devtype}_{v.circuit}", "devtype": v.devtype} for k, v in self.alias_dict.items()}
 
     def full(self):
-        ret = {
-            'dev': 'run',
-            'circuit': self.circuit,
-            'save': False,
-            'aliases': self.aliases
-        }
+        ret = {"dev": "run", "circuit": self.circuit, "save": False, "aliases": self.aliases}
         return ret
 
     async def set(self, save: bool = False, delete: str | None = None):
@@ -194,8 +190,8 @@ class DeviceList(dict):
             return super().__getitem__(self.altnames[key])
 
     def by_name(self, devtype, circuit=None, major_group=None):
-        """ The device of a type (or its altname) with a circuit or an alias,
-            without a circuit all devices of the type, optionally of a major_group
+        """The device of a type (or its altname) with a circuit or an alias,
+        without a circuit all devices of the type, optionally of a major_group
         """
         devdict = super().get(self.altnames.get(devtype, devtype))
         if devdict is None:
@@ -214,10 +210,9 @@ class DeviceList(dict):
         return dev
 
     def register_device(self, devtype_name, device):
-        """ can be called with devtype = INTEGER or NAME
-        """
+        """can be called with devtype = INTEGER or NAME"""
         if devtype_name is None:
-            raise Exception('Device type must contain INTEGER or NAME')
+            raise Exception("Device type must contain INTEGER or NAME")
         devdict = self[devtype_name]
 
         devdict[str(device.circuit)] = device
@@ -234,14 +229,14 @@ class DeviceList(dict):
         logger.debug(f"Registered new device '{devtype_name}' with circuit {device.circuit} \t ({device})")
 
     def set_alias(self, alias: str | None, device: Device, file_update: bool = False) -> None:
-        """ Set or reset ('' or None) the alias, an invalid alias raises ValueError logged by the caller """
+        """Set or reset ('' or None) the alias, an invalid alias raises ValueError logged by the caller"""
         if alias == device.alias:
             return
-        if alias == '' or alias is None:
+        if alias == "" or alias is None:
             if device.alias:
                 self.aliases.delete(device.alias, file_update)
             # no alias is '', full() of the devices tests it
-            device.alias = ''
+            device.alias = ""
             logger.debug(f"Reset alias of {device.devtype}[{device.circuit}]")
         else:
             # by_name() finds the circuit first, such alias would never be used
@@ -276,45 +271,45 @@ SEQUENCER = "sequencer"
 
 # # corresponding device types names !! ORDER IS IMPORTANT
 num_to_devtype_name = {
-    0: 'ro',
-    17: 'do',
-    1: 'di',
-    2: 'ai',
-    3: 'ao',
-    5: 'sensor',
-    8: 'owbus',
-    12: 'ds2408',
-    15: 'modbus_slave',
-    16: 'board',
-    18: 'led',
-    19: 'watchdog',
-    20: 'register',
-    24: 'data_point',
-    26: 'tcp_bus',
-    27: 'serial_bus',
-    28: 'device_info',
-    29: 'owpower',
-    30: 'run',
-    31: 'nv_save',
-    32: 'sequencer',
+    0: "ro",
+    17: "do",
+    1: "di",
+    2: "ai",
+    3: "ao",
+    5: "sensor",
+    8: "owbus",
+    12: "ds2408",
+    15: "modbus_slave",
+    16: "board",
+    18: "led",
+    19: "watchdog",
+    20: "register",
+    24: "data_point",
+    26: "tcp_bus",
+    27: "serial_bus",
+    28: "device_info",
+    29: "owpower",
+    30: "run",
+    31: "nv_save",
+    32: "sequencer",
 }
 
 devtype_altnames = {
-    'digitalinput': 'di',
-    'input': 'di',
-    'digitaloutput': 'do',
-    'output': 'do',
-    'relay': 'ro',
-    'analoginput': 'ai',
-    'analogoutput': 'ao',
-    'wd': 'watchdog',
-    'temp': 'sensor',
-    '1wdevice': 'sensor',
+    "digitalinput": "di",
+    "input": "di",
+    "digitaloutput": "do",
+    "output": "do",
+    "relay": "ro",
+    "analoginput": "ai",
+    "analogoutput": "ao",
+    "wd": "watchdog",
+    "temp": "sensor",
+    "1wdevice": "sensor",
 }
 
 
 def devtype_of(name: str) -> str:
-    """ Device type of a name, also of 'dev' in full() which is not always the device type (e.g. 'wd') """
+    """Device type of a name, also of 'dev' in full() which is not always the device type (e.g. 'wd')"""
     return devtype_altnames.get(name, name)
 
 

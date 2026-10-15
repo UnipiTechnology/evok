@@ -7,17 +7,17 @@ from tmodbus.exceptions import TModbusError
 
 logger = logging.getLogger(__name__)
 
-MAX_READ_COUNT = 125     # registers read by one Modbus request
+MAX_READ_COUNT = 125  # registers read by one Modbus request
 
 
 class ENoCacheRegister(Exception):
-    """ The register was not read yet """
+    """The register was not read yet"""
 
 
 class EUnknownRegister(Exception):
-    """ The registers are not in one register block, an error of the hardware definition
+    """The registers are not in one register block, an error of the hardware definition
 
-        Not a ValueError, the API reports it as an error of the server, not of the request.
+    Not a ValueError, the API reports it as an error of the server, not of the request.
     """
 
 
@@ -27,7 +27,7 @@ class RegisterGroup:
     count: int
     f_divider: int = 1
     f_counter: int = 0
-    values: list[int | None] = field(init=False)     # None before the first read
+    values: list[int | None] = field(init=False)  # None before the first read
 
     def __post_init__(self):
         self.values = [None] * self.count
@@ -36,7 +36,7 @@ class RegisterGroup:
         return self.address <= address and self.address + self.count >= address + count
 
     def update(self, values, address=None):
-        """ Set the values of the registers from address, the registers out of the group are skipped """
+        """Set the values of the registers from address, the registers out of the group are skipped"""
         start = self.address if address is None else address
         for i, value in enumerate(values):
             if self.is_member(start + i):
@@ -46,12 +46,12 @@ class RegisterGroup:
         self.f_counter = 0
 
     def tick_counter(self):
-        self.f_counter = self.f_divider - 1 if self.f_counter == 0 else \
-            self.f_counter - 1
+        self.f_counter = self.f_divider - 1 if self.f_counter == 0 else self.f_counter - 1
 
 
 def _make_group(block: dict) -> RegisterGroup:
-    """ A register block of a hardware definition, raise ValueError if it is invalid """
+    """A register block of a hardware definition, raise ValueError if it is invalid"""
+
     def positive_int(name, minimum):
         value = block.get(name)
         if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
@@ -61,15 +61,16 @@ def _make_group(block: dict) -> RegisterGroup:
     if "frequency" in block:
         # frequency was the old name, the block is read in every scan_divider-th scan, it is not a frequency
         if "scan_divider" in block:
-            raise ValueError(f"Register block {block}: 'frequency' is a deprecated alias of 'scan_divider', "
-                             f"do not set both")
+            raise ValueError(
+                f"Register block {block}: 'frequency' is a deprecated alias of 'scan_divider', do not set both"
+            )
         logger.warning(f"Register block {block}: 'frequency' is deprecated, rename it to 'scan_divider'")
         block = {**block, "scan_divider": block["frequency"]}
     if block.get("type", "holding") not in ("holding", "input"):
         raise ValueError(f"Register block {block}: unknown type '{block['type']}', use 'holding' or 'input'")
-    group = RegisterGroup(address=positive_int("start_reg", 0),
-                          count=positive_int("count", 1),
-                          f_divider=positive_int("scan_divider", 1))
+    group = RegisterGroup(
+        address=positive_int("start_reg", 0), count=positive_int("count", 1), f_divider=positive_int("scan_divider", 1)
+    )
     # a block is read by one request, a larger one stopped the scan of the unit by an error of the request
     if group.count > MAX_READ_COUNT:
         raise ValueError(f"Register block {block}: 'count' must be at most {MAX_READ_COUNT}, split the block")
@@ -79,7 +80,6 @@ def _make_group(block: dict) -> RegisterGroup:
 
 
 class ModbusCacheMap:
-
     def __init__(self, modbus_reg_map, modbus_client):
         self.modbus_client: AsyncModbusClient = modbus_client
         # time.monotonic() of the last read, None before the first successful scan; the clock of the system
@@ -95,21 +95,25 @@ class ModbusCacheMap:
             # a register is read from the first group, the copy in an overlapping one would not be used
             for other in groups:
                 if group.address < other.address + other.count and other.address < group.address + group.count:
-                    raise ValueError(f"Register block {block} overlaps the block of registers "
-                                     f"{other.address}..{other.address + other.count - 1}")
+                    raise ValueError(
+                        f"Register block {block} overlaps the block of registers "
+                        f"{other.address}..{other.address + other.count - 1}"
+                    )
             groups.append(group)
 
     async def do_scan(self, initial: bool = False, all_groups: bool = False) -> bool:
-        """ Read the groups by their scan_divider, with all_groups read all of them and keep their counters,
-            the scan after a change does not shift the phase of the slow groups
+        """Read the groups by their scan_divider, with all_groups read all of them and keep their counters,
+        the scan after a change does not shift the phase of the slow groups
         """
         if initial:
             for group in self.groups + self.igroups:
                 group.clear_counter()
 
         read = 0
-        for groups, func in ((self.groups, self.modbus_client.read_holding_registers),
-                             (self.igroups, self.modbus_client.read_input_registers)):
+        for groups, func in (
+            (self.groups, self.modbus_client.read_holding_registers),
+            (self.igroups, self.modbus_client.read_input_registers),
+        ):
             count = await self._do_scan_groups(groups, func, all_groups)
             if count is None:
                 return False
@@ -126,30 +130,29 @@ class ModbusCacheMap:
         return True
 
     def _find_group(self, address: int, count: int, is_input: bool) -> RegisterGroup:
-        """ The block of all count registers, a value over two blocks would be never cached """
-        for group in (self.igroups if is_input else self.groups):
+        """The block of all count registers, a value over two blocks would be never cached"""
+        for group in self.igroups if is_input else self.groups:
             if group.is_member(address, count):
                 return group
         kind = "input" if is_input else "holding"
-        raise EUnknownRegister(f"The {kind} registers {address}..{address + count - 1} "
-                               f"are not in one register block")
+        raise EUnknownRegister(f"The {kind} registers {address}..{address + count - 1} are not in one register block")
 
     def get_register(self, index, count=1, is_input=False):
         group = self._find_group(index, count, is_input)
         offset = index - group.address
-        values = group.values[offset:offset + count]
+        values = group.values[offset : offset + count]
         for i, value in enumerate(values):
             if value is None:
                 raise ENoCacheRegister(f"No cached value of register {index + i}")
         return values
 
     def set_register(self, index, values, is_input=False):
-        """ Update cached registers after a successful write or read, the registers out of the blocks are skipped """
-        for group in (self.igroups if is_input else self.groups):
+        """Update cached registers after a successful write or read, the registers out of the blocks are skipped"""
+        for group in self.igroups if is_input else self.groups:
             group.update(values, index)
 
     async def get_register_async(self, index, count=1, is_input=False):
-        """ Read the registers from the unit, also the ones out of the register blocks """
+        """Read the registers from the unit, also the ones out of the register blocks"""
         if is_input:
             vals = await self.modbus_client.read_input_registers(index, quantity=count)
         else:
@@ -158,7 +161,7 @@ class ModbusCacheMap:
         return vals
 
     async def _do_scan_groups(self, groups: list[RegisterGroup], func, all_groups: bool = False) -> int | None:
-        """ The number of the read groups, None after a communication error """
+        """The number of the read groups, None after a communication error"""
         read = 0
         try:
             for group in groups:
