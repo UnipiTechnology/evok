@@ -1,8 +1,4 @@
-"""JSON-RPC 2.0 client with record/replay.
-
-Mirrors the Evok ``/rpc`` endpoint. Method/params form the cassette key so the
-same RPC call replays deterministically.
-"""
+"""JSON-RPC 2.0 client of the Evok ``/rpc`` endpoint."""
 
 from typing import Any
 
@@ -16,6 +12,14 @@ class RpcClient:
         self._http = http
 
     def call(self, method: str, params: Any = None) -> Any:
+        """The result of the method, an error of JSON-RPC fails"""
+        body = self.call_raw(method, params)
+        if isinstance(body, dict) and "error" in body and body["error"] is not None:
+            raise AssertionError(f"RPC {method!r} error: {body['error']}")
+        return body.get("result") if isinstance(body, dict) else body
+
+    def call_raw(self, method: str, params: Any = None) -> Any:
+        """The reply of JSON-RPC, also with an error"""
         global _jsonrpc_id
         _jsonrpc_id += 1
         payload = {
@@ -25,13 +29,7 @@ class RpcClient:
         }
         if params is not None:
             payload["params"] = params
-        # Key the cassette by method+params ONLY; the jsonrpc `id` increments per
-        # call and would otherwise fragment record/compare entries.
-        key = {"jsonrpc": "2.0", "method": method, "params": params}
-        resp = self._http.post_json("/rpc", payload, key=key)
+        resp = self._http.post_json("/rpc", payload)
         if resp.status != 200:
             raise AssertionError(f"RPC {method!r} returned HTTP {resp.status}: {resp.raw_text}")
-        body = resp.json()
-        if isinstance(body, dict) and "error" in body and body["error"] is not None:
-            raise AssertionError(f"RPC {method!r} error: {body['error']}")
-        return body.get("result") if isinstance(body, dict) else body
+        return resp.json()

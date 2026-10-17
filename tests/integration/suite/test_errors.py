@@ -1,19 +1,9 @@
 """Error & validation contract tests.
 
-Pins the error envelope shape and status codes the server returns for bad
-input. The security review noted the server returns HTTP 404 for server-side
-errors (a misuse) and leaks exception class names + messages. These tests
-encode the CURRENT behavior so replay passes; if the error contract is
-intentionally improved (correct statuses, sanitized messages), re-record.
-
-Observed envelope (handlers_base.py / evok.py): on exception the handler writes
-  {"success": false, "errors": {<ExceptionClassName>: <str>}}
-and sets status 404.
+The error reply of the API is {"success": false, "errors": {<ErrorType>: <message>}}
+with the status by the error: 404 of an unknown device type, circuit, alias or
+property, 400 of invalid params, see the replies of the REST API in the docs.
 """
-
-import pytest
-
-pytestmark = pytest.mark.replay
 
 
 def _assert_error_envelope(body) -> None:
@@ -24,13 +14,13 @@ def _assert_error_envelope(body) -> None:
 
 def test_error_unknown_device_type(http):
     r = http.get("/rest/nosuchdev/1/")
-    assert r.status in (404, 400), r.raw_text
+    assert r.status == 404, r.raw_text
     _assert_error_envelope(r.body)
 
 
 def test_error_unknown_circuit(http):
     r = http.get("/rest/ro/999/")
-    assert r.status in (404, 400), r.raw_text
+    assert r.status == 404, r.raw_text
     _assert_error_envelope(r.body)
 
 
@@ -40,7 +30,7 @@ def test_error_ao_value_below_minimum(http):
     # range is refused before any write. This test uses /json/, the same JSON body
     # to /rest/* is covered by test_error_rest_silently_noops_json_body.
     r = http.post_json("/json/ao/1_01/", {"value": -1})
-    assert r.status in (404, 400), r.raw_text
+    assert r.status == 400, r.raw_text
     _assert_error_envelope(r.body)
 
 
@@ -56,17 +46,16 @@ def test_error_ai_unknown_mode(http):
 def test_error_invalid_property_underscore(http):
     # The server rejects property reads whose first char is '_'.
     r = http.get("/rest/ro/2_01/_internal")
-    assert r.status in (404, 400), r.raw_text
+    assert r.status == 404, r.raw_text
     _assert_error_envelope(r.body)
 
 
 def test_error_rest_silently_noops_json_body(http):
-    # BUG #3 (see FINDINGS.md) is FIXED (the name of the test is kept for its
-    # cassette): a JSON body to /rest/* gave an empty kw dict (body_arguments is
-    # empty for JSON), set(**{}) changed nothing and returned 200/success. /rest/*
-    # now reads a JSON body when there are no form fields, so the params are
-    # validated as on /json/ (see test_error_ao_value_below_minimum): -1 is
-    # refused with 400.
+    # BUG #3 (see FINDINGS.md) is FIXED: a JSON body to /rest/* gave an empty kw
+    # dict (body_arguments is empty for JSON), set(**{}) changed nothing and
+    # returned 200/success. /rest/* now reads a JSON body when there are no form
+    # fields, so the params are validated as on /json/ (see
+    # test_error_ao_value_below_minimum): -1 is refused with 400.
     r = http.post_json("/rest/ao/1_01/", {"value": -1})
     assert r.status == 400, r.raw_text
     _assert_error_envelope(r.body)
