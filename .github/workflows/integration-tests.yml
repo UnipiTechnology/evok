@@ -1,30 +1,24 @@
 name: integration-tests
 
-# CI gate for the Evok black-box integration & regression harness.
+# CI gate for the Evok black-box integration harness.
 # See tests/integration/README.md for the harness architecture.
 #
-# Two jobs, both hardware-free:
-#   * replay     — offline: serves golden cassettes, validates against the
-#                  spec-derived oracles. Catches drift in tests/spec/oracles.
-#   * functional — starts the real evok against the mockbus (fake Modbus PLC)
-#                  + a fake 1-Wire sysfs tree (DS18B20), then runs the harness
-#                  as a black-box client. Exercises the full server stack.
+# functional — starts the real evok against the mockbus (fake Modbus PLC) + a fake
+# 1-Wire sysfs tree (DS18B20), then runs the harness as a black-box client; every
+# reply is validated against the OpenAPI document generated from the sources.
+# Hardware-free.
 #
 # Lint lives in .github/workflows/lint.yml (split by harness vs evok ownership).
-#
-# Device-dependent modes (compare / record) are NEVER run in CI — there is no
-# hardware plumbed in here. Run them locally against a device:
-#   EVOK_TEST_MODE=compare EVOK_BASE_URL=... uv run pytest
-#   EVOK_TEST_MODE=record  EVOK_BASE_URL=... uv run pytest
 
 on:
   push:
     branches:
       - 'main'
+      - 'dev-3.1'
   pull_request:
     paths:
       - 'tests/integration/**'
-      - 'evok/**'
+      - 'src/evok/**'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/integration-tests.yml'
@@ -34,42 +28,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  replay:
-    name: replay (offline test gate)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: tests/integration
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.13'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
-        with:
-          enable-cache: true
-          cache-dependency-glob: 'tests/integration/uv.lock'
-
-      - name: uv.lock is up to date
-        run: uv lock --check
-
-      - name: Sync dependencies
-        run: uv sync --frozen
-
-      - name: spec.json is up to date
-        # The spec is generated from the golden cassettes and is the offline CI
-        # oracle. Fail if a cassette changed without regenerating it.
-        run: uv run python tools/extract_spec_from_cassettes.py --check
-
-      - name: Run harness (replay)
-        env:
-          EVOK_TEST_MODE: replay
-        run: uv run pytest -ra
-
   functional:
     name: functional (mockbus-backed evok)
     runs-on: ubuntu-latest
@@ -137,7 +95,6 @@ jobs:
 
       - name: Run harness (functional)
         env:
-          EVOK_TEST_MODE: functional
           EVOK_BASE_URL: http://127.0.0.1:8090
         run: uv run pytest -ra
 

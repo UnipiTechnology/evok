@@ -60,8 +60,8 @@ def generate_config(
                 },
             },
             # 1-Wire bus: evok reads the kernel subsystem at /sys/bus/w1/devices.
-            # The launcher mounts a fake sysfs tree there (a DS18B20 at the same
-            # address the cassettes were recorded against). owpower '1' is the
+            # The launcher mounts a fake sysfs tree there (a DS18B20 at the
+            # address of the sensor tests). owpower '1' is the
             # OwPower device registered from board 1's hw_definition (val_coil
             # 1001) and is driven by the mockbus; the fake bus does not need it
             # (it never powers down the bus), but evok requires the circuit to

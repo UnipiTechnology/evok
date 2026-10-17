@@ -29,7 +29,7 @@ Both fakes are driven by the **same hw_definition YAMLs the real device uses**
 The mockbus serves both slave-ids on one TCP port and mirrors coil writes into
 the holding-register bitmask so evok's scan detects transitions (this is how
 WS/REST change events fire without real hardware). The fake 1-Wire tree serves a
-DS18B20 at the same address the cassettes were recorded against, as plain files
+DS18B20 at the address of the sensor tests (`suite/test_sensor.py`), as plain files
 under `/sys/bus/w1/devices` (the layout evok's `evok/w1/sysfs.py` reads).
 
 ## Run it
@@ -57,8 +57,7 @@ namespaces is disabled first (see the workflow).
 
 ## What the mock exposes
 
-The full Neuron M103 inventory (matches the live device the cassettes were
-recorded against):
+The full Neuron M103 inventory (`fixtures/devices.yaml`):
 
 | devtype | circuits | source |
 |---------|----------|--------|

@@ -1,9 +1,5 @@
 """Bulk API functional tests (batch group_queries / group_assignments / individual_assignments)."""
 
-import pytest
-
-pytestmark = pytest.mark.replay
-
 
 def test_bulk_individual_assignments(http):
     payload = {

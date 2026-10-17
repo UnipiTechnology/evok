@@ -1,92 +1,48 @@
-# Evok black-box integration & regression harness
+# Evok black-box integration harness
 
-Validates the **externally observable** behavior of the Evok server over its
+Validates the **externally observable** behavior of a running Evok server over its
 network APIs (REST / JSON / Bulk / RPC / WebSocket / Webhook). Server-agnostic:
 imports no server code, treats the server as a black box.
 
-## What runs in CI
+## The definition of the API
 
-Two gates, both hardware-free, in `.github/workflows/integration-tests.yml`:
+Every device state in a reply (REST, JSON, bulk, RPC, WebSocket) and the params of
+every accepted POST are validated against the **OpenAPI document of Evok**, generated
+from the schemas of its sources (`python -m evok.openapi`, see `oracles/contract.py`).
+The harness runs the generator as a subprocess of the Evok project, it does not import it.
+`EVOK_OPENAPI=<file>` uses another document, e.g. the one attached to a release, to check
+a device with that version.
 
-| Job | What it does | Catches |
-|-----|--------------|--------|
-| **replay** | Serves golden cassettes offline; validates each response against `spec/spec.json` | the offline toolchain stays self-consistent — spec generator, oracles, contract validator, and cassettes agree with each other |
-| **functional** | Starts the **real evok** against the **mockbus** (fake Modbus PLC + fake 1-Wire sysfs), runs the harness as a client | regressions in the server stack itself — routing, dispatch, serialization, validation, errors |
+The tests add their own assertions: the status codes and the envelopes of the errors,
+the consistency of the APIs, the events of the WebSocket.
 
-## How to use locally
+## How to use
 
-**Iterating on evok code** — exercise the real server against the fake buses, no hardware:
+**Against the mockbus** — the real evok with fake buses, no hardware:
 
 ```bash
 # terminal 1: start mockbus + fake 1-Wire + evok (Ctrl-C stops all)
 uv run python mockbus/start.py
 
 # terminal 2: run the harness against it
-EVOK_TEST_MODE=functional EVOK_BASE_URL=http://127.0.0.1:8090 uv run pytest
+EVOK_BASE_URL=http://127.0.0.1:8090 uv run pytest
 ```
 
-**Offline check (no server needed)** — what CI runs for replay:
+**Against a device** with the inventory of the mockbus (a Neuron M103, see
+`fixtures/devices.yaml`) and nothing connected, the tests switch its outputs:
 
 ```bash
-uv run pytest
+EVOK_BASE_URL=http://<device>:8080 uv run pytest
 ```
 
-**Updating the golden cassettes** — when evok behavior intentionally changes,
-re-record from a real device, then regenerate the spec:
+`EVOK_BASE_URL` defaults to `http://127.0.0.1:8080`.
 
-```bash
-EVOK_TEST_MODE=record EVOK_BASE_URL=http://<device>:8080 uv run pytest
-uv run python tools/extract_spec_from_cassettes.py   # regenerates spec/spec.json
-```
+## CI
 
-**Checking a device for drift** — diff a running device against its cassettes:
-
-```bash
-EVOK_TEST_MODE=compare EVOK_BASE_URL=http://<device>:8080 uv run pytest
-```
-
-## How it works
-
-The harness is built around a **frozen snapshot** of what the server did at
-record time:
-
-```
-real hardware ──record──► cassettes ──generate──► spec  (committed, frozen)
-                          (fixtures/golden/)     (spec/spec.json)
-```
-
-The spec is generated from the cassettes, then both are committed. Each mode
-then compares something against that frozen snapshot:
-
-| Mode | Bus behind server | Judge | Catches |
-|------|-------------------|-------|---------|
-| **replay** | none (offline) | spec | tooling drift — spec generator, oracles, contract validator, and cassettes stay mutually consistent |
-| **functional** | fake (mockbus + 1-Wire sysfs) | test assertions | server logic regressions — routing, dispatch, serialization, errors |
-| **compare** | real device | per-field diff vs cassettes | device behavioral drift — every field, with epsilon for floats |
-
-**Why replay isn't tautological.** The spec is **frozen and committed**: if the
-generator, oracles, contract validator, or a cassette is later edited, replay
-fails — it proves the offline toolchain still agrees with itself. It does **not**
-catch server regressions (the server isn't running); functional and compare do.
-
-- **Cassettes** (`fixtures/golden/`) — recorded request→response pairs, one JSON
-  file per test. The regression oracle.
-- **Spec** (`spec/spec.json`) — JSON Schema per device type, **generated from the
-  cassettes** (not hand-authored). Regenerate with
-  `tools/extract_spec_from_cassettes.py` after re-recording.
-
-## Modes
-
-Selected by `EVOK_TEST_MODE`; `EVOK_BASE_URL` selects the target (default
-`http://127.0.0.1:8080`).
-
-| Mode | Needs | Use |
-|------|-------|-----|
-| `replay` (default) | nothing | offline CI; proves spec/cassettes/tooling agree |
-| `functional` | mockbus launcher | local dev; exercises real evok vs fake buses (also CI) |
-| `live` | a running server | ad-hoc checks |
-| `record` | a real device | refresh cassettes after intentional changes |
-| `compare` | a real device | behavioral drift vs the recording (per-field diff) |
+`.github/workflows/integration-tests.yml` starts the mockbus with evok and runs the
+harness against it (the job **functional**); it catches the regressions of the server
+stack — routing, dispatch, serialization, validation, errors — and every deviation of
+a reply from the definition of the API.
 
 ## The mockbus
 

@@ -15,9 +15,8 @@ remote test device. Therefore this test is INFERRED from the codebase and is
 SKIPPED unless the operator confirms the server's webhook is pointed at the
 receiver via EVOK_WEBHOOK_CONFIGURED=1.
 
-This test has NOT been recorded; it is a contract sketch. When a device with
-config access is available, run with EVOK_TEST_MODE=record and
-EVOK_WEBHOOK_CONFIGURED=1 to capture and verify.
+It is a contract sketch: run it with EVOK_WEBHOOK_CONFIGURED=1 against a server
+whose webhook address is the receiver.
 """
 
 import asyncio
@@ -66,7 +65,7 @@ async def test_webhook_emits_get_when_not_complex(http, webhook_receiver):
     NOTE: this and the POST case are mutually exclusive on a single server
     config. This test is a contract sketch for the GET variant and will only
     pass if the server is configured with complex_events=false. Treat as
-    documentation of the alternate contract until recorded.
+    documentation of the alternate contract.
     """
     before = http.get("/rest/do/1_01/").body.get("value")
     http.post_form("/rest/do/1_01/", {"value": "0" if before else "1"})

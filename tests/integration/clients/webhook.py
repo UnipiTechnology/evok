@@ -2,7 +2,7 @@
 
 A tiny HTTP server the harness spins up so tests can assert Evok's *outbound*
 POSTs (or GETs) without an external service. The Evok webhook target URL must
-be configured to point at this receiver during live/record runs.
+be configured to point at this receiver.
 """
 
 import json

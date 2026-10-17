@@ -4,13 +4,8 @@ The same device at (approximately) the same instant must report the same state
 through REST, JSON, and RPC. These tests catch regressions where one transport
 drifts from another — the class of bug a single-protocol test misses.
 
-Runs in live/record against a real or mock-backed server. In replay mode it
-asserts against the recorded cassette for each leg.
+Runs against a real or mock-backed server.
 """
-
-import pytest
-
-pytestmark = pytest.mark.replay
 
 
 def test_rest_json_rpc_agree_on_do_value(http, rpc):

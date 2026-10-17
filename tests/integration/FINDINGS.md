@@ -1,13 +1,10 @@
 # Evok — known bugs found by the integration harness
 
-Bugs discovered while recording the black-box integration suite against Evok
-v3.0.6 on a Neuron M103. Each is pinned by a test in `tests/integration/suite/`
-that encodes the CURRENT (buggy) behavior so the harness passes; the tests
-document the bug inline and will need re-recording once fixed.
+Bugs discovered by the black-box integration suite against Evok v3.0.6 on a
+Neuron M103. Each is pinned by a test in `tests/integration/suite/` which asserts
+the corrected behavior.
 
 Status legend:
-  - [pinned]    harness records the buggy behavior; fix → re-record the cassette
-  - [quirk]     arguably intended/by-design, but surprising; documented
   - [FIXED]     fixed in Evok 3.1, the test asserts the corrected behavior
 
 ---
@@ -82,48 +79,12 @@ The fix reads the JSON body on `/rest/*` too, as `LegacyJsonHandler` does.
 
 ---
 
-## 4. `value` is scan-cache-lagged in write responses (not a crash, but a contract gap)
+## 4. [FIXED] `value` was scan-cache-lagged in write responses
 
-**Severity:** design quirk (not strictly a bug, but a footgun)
-**Location:** `evok/modbus_slave.py` — every device `set()` returns `self.full()`
-**Pinned by:** `tests/integration/suite/test_boundaries.py` (skipped, with full explanation)
+**Status:** fixed in Evok 3.1: the devices of a Modbus unit are written together,
+then the unit is read and the reply has the states after the writes (`set_devices`,
+`src/evok/modbus/base.py`). The reply of a POST is the state after the change.
 
-`set()` writes to the bus then returns `self.full()`, whose `value` reflects the
-LAST scan cache, not the just-written value. The quantize/clamp returns from
-`set_value()` (e.g. AO clamps to `[0, 4095]`, WD timeout→65535) are discarded by
-`set()` (it returns `full()`, not the write result). The updated cache appears
-only after the next scan (~20ms), which races the request/response.
-
-Consequence: the response `value` of a write is non-deterministic relative to
-the request, and the documented clamps (AO 0–10V, register 65535, counter wrap)
-are NOT observable through the HTTP API in a single round-trip. The harness
-treats `value` as volatile everywhere in compare mode for this reason (see
-`cassette.py`).
-
-**Not a fix request** — documenting it because it shaped the harness design
-(why `value` can't be exact-compared). If the API ever echoes the clamped
-write value or adds a read-after-stable endpoint, the boundary tests in
-`test_boundaries.py` can be unskipped.
-
----
-
-## How the harness pins these
-
-Each bug has a test that records the **current** behavior into a golden cassette
-and asserts on it. The tests carry inline notes:
-
-- `test_bulk.py::test_bulk_group_queries` — asserts the FIXED behavior (§1): two
-  queries return two lists of states.
-- `test_errors.py::test_error_property_read_unit` — asserts the FIXED behavior
-  (`unit` now readable, HTTP 200).
-- `test_errors.py::test_error_ao_value_below_minimum` and
-  `test_error_rest_silently_noops_json_body` — assert the FIXED behavior (§3): a
-  value out of the range is refused with 400 on `/json/` and `/rest/`.
-- `test_errors.py::test_error_ai_unknown_mode` — an unknown AI mode is refused
-  with 400.
-- `test_boundaries.py` (REMOVED) — the clamp mechanism is documented here in §4; the tests were dead (always-skipped) because the contract is not black-box-observable in one round-trip. Re-add as device-gated poll-to-stable tests if the clamps need exercising.
-
-**Re-recording after a fix:** once any of these is fixed, run
-`EVOK_TEST_MODE=record EVOK_BASE_URL=... uv run pytest <test>` to refresh the
-cassette, then update the test's assertions to match the corrected behavior
-(and move the entry from this file to a changelog).
+**Originally:** `set()` wrote to the bus and returned `self.full()`, whose `value`
+reflected the last scan, not the written value; the clamps of a write (AO range,
+WD timeout 65535) were not observable in one round-trip.

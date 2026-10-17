@@ -30,8 +30,8 @@ import shutil
 import sys
 from pathlib import Path
 
-# Names of the fake master and the DS18B20 the golden cassettes were recorded
-# against. The sysfs name carries the serial number in reverse byte order of the
+# Names of the fake master and the DS18B20 of the tests (suite/test_sensor.py).
+# The sysfs name carries the serial number in reverse byte order of the
 # owfs address; derive it from the address so the two never drift apart.
 SENSOR_ADDRESS = "28.CD79A9080000.4A"
 SENSOR_CIRCUIT = "28CD79A90800004A"

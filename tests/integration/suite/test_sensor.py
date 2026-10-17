@@ -1,9 +1,9 @@
-"""1-Wire sensor (DS18B20) tests — recorded against a live Neuron M103.
+"""1-Wire sensor (DS18B20) tests — the sensor of the mockbus (fake 1-Wire sysfs) or of a device.
 
 The sensor registers with circuit = 1-Wire address with dots stripped
 (e.g. "28.CD79A9080000.4A" -> "28CD79A90800004A"), and reports ``dev: "temp"``
 (not ``"sensor"``) in its full() payload, with fields:
-  dev, circuit, address, value (°C), lost, time, interval, type.
+  dev, circuit, address, value (°C), lost, time, interval, type, comm, last_comm.
 
 Covers:
   * read via /rest/sensor/<circuit>/ and via /rest/all/
@@ -11,13 +11,9 @@ Covers:
   * set interval (configuration write; safe)
   * owbus_list RPC returns the discovered address under the DS18B20 key
 
-NOTE: the circuit is device-specific (tied to this physical sensor). If the
-sensor is swapped, re-record these cassettes.
+NOTE: the circuit is the address of the sensor of the mockbus (mockbus/w1sysfs.py);
+on a device it must be the same sensor.
 """
-
-import pytest
-
-pytestmark = pytest.mark.replay
 
 # Tied to the physical DS18B20 currently on the test rig's 1-Wire bus.
 SENSOR_CIRCUIT = "28CD79A90800004A"
