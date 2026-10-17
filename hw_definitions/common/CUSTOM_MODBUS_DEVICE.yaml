@@ -2,30 +2,36 @@
 # File version: 1.0
 # Min. firmware version: 0.1
 ---
-# This key defines which Modbus registers will be periodically read. Each block (also sometimes referred to as "group") is read once ever ["frequency"] read cycles
+# This key defines which Modbus registers will be periodically read. Each block (also sometimes referred to as "group") is read once every ["scan_divider"] read cycles
 modbus_register_blocks:
     - start_reg   : 0
       count       : 10
-      frequency   : 1
+      scan_divider: 1
 
     - start_reg   : 500
       count       : 8
-      frequency   : 10
+      scan_divider: 10
 
     - start_reg   : 508
       count       : 8
-      frequency   : 50
+      scan_divider: 50
 
-# This defines the devices mapped to the registers above. As custom devices are very unlikely to support any Neuron features, the only devices which should be mapped are "REGISTER"s
-modbus_features: 
-    - type        : REGISTER
+# This defines the devices mapped to the registers above. As custom devices are very unlikely to support any Neuron features, the devices should be "DATA_POINT"s; datatype uint16 is the raw register, writable: true allows its writing (a holding register)
+modbus_features:
+    - type        : DATA_POINT
       count       : 10
-      start_reg   : 0
-      
-    - type        : REGISTER
+      value_reg   : 0
+      datatype    : uint16
+      writable    : true
+
+    - type        : DATA_POINT
       count       : 8
-      start_reg   : 500
-      
-    - type        : REGISTER
+      value_reg   : 500
+      datatype    : uint16
+      writable    : true
+
+    - type        : DATA_POINT
       count       : 8
-      start_reg   : 508
+      value_reg   : 508
+      datatype    : uint16
+      writable    : true

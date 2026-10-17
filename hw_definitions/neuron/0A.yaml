@@ -11,17 +11,17 @@ modbus_register_blocks:
     # DI / 20ms
     - start_reg   : 0
       count       : 3
-      frequency   : 1
+      scan_divider: 1
 
     # CNT / 1s
     - start_reg   : 3
       count       : 60
-      frequency   : 50
+      scan_divider: 50
 
     # Configuration / 5s
     - start_reg   : 1008
       count       : 32
-      frequency   : 250
+      scan_divider: 250
 
 # Device features definition
 modbus_features:

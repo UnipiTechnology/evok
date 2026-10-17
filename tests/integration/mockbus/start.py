@@ -44,7 +44,7 @@ from tests.integration.mockbus.w1sysfs import (  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 RUN_DIR = HERE / "run"
-HW_DIR = HERE / "hw_definitions"
+HW_DIR = HERE.parents[2] / "hw_definitions" / "neuron"  # 00.yaml and 01.yaml of the repository
 W1_TREE_DIR = RUN_DIR / "fake_w1"
 
 EVOCK_HTTP_PORT = 8090

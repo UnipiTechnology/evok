@@ -4,8 +4,8 @@ A stand-in PLC on the bus side. The real Evok server connects to this instead of
 real hardware, so the harness can exercise the full server stack (routing,
 validation, dispatch, serialization) in CI without a device.
 
-It is driven by hw_definition YAML files (the SAME files the real Evok uses,
-copied from the device's ``/etc/evok/hw_definitions/``): it reads the
+It is driven by hw_definition YAML files (the SAME files the real Evok uses, from
+``hw_definitions/neuron/`` of the repository): it reads the
 ``modbus_register_blocks`` to know which register ranges to serve, and
 initializes them to zero (sane defaults — evok registers devices from the
 definition's ``modbus_features`` regardless of values; values only affect
@@ -41,7 +41,8 @@ import yaml
 from pymodbus.datastore import ModbusSequentialDataBlock, ModbusServerContext, ModbusSlaveContext
 from pymodbus.server import StartAsyncTcpServer
 
-HW_DIR = Path(__file__).resolve().parent / "hw_definitions"
+# the HW definitions of the Neuron units in the repository of Evok
+HW_DIR = Path(__file__).resolve().parents[3] / "hw_definitions" / "neuron"
 
 # Function codes for coil writes (mirror these into holding registers).
 _COIL_WRITE_FCS = {0x05, 0x0F}

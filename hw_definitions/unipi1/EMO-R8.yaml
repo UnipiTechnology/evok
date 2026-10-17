@@ -3,7 +3,7 @@ type: EMO-R8
 modbus_register_blocks:
   - start_reg   : 1
     count       : 1
-    frequency   : 1
+    scan_divider: 1
 modbus_features:
   - type        : RO
     count       : 8

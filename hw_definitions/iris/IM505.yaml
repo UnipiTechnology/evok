@@ -1,1 +1,44 @@
-IM505_float.yaml
+---
+# IRIS Card ID-AiUC8-2
+modbus_register_blocks:
+    - board_index : 1
+      start_reg   : 0
+      count       : 17
+      scan_divider: 1
+    - board_index : 1
+      start_reg   : 1000
+      count       : 18
+      scan_divider: 10
+modbus_features:
+    - type        : AI
+      count       : 8
+      modes       :
+        Voltage:
+          value: 0
+          unit: 'V'
+          range: [0, 10]
+          transformation:
+            datatype: uint32
+            decimals: 3
+            ratio: 3.903701663554032e-05
+        Current:
+          value: 1
+          unit: 'mA'
+          range: [0, 20]
+          transformation:
+            datatype: uint32
+            decimals: 3
+            ratio: 0.000152587890625
+      val_reg     : 0
+      mode_reg    : 1010
+
+    - type        : WD
+      count       : 1
+      val_reg     : 16
+      timeout_reg : 1008
+      nv_sav_coil : 1003
+      reset_coil  : 1002
+
+  # Non-volatile memory saver
+    - type: NV_SAVE
+      val_coil: 1003

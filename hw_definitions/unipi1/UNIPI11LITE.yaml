@@ -3,10 +3,10 @@ type: UNIPI11LITE
 modbus_register_blocks:
   - start_reg   : 0
     count       : 14
-    frequency   : 1
+    scan_divider: 1
   - start_reg   : 1010
     count       : 6
-    frequency   : 10
+    scan_divider: 10
 modbus_features:
   - type        : RO
     count       : 6

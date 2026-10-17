@@ -11,27 +11,27 @@ modbus_register_blocks:
     # DI, RO / 20ms
     - start_reg   : 0
       count       : 2
-      frequency   : 1
+      scan_divider: 1
 
     # AI, AO / 1000ms
     - start_reg   : 2
       count       : 12
-      frequency   : 50
+      scan_divider: 50
 
     # MWD status / 5s
     - start_reg   : 14
       count       : 1
-      frequency   : 250
+      scan_divider: 250
 
     # CNT / 1s
     - start_reg   : 15
       count       : 12
-      frequency   : 50
+      scan_divider: 50
 
     # configuration / 5s
     - start_reg   : 1008
       count       : 15
-      frequency   : 250
+      scan_divider: 250
 
 # Device features definition
 modbus_features:

@@ -22,7 +22,7 @@ fake 1-Wire sysfs (DS18B20)
 ```
 
 Both fakes are driven by the **same hw_definition YAMLs the real device uses**
-(copied verbatim from `/etc/evok/hw_definitions/`):
+(`hw_definitions/neuron/` of the repository):
 - `00.yaml` — CPU board (slave-id 1): 4 DI, 4 DO, 1 AI, 1 AO, 4 LED, WD, owpower
 - `01.yaml` — relay board (slave-id 2): 8 DI, 8 RO, 1 WD
 

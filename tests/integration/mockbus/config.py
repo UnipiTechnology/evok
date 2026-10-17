@@ -10,8 +10,8 @@ functional tier we generate a minimal config that:
   * advertises device_info (family/model/board_count) so /rest/all lists it
   * enables the websocket API
 
-The hw_definition files (``00.yaml``, ``01.yaml``) are copied verbatim from the
-real device's ``/etc/evok/hw_definitions/`` into ``mockbus/hw_definitions/``.
+The hw_definition files (``00.yaml``, ``01.yaml``) are those of the repository,
+``hw_definitions/neuron/``.
 
 The 1-Wire bus (OWBUS / temp sensor) is configured as an OWFS bus, but it is not
 served by a daemon: evok reads the kernel 1-Wire subsystem directly. The launcher

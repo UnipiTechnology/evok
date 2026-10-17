@@ -4,11 +4,11 @@ modbus_register_blocks:
     - board_index : 1
       start_reg   : 0
       count       : 5
-      frequency   : 1
+      scan_divider: 1
     - board_index : 1
       start_reg   : 1000
       count       : 12
-      frequency   : 10
+      scan_divider: 10
 modbus_features:
     - type        : RO
       count       : 2

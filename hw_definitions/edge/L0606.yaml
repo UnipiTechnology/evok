@@ -2,7 +2,7 @@ modbus_register_blocks:
   # ULED / 300 ms
   - start_reg   : 3998
     count       : 2
-    frequency   : 15
+    scan_divider: 15
 
 modbus_features:
 

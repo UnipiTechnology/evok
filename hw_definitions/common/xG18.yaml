@@ -11,12 +11,12 @@ modbus_register_blocks:
     # Temperature & validity / 2s 
     - start_reg   : 1
       count       : 9
-      frequency   : 100
+      scan_divider: 100
 
     # Configuration / 5s
     - start_reg   : 1010
       count       : 8
-      frequency   : 250
+      scan_divider: 250
 
 # Device features definition
 modbus_features:

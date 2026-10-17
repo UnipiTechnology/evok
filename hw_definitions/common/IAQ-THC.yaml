@@ -12,13 +12,13 @@ modbus_register_blocks:
     # First registers group
     - start_reg   : 0
       count       : 44
-      frequency   : 50
+      scan_divider: 50
       type        : input
 
     # Second registers group
     - start_reg   : 76
       count       : 10
-      frequency   : 500
+      scan_divider: 500
       type        : input
 
 # Device features definition

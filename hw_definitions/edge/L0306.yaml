@@ -2,27 +2,27 @@ modbus_register_blocks:
   # DI, DO / 20ms
   - start_reg   : 0
     count       : 2
-    frequency   : 1
+    scan_divider: 1
 
   # AI / 1s
   - start_reg   : 2
     count       : 10
-    frequency   : 50
+    scan_divider: 50
 
   # MWD status, CNT, PWM / 1s
   - start_reg   : 12
     count       : 11
-    frequency   : 50
+    scan_divider: 50
 
   # Configuation / 5s
   - start_reg   : 1008
     count       : 16
-    frequency   : 250
+    scan_divider: 250
 
  # ULED / 300 ms
   - start_reg   : 3998
     count       : 2
-    frequency   : 15
+    scan_divider: 15
 
 modbus_features:
   - type        : DI
