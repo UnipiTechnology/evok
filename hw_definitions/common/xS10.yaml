@@ -1,6 +1,5 @@
-# Unipi Patron - S207, S227
-# Unipi Neuron - M103
-# 8x DI, 8x RO
+# Unipi Extension xS10
+# 16x DI, 8x RO, 4x ULED
 # File version: 1.1
 # Min. EVOK version: 3.0
 # Min. firmware version: 5.50
@@ -12,24 +11,29 @@ modbus_register_blocks:
     # DI, RO, MWD_status / 20ms
     - start_reg   : 0
       count       : 3
-      frequency   : 1
+      scan_divider: 1
 
     # CNT / 1s
     - start_reg   : 3
-      count       : 16
-      frequency   : 50
+      count       : 32
+      scan_divider: 50
 
-    # Configuration / 5s
+    # ULED / 5s
+    - start_reg   : 39
+      count       : 1
+      scan_divider: 250
+
+    # configuration / 5s
     - start_reg   : 1008
-      count       : 13
-      frequency   : 250
+      count       : 21
+      scan_divider: 250
 
 # Device features definition
 modbus_features:
 
     # Digital inputs
     - type        : DI
-      count       : 8
+      count       : 16
       modes       :
         - Simple
         - DirectSwitch
@@ -41,18 +45,24 @@ modbus_features:
       max_v       : 24
       val_reg     : 0
       counter_reg : 3
-      direct_reg  : 1018
+      direct_reg  : 1026
       deboun_reg  : 1010
-      polar_reg   : 1019
-      toggle_reg  : 1020
+      polar_reg   : 1027
+      toggle_reg  : 1028
 
     # Relay outputs
     - type        : RO
       count       : 8
-      val_reg     : 1
-      val_coil    : 0
       modes       :
         - Simple
+      val_reg     : 1
+      val_coil    : 0
+
+    # User LEDs
+    - type        : LED
+      count       : 4
+      val_coil    : 24
+      val_reg     : 39
 
     # Master Watchdog (MWD) & configuration
     - type        : WD

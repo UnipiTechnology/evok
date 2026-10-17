@@ -352,9 +352,11 @@ You can force the creation of this file using this command:
  - The Bus is always named `LOCAL_TCP`.
  - A device_info section is generated to describe the device. This information is based on `unipiid`.
  - The device name is generated based on the `slave-id`. In standard Unipi controllers it is the same as the section number.
- - The OWFS section is generated only if the device supports 1-Wire and the `owserver` package is installed
-   (Evok 3.1 does not use owserver, the bus is read by the kernel).
-   An OWFS section with `hostname` or `port` of owserver is an error, the bus is not created; remove them.
+ - The OWFS bus `OWBUS` is generated only if the device has the 1-Wire master DS2482, the device tree of
+   the Unipi OS binds it to the driver `ds2482` of the kernel. Evok reads the bus by the kernel, owserver
+   is not used.
+   An OWFS section with `hostname` or `port` of owserver (an `autogen.yaml` of an older Evok) is an error,
+   the bus is not created; generate the file again.
    - The `owpower` parameter is defined only if Unipi controller supports this feature.
 
 ```yaml title="Autogen example"
@@ -378,7 +380,7 @@ comm_channels:
       3:
         slave-id: 3
         model: '13'
-  OWFS:
+  OWBUS:
     type: OWFS
     interval: 10
     scan_interval: 60

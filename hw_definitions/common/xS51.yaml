@@ -1,6 +1,5 @@
-# Unipi Patron - S107, S117, S167, M207, M527, M267, M567, L207, L527
-# Unipi Neuron - ALL
-# 4x DI, 4x DO, 1x AI, 1x AO, 4x ULED
+# Unipi Extension xS51
+# 4x AI, 4x AO, 4x DI, 5x RO, 3x ULED
 # File version: 1.1
 # Min. EVOK version: 3.0
 # Min. firmware version: 5.50
@@ -9,35 +8,35 @@
 # Modbus communication definition (read)
 modbus_register_blocks:
 
-    # DI, DO / 20ms
+    # DI, RO / 20ms
     - start_reg   : 0
       count       : 2
-      frequency   : 1
+      scan_divider: 1
+
+    # AI, AO / 1000ms
+    - start_reg   : 2
+      count       : 12
+      scan_divider: 50
 
     # MWD status / 5s
-    - start_reg   : 6
+    - start_reg   : 14
       count       : 1
-      frequency   : 250
+      scan_divider: 250
 
-    # CNT, PWM / 1s
-    - start_reg   : 8
-      count       : 12
-      frequency   : 50
+    # CNT / 1s
+    - start_reg   : 15
+      count       : 8
+      scan_divider: 50
 
     # ULED / 5s
-    - start_reg   : 20
+    - start_reg   : 27
       count       : 1
-      frequency   : 250
+      scan_divider: 250
 
     # Configuration / 5s
     - start_reg   : 1008
-      count       : 17
-      frequency   : 250
-
-    # AI, AO / 1000ms
-    - start_reg   : 3000
-      count       : 6
-      frequency   : 50
+      count       : 15
+      scan_divider: 250
 
 # Device features definition
 modbus_features:
@@ -55,60 +54,68 @@ modbus_features:
       min_v       : 5
       max_v       : 24
       val_reg     : 0
-      counter_reg : 8
+      counter_reg : 15
       direct_reg  : 1014
       deboun_reg  : 1010
       polar_reg   : 1015
       toggle_reg  : 1016
 
     # Relay outputs
-    - type        : DO
-      count       : 4
+    - type        : RO
+      count       : 5
       modes       :
         - Simple
-        - PWM
       val_reg     : 1
       val_coil    : 0
-      pwm_reg     : 16
-      pwm_ps_reg  : 1017
-      pwm_c_reg   : 1018
 
     # Analog inputs
     - type        : AI
-      count       : 1
+      count       : 4
       modes       :
-        Voltage:
+        Disabled:
           value: 0
+        Voltage:
+          value: 1
           unit: 'V'
           range: [0, 10]
+        Voltage2V5:
+          value: 2
+          unit: 'V'
+          range: [0, 2.5]
         Current:
-          value: 1
+          value: 3
           unit: 'mA'
           range: [0, 20]
-      val_reg     : 3002
-      mode_reg    : 1024
-
-    # Analog output (AOR)
-    - type        : BAO
-      count       : 1
-      val_reg     : 3000
-      res_val_reg : 3004
+        Resistance3W:
+          value: 4
+          unit: 'Ohm'
+          range: [0, 1960]
+        Resistance2W:
+          value: 5
+          unit: 'Ohm'
+          range: [0, 100000]
+      val_reg     : 6
       mode_reg    : 1019
+
+    # Analog outputs (AOV)
+    - type        : AO
+      count       : 4
+      modes       :
+        Voltage:
+          unit: 'V'
+          range: [0, 10]
+      val_reg     : 2
 
     # User LEDs
     - type        : LED
-      count       : 4
-      val_coil    : 8
-      val_reg     : 20
-
-    # OneWire power (reset)
-    - type        : OWPOWER
-      val_coil    : 1001
+      count       : 3
+      val_coil    : 9
+      val_reg     : 27
 
     # Master Watchdog (MWD) & configuration
     - type        : WD
       count       : 1
-      val_reg     : 6
+      val_reg     : 14
       timeout_reg : 1008
       nv_sav_coil : 1003
       reset_coil  : 1002

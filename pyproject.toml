@@ -51,6 +51,8 @@ test = ['pytest', 'pytest-asyncio']
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# the integration harness has its own project and environment, see tests/integration/README.md
+addopts = "--ignore=tests/integration"
 asyncio_mode = "auto"
 
 [tool.ruff]
