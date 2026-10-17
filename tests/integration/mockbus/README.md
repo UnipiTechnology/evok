@@ -18,13 +18,19 @@ fake 1-Wire sysfs (DS18B20)
        │
        │ HTTP/WS/RPC
        │
-   harness (pytest, EVOK_TEST_MODE=functional)
+   harness (pytest)
 ```
 
 Both fakes are driven by the **same hw_definition YAMLs the real device uses**
 (copied verbatim from `/etc/evok/hw_definitions/`):
 - `00.yaml` — CPU board (slave-id 1): 4 DI, 4 DO, 1 AI, 1 AO, 4 LED, WD, owpower
 - `01.yaml` — relay board (slave-id 2): 8 DI, 8 RO, 1 WD
+
+The configuration of evok (`config.py`) declares also a third unit (slave-id 3) which
+the mockbus does not serve, its communication fails (`comm`, `scan_error`). The APIs require
+the tokens `TOKEN` (and `READ_TOKEN` for reading), the webhook posts the changes of DO to the
+receiver of the tests (127.0.0.1:8181) and the MQTT API uses the broker (amqtt) of the
+launcher at 127.0.0.1:1884.
 
 The mockbus serves both slave-ids on one TCP port and mirrors coil writes into
 the holding-register bitmask so evok's scan detects transitions (this is how
@@ -38,16 +44,17 @@ The mockbus + fake 1-Wire + evok lifecycle is managed by a **standalone launcher
 not by pytest. Run it in one terminal, then point the harness at it from another:
 
 ```bash
-# terminal 1: start mockbus + fake 1-Wire sysfs + evok (foreground; Ctrl-C stops all)
+# terminal 1: start mockbus + fake 1-Wire sysfs + MQTT broker + evok (Ctrl-C stops all)
 cd tests/integration
 uv run python mockbus/start.py
 
-# terminal 2: run the harness against it (functional = live mode vs the URL)
-EVOK_TEST_MODE=functional EVOK_BASE_URL=http://127.0.0.1:8090 uv run pytest
+# terminal 2: run the harness against it
+EVOK_BASE_URL=http://127.0.0.1:8090 EVOK_MQTT=127.0.0.1:1884 EVOK_WEBHOOK_CONFIGURED=1 \
+    uv run pytest
 ```
 
-The harness stays a pure black-box client — it never launches processes.
-`EVOK_TEST_MODE=functional` behaves exactly like `live` against the given URL.
+The harness stays a pure black-box client — it never launches processes. It sends the
+token of the mockbus unless `EVOK_TOKEN` (and `EVOK_READ_TOKEN`) is set.
 
 The launcher re-execs itself in a private mount namespace (`unshare -rm`, no
 root required) and mounts the fake tree over `/sys/bus` there. The real evok runs
