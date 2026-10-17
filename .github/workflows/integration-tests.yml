@@ -4,7 +4,8 @@ name: integration-tests
 # See tests/integration/README.md for the harness architecture.
 #
 # functional — starts the real evok against the mockbus (fake Modbus PLC) + a fake
-# 1-Wire sysfs tree (DS18B20), then runs the harness as a black-box client; every
+# 1-Wire sysfs tree (DS18B20) + an MQTT broker, with the tokens and the webhook to
+# the receiver of the tests, then runs the harness as a black-box client; every
 # reply is validated against the OpenAPI document generated from the sources.
 # Hardware-free.
 #
@@ -71,7 +72,7 @@ jobs:
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
 
-      - name: Start mockbus + fake 1-Wire + evok
+      - name: Start mockbus + fake 1-Wire + MQTT broker + evok
         # Background the launcher; it stays alive serving on :8090. The harness
         # connects in the next step. Teardown is implicit (job runner reaps).
         run: |
@@ -83,7 +84,8 @@ jobs:
           # Poll /rest/all until evok responds and the 1-Wire sensor is found
           # (board scan + 1-Wire scan take a few seconds). Timeout after 60s.
           for i in $(seq 1 60); do
-            if curl -sf http://127.0.0.1:8090/rest/all/ 2>/dev/null | grep -q '"dev": "temp"'; then
+            if curl -sf -H "Authorization: Bearer integration-token-0123456789abcdef" \
+                http://127.0.0.1:8090/rest/all/ 2>/dev/null | grep -q '"dev": "temp"'; then
               echo "evok ready after ${i}s"
               exit 0
             fi
@@ -96,6 +98,8 @@ jobs:
       - name: Run harness (functional)
         env:
           EVOK_BASE_URL: http://127.0.0.1:8090
+          EVOK_MQTT: 127.0.0.1:1884
+          EVOK_WEBHOOK_CONFIGURED: '1'
         run: uv run pytest -ra
 
       - name: Upload launcher log on failure

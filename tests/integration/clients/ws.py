@@ -14,7 +14,8 @@ from .http import validate_states
 class WsSession:
     """One logical WS exchange: open, (optionally) send a command, collect, close."""
 
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, base_url: str, token: str | None = None) -> None:
+        self._headers = {"Authorization": f"Bearer {token}"} if token else None
         # base_url is http://; ws uses the same host.
         self._ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://")
         if not self._ws_url.endswith("/ws"):
@@ -30,7 +31,9 @@ class WsSession:
     async def run(self, receive_for: float = 1.0) -> list[Any]:
         import websockets
 
-        async with websockets.connect(self._ws_url, open_timeout=5) as ws:
+        async with websockets.connect(
+            self._ws_url, open_timeout=5, additional_headers=self._headers
+        ) as ws:
             cmds = (
                 self._open_cmd
                 if isinstance(self._open_cmd, list)

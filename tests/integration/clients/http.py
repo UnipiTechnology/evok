@@ -5,7 +5,7 @@ validated against the definition of the API (oracles.contract).
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -18,6 +18,7 @@ class HttpResponse:
     status: int
     body: Any  # parsed JSON when content-type is json, else raw text
     raw_text: str
+    headers: dict[str, str] = field(default_factory=dict)
 
     def json(self) -> Any:
         return self.body
@@ -26,8 +27,9 @@ class HttpResponse:
 class HttpClient:
     """Typed HTTP client, one per test (see the fixture)."""
 
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, base_url: str, token: str | None = None) -> None:
         self._base = base_url.rstrip("/")
+        self._headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     def get(self, path: str) -> HttpResponse:
         return self._exchange("GET", path)
@@ -48,7 +50,7 @@ class HttpClient:
     ) -> HttpResponse:
         path = path if path.startswith("/") else f"/{path}"
         url = f"{self._base}{path}"
-        with httpx.Client(timeout=5.0) as client:
+        with httpx.Client(timeout=5.0, headers=self._headers) as client:
             if method == "GET":
                 r = client.get(url)
             elif json_body is not None:
@@ -70,7 +72,12 @@ def _httpx_to_response(r: httpx.Response) -> HttpResponse:
         body = r.json()
     except (ValueError, json.JSONDecodeError):
         body = raw
-    return HttpResponse(status=r.status_code, body=body, raw_text=raw)
+    return HttpResponse(
+        status=r.status_code,
+        body=body,
+        raw_text=raw,
+        headers={k.lower(): v for k, v in r.headers.items()},
+    )
 
 
 def _states(body: Any) -> list[dict]:

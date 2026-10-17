@@ -27,8 +27,12 @@ from tests.integration.clients.http import HttpClient  # noqa: E402
 from tests.integration.clients.rpc import RpcClient  # noqa: E402
 from tests.integration.clients.webhook import WebhookReceiver  # noqa: E402
 from tests.integration.clients.ws import WsSession  # noqa: E402
+from tests.integration.mockbus import config as mockbus  # noqa: E402
 
 BASE_URL = os.environ.get("EVOK_BASE_URL", "http://127.0.0.1:8080")
+# the tokens of the server, of the mockbus by default; a server without a token ignores them
+TOKEN = os.environ.get("EVOK_TOKEN", mockbus.TOKEN)
+READ_TOKEN = os.environ.get("EVOK_READ_TOKEN", mockbus.READ_TOKEN)
 
 
 @pytest.fixture(scope="session")
@@ -44,7 +48,13 @@ def device_inventory() -> dict:
 
 @pytest.fixture
 def http(evok_base_url: str) -> HttpClient:
-    return HttpClient(base_url=evok_base_url)
+    return HttpClient(base_url=evok_base_url, token=TOKEN)
+
+
+@pytest.fixture
+def http_as(evok_base_url: str):
+    """A client with another token: ``http_as(None)``, ``http_as(READ_TOKEN)``"""
+    return lambda token: HttpClient(base_url=evok_base_url, token=token)
 
 
 @pytest.fixture
@@ -54,12 +64,33 @@ def rpc(http: HttpClient) -> RpcClient:
 
 @pytest.fixture
 def ws(evok_base_url: str) -> WsSession:
-    return WsSession(base_url=evok_base_url)
+    return WsSession(base_url=evok_base_url, token=TOKEN)
+
+
+@pytest.fixture
+def ws_as(evok_base_url: str):
+    """A WebSocket session with another token"""
+    return lambda token: WsSession(base_url=evok_base_url, token=token)
+
+
+@pytest.fixture(scope="session")
+def read_token() -> str:
+    return READ_TOKEN
+
+
+@pytest.fixture(scope="session")
+def tokens_required(evok_base_url: str) -> bool:
+    """The server requires a token, else the tests of the tokens are skipped"""
+    status = HttpClient(base_url=evok_base_url).get("/rest/all/").status
+    if status != 401:
+        pytest.skip("the server does not require a token")
+    return True
 
 
 @pytest.fixture
 def webhook_receiver() -> WebhookReceiver:
-    recv = WebhookReceiver().start()
+    recv = WebhookReceiver(port=int(os.environ.get("EVOK_WEBHOOK_PORT", mockbus.WEBHOOK_PORT)))
+    recv.start()
     yield recv
     recv.stop()
 
