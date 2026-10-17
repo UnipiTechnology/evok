@@ -1,0 +1,115 @@
+# Unipi Patron - M527, M567, L527
+# Unipi Neuron - M523, L523, L533
+# 4x DI, 5x RO, 4x AI, 4x AO
+# File version: 1.1
+# Min. EVOK version: 3.0
+# Min. firmware version: 5.50
+---
+
+# Modbus communication definition (read)
+modbus_register_blocks:
+
+    # DI, RO / 20ms
+    - start_reg   : 0
+      count       : 2
+      frequency   : 1
+
+    # AI, AO / 1000ms
+    - start_reg   : 2
+      count       : 12
+      frequency   : 50
+
+    # MWD status / 5s
+    - start_reg   : 14
+      count       : 1
+      frequency   : 250
+
+    # CNT / 1s
+    - start_reg   : 16
+      count       : 8
+      frequency   : 50
+
+    # Configuration / 5s
+    - start_reg   : 1008
+      count       : 15
+      frequency   : 250
+
+# Device features definition
+modbus_features:
+
+    # Digital inputs
+    - type        : DI
+      count       : 4
+      modes       :
+        - Simple
+        - DirectSwitch
+      ds_modes    :
+        - Simple
+        - Inverted
+        - Toggle
+      min_v       : 5
+      max_v       : 24
+      val_reg     : 0
+      counter_reg : 16
+      direct_reg  : 1014
+      deboun_reg  : 1010
+      polar_reg   : 1015
+      toggle_reg  : 1016
+
+    # Relay outputs
+    - type        : RO
+      count       : 5
+      val_reg     : 1
+      val_coil    : 0
+      modes       :
+        - Simple
+
+    # Analog inputs
+    - type        : AI
+      count       : 4
+      modes       :
+        Disabled:
+          value: 0
+        Voltage:
+          value: 1
+          unit: 'V'
+          range: [0, 10]
+        Voltage2V5:
+          value: 2
+          unit: 'V'
+          range: [0, 2.5]
+        Current:
+          value: 3
+          unit: 'mA'
+          range: [0, 20]
+        Resistance3W:
+          value: 4
+          unit: 'Ohm'
+          range: [0, 1960]
+        Resistance2W:
+          value: 5
+          unit: 'Ohm'
+          range: [0, 100000]
+      val_reg     : 6
+      mode_reg    : 1019
+
+    # Analog outputs (AOV)
+    - type        : AO
+      count       : 4
+      modes       :
+        Voltage:
+          unit: 'V'
+          range: [0, 10]
+      val_reg     : 2
+
+    # Master Watchdog (MWD) & configuration
+    - type        : WD
+      count       : 1
+      val_reg     : 14
+      timeout_reg : 1008
+      nv_sav_coil : 1003
+      reset_coil  : 1002
+
+  # Non-volatile memory saver
+    - type: NV_SAVE
+      val_coil: 1003

@@ -1,0 +1,52 @@
+# Unipi Neuron - M403, L403
+# 28x RO
+# File version: 1.1
+# Min. EVOK version: 3.0
+# Min. firmware version: 5.50
+---
+
+# Modbus communication definition (read)
+modbus_register_blocks:
+
+    # RO, MWD_status / 20ms
+    - start_reg   : 0
+      count       : 3
+      frequency   : 1
+
+    # MWD_timeout / 10s
+    - start_reg   : 1008
+      count       : 1
+      frequency   : 500
+
+# Device features definition
+modbus_features:
+
+    # Relay outputs reg.1
+    - type        : RO
+      count       : 16
+      val_reg     : 0
+      val_coil    : 0
+      modes       :
+        - Simple
+      start_index : 0
+
+    # Relay outputs reg.2
+    - type        : RO
+      count       : 12
+      val_reg     : 1
+      val_coil    : 16
+      modes       :
+        - Simple
+      start_index : 16
+
+    # Master Watchdog (MWD) & configuration
+    - type        : WD
+      count       : 1
+      val_reg     : 2
+      timeout_reg : 1008
+      nv_sav_coil : 1003
+      reset_coil  : 1002
+
+  # Non-volatile memory saver
+    - type: NV_SAVE
+      val_coil: 1003

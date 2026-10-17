@@ -1,0 +1,105 @@
+# Unipi Patron - M537
+# 8x AI, 4x DI, 5x RO
+# File version: 1.0
+# Min. EVOK version: 3.0
+# Min. firmware version: 7.18
+---
+
+# Modbus communication definition (read)
+modbus_register_blocks:
+
+    # DI, RO / 20ms
+    - start_reg   : 0
+      count       : 2
+      frequency   : 1
+
+    # AI / 1000ms
+    - start_reg   : 2
+      count       : 16
+      frequency   : 50
+
+    # MWD status / 5s
+    - start_reg   : 18
+      count       : 1
+      frequency   : 250
+
+    # CNT / 1s
+    - start_reg   : 19
+      count       : 8
+      frequency   : 50
+
+    # Configuration / 5s
+    - start_reg   : 1008
+      count       : 17
+      frequency   : 250
+
+# Device features definition
+modbus_features:
+
+    # Digital inputs
+    - type        : DI
+      count       : 4
+      modes       :
+        - Simple
+        - DirectSwitch
+      ds_modes    :
+        - Simple
+        - Inverted
+        - Toggle
+      min_v       : 5
+      max_v       : 24
+      val_reg     : 0
+      counter_reg : 19
+      direct_reg  : 1014
+      deboun_reg  : 1010
+      polar_reg   : 1015
+      toggle_reg  : 1016
+
+    # Relay outputs
+    - type        : RO
+      count       : 5
+      modes       :
+        - Simple
+      val_reg     : 1
+      val_coil    : 0
+
+    # Analog inputs
+    - type        : AI
+      count       : 8
+      modes       :
+        Disabled:
+          value: 0
+        Voltage10V:
+          value: 1
+          unit: 'V'
+          range: [0, 10]
+        Voltage2V:
+          value: 2
+          unit: 'V'
+          range: [0, 2]
+        Current:
+          value: 3
+          unit: 'mA'
+          range: [0, 20]
+        ResistanceLow:
+          value: 4
+          unit: 'Ohm'
+          range: [75, 2000]
+        ResistanceHigh:
+          value: 5
+          unit: 'Ohm'
+          range: [1000, 20000]
+      val_reg     : 2
+      mode_reg    : 1017
+
+    # Master Watchdog (MWD) & configuration
+    - type        : WD
+      count       : 1
+      val_reg     : 18
+      timeout_reg : 1008
+      nv_sav_coil : 1003
+      reset_coil  : 1002
+
+  # Non-volatile memory saver
+    - type: NV_SAVE
+      val_coil: 1003

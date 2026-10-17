@@ -1,0 +1,31 @@
+# Custom device XY
+# File version: 1.0
+# Min. firmware version: 0.1
+---
+# This key defines which Modbus registers will be periodically read. Each block (also sometimes referred to as "group") is read once ever ["frequency"] read cycles
+modbus_register_blocks:
+    - start_reg   : 0
+      count       : 10
+      frequency   : 1
+
+    - start_reg   : 500
+      count       : 8
+      frequency   : 10
+
+    - start_reg   : 508
+      count       : 8
+      frequency   : 50
+
+# This defines the devices mapped to the registers above. As custom devices are very unlikely to support any Neuron features, the only devices which should be mapped are "REGISTER"s
+modbus_features: 
+    - type        : REGISTER
+      count       : 10
+      start_reg   : 0
+      
+    - type        : REGISTER
+      count       : 8
+      start_reg   : 500
+      
+    - type        : REGISTER
+      count       : 8
+      start_reg   : 508

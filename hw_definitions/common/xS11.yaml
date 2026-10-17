@@ -1,0 +1,77 @@
+# Unipi Extension xS11
+# 11x DI, 13x RO, 3x ULED
+# File version: 1.1
+# Min. EVOK version: 3.0
+# Min. firmware version: 5.50
+---
+
+# Modbus communication definition (read)
+modbus_register_blocks:
+
+    # DI, RO, MWD_status / 20ms
+    - start_reg   : 0
+      count       : 3
+      frequency   : 1
+
+    # CNT / 1s
+    - start_reg   : 3
+      count       : 24
+      frequency   : 50
+
+    # ULED / 5s
+    - start_reg   : 31
+      count       : 1
+      frequency   : 250
+
+    # Configuration / 5s
+    - start_reg   : 1008
+      count       : 17
+      frequency   : 250
+
+# Device features definition
+modbus_features:
+
+    # Digital inputs
+    - type        : DI
+      count       : 12
+      modes       :
+        - Simple
+        - DirectSwitch
+      ds_modes    :
+        - Simple
+        - Inverted
+        - Toggle
+      min_v       : 5
+      max_v       : 24
+      val_reg     : 0
+      counter_reg : 3
+      direct_reg  : 1022
+      deboun_reg  : 1010
+      polar_reg   : 1023
+      toggle_reg  : 1024
+
+    # Relay outputs
+    - type        : RO
+      count       : 13
+      modes       :
+        - Simple
+      val_reg     : 1
+      val_coil    : 0
+
+    # User LEDs
+    - type        : LED
+      count       : 3
+      val_coil    : 25
+      val_reg     : 31
+
+    # Master Watchdog (MWD) & configuration
+    - type        : WD
+      count       : 1
+      val_reg     : 2
+      timeout_reg : 1008
+      nv_sav_coil : 1003
+      reset_coil  : 1002
+
+  # Non-volatile memory saver
+    - type: NV_SAVE
+      val_coil: 1003

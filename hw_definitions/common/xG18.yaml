@@ -1,0 +1,33 @@
+# Unipi xG18 - OneWire-to-Modbus gateway
+# 8x single-channel for DS18b20
+# File version: 1.1
+# Min. EVOK version: 3.0
+# Min. firmware version: 5.50
+---
+
+# Modbus communication definition (read)
+modbus_register_blocks:
+
+    # Temperature & validity / 2s 
+    - start_reg   : 1
+      count       : 9
+      frequency   : 100
+
+    # Configuration / 5s
+    - start_reg   : 1010
+      count       : 8
+      frequency   : 250
+
+# Device features definition
+modbus_features:
+
+    # Temperatures & validity
+    - type            : DATA_POINT
+      name            : "temperature"
+      count           : 8
+      value_reg       : 1
+      valid_mask_reg  : 9
+      offset          : 0
+      factor          : 0.01
+      datatype        : signed16
+      unit            : "°C"

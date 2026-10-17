@@ -1,0 +1,67 @@
+# Unipi Patron - M207, M267, L207, L527
+# Unipi Neuron - M203, L203, L523
+# 16x DI, 14x RO
+# File version: 1.1
+# Min. EVOK version: 3.0
+# Min. firmware version: 5.50
+---
+
+# Modbus communication definition (read)
+modbus_register_blocks:
+
+    # DI, RO, MWD_status / 20ms
+    - start_reg   : 0
+      count       : 3
+      frequency   : 1
+
+    # CNT / 1s
+    - start_reg   : 3
+      count       : 32
+      frequency   : 50
+
+    # Configuration / 5s
+    - start_reg   : 1008
+      count       : 21
+      frequency   : 250
+
+# Device features definition
+modbus_features:
+
+    # Digital inputs
+    - type        : DI
+      count       : 16
+      modes       :
+        - Simple
+        - DirectSwitch
+      ds_modes    :
+        - Simple
+        - Inverted
+        - Toggle
+      min_v       : 5
+      max_v       : 24
+      val_reg     : 0
+      counter_reg : 3
+      direct_reg  : 1026
+      deboun_reg  : 1010
+      polar_reg   : 1027
+      toggle_reg  : 1028
+
+    # Relay outputs
+    - type        : RO
+      count       : 14
+      val_reg     : 1
+      val_coil    : 0
+      modes       :
+        - Simple
+
+    # Master Watchdog (MWD) & configuration
+    - type        : WD
+      count       : 1
+      val_reg     : 2
+      timeout_reg : 1008
+      nv_sav_coil : 1003
+      reset_coil  : 1002
+
+  # Non-volatile memory saver
+    - type: NV_SAVE
+      val_coil: 1003

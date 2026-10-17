@@ -1,0 +1,13 @@
+---
+type: EMO-R8
+modbus_register_blocks:
+  - start_reg   : 1
+    count       : 1
+    frequency   : 1
+modbus_features:
+  - type        : RO
+    count       : 8
+    modes       :
+      - Simple
+    val_reg     : 1
+    val_coil    : 0

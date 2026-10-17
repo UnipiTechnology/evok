@@ -1,0 +1,12 @@
+modbus_register_blocks:
+  # ULED / 300 ms
+  - start_reg   : 3998
+    count       : 2
+    frequency   : 15
+
+modbus_features:
+
+  - type        : LED
+    count       : 3
+    val_coil    : 3000
+    val_reg     : 3998

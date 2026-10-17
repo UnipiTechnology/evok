@@ -1,0 +1,21 @@
+---
+modbus_register_blocks:
+    - board_index : 1
+      start_reg   : 0
+      count       : 7
+      frequency   : 1
+    - board_index : 1
+      start_reg   : 1000
+      count       : 25
+      frequency   : 10
+modbus_features: 
+    - type        : WD
+      count       : 1
+      val_reg     : 2
+      timeout_reg : 1008
+      nv_sav_coil : 1003
+      reset_coil  : 1002
+
+  # Non-volatile memory saver
+    - type: NV_SAVE
+      val_coil: 1003

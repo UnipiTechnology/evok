@@ -1,0 +1,74 @@
+# Unipi Extension xS30
+# 24x DI, 4x ULED
+# File version: 1.1
+# Min. EVOK version: 3.0
+# Min. firmware version: 5.50
+---
+
+# Modbus communication definition (read)
+modbus_register_blocks:
+
+    # DI, MWD_status / 20ms
+    - start_reg   : 0
+      count       : 3
+      frequency   : 1
+
+    # CNT / 1s
+    - start_reg   : 3
+      count       : 48
+      frequency   : 50
+
+    # ULED / 5s
+    - start_reg   : 51
+      count       : 1
+      frequency   : 250
+
+    # configuration / 5s
+    - start_reg   : 1008
+      count       : 26
+      frequency   : 250
+
+# Device features definition
+modbus_features: 
+
+    # Digital inputs reg.1
+    - type        : DI
+      count       : 16
+      modes       :
+        - Simple
+      min_v       : 5
+      max_v       : 24
+      val_reg     : 0
+      counter_reg : 3
+      deboun_reg  : 1010
+      start_index : 0
+
+    # Digital inputs reg.2
+    - type        : DI
+      count       : 8
+      modes       :
+        - Simple
+      min_v       : 5
+      max_v       : 24
+      val_reg     : 1
+      counter_reg : 35
+      deboun_reg  : 1026
+      start_index : 16
+
+    # User LEDs
+    - type        : LED
+      count       : 4
+      val_coil    : 24
+      val_reg     : 51
+
+    # Master Watchdog (MWD) & configuration
+    - type        : WD
+      count       : 1
+      val_reg     : 2
+      timeout_reg : 1008
+      reset_coil  : 1002
+      nv_sav_coil : 1003
+
+  # Non-volatile memory saver
+    - type: NV_SAVE
+      val_coil: 1003
