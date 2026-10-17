@@ -1,6 +1,17 @@
 # Evok - the Unipi API
 
-Evok is the primary API for accessing I/Os of [NEURON], [PATRON], [GATE] and [Unipi 1.1] devices including [Extension modules] by [Unipi technology].
+Evok is a bridge between the hardware of [Unipi technology] and the applications. It turns the Modbus registers of the Unipi
+units and the 1-Wire sensors into named devices with a clear state, e.g. the digital input `di 1_01`, the relay
+`ro 2_03` or a thermometer `temp`, so the applications do not need to know Modbus or the register maps.
+
+- **Abstraction of the hardware:** the devices are created by the HW definitions of the units, their values
+  are in the units of their modes, with checked modes and ranges.
+- **One state:** Evok scans the units and keeps the actual state of every device, also the quality
+  of the communication (`comm`, `last_comm`); the changes are sent as events.
+- **One way of writing:** a change from any API is validated, written under the lock of the unit and read back;
+  the pulses and sequences of the outputs are timed by the sequencer.
+- **Integration:** the same devices for web applications, Node-RED and Home Assistant, with tokens and CORS
+  for the remote clients.
 
 It provides multiple ways to easily access the I/Os of the devices, including:
 
@@ -15,30 +26,36 @@ Besides that, Evok also supports sending notifications via webhook.
 
 [evok-web] is a simple demo web application using Evok demonstrating its usage and allowing easy control of the devices configured in Evok.
 
+Natively supported hardware: [Neuron], [Patron], [Gate] and [Unipi 1.1] including [Extension modules].
+Other devices that communicate via Modbus can be described using configuration files.
+
+If you develop your own control application where the real-time behaviour matters, the application should
+use the Modbus protocol directly or the library of [unipi-tools], which communicates with the kernel driver
+via unipichannel.
+
 ## Documentation
 Installation, basic usage examples, configuration and further information can be found on [https://evok.readthedocs.io/](https://evok.readthedocs.io/)
 
 The OpenAPI document of the REST and JSON API is generated from the sources (`python -m evok.openapi`) and published with every release: [Evok_API_OAS.yaml](https://github.com/UnipiTechnology/evok/releases/latest/download/Evok_API_OAS.yaml). The other APIs are described in the [documentation](https://evok.readthedocs.io/).
 
-## Major changes between Evok v2 and v3
+## Major changes between Evok 3.0 and 3.1
 
-- Evok v3 is based on Python3.
-- API breaking changes:
-    - Relay entities are excluded from the `output` endpoint and have a separate endpoint `ro`.  Alternate access via `relay` is still available.
-    - Digital output entities are excluded from the `output` endpoint and have a separate endpoint `do`. Alternate access via `output` is still available.
-    - Digital input entities are excluded from the `input` endpoint and have a separate endpoint `di`. Alternate access via `input` is still available.
-    - Modified methods of setting analog input `ai` and analog output `ao` modes - mode and range are unified into one parameter. For more information see Analog input and Analog output in the [OpenAPI document](https://github.com/UnipiTechnology/evok/releases/latest/download/Evok_API_OAS.yaml).
-    - Renamed `unit_register` entity to `data_point`.
-- Updating Evok from v2 to v3 is unsupported as well as migration from Debian 10 is unsupported - it's recommended to start from a fresh operating system.
-- The configuration of Evok has been completely rewritten to yaml based on tree structure(old .conf structure is no longer supported). See more information in the [Evok configuration](https://evok.readthedocs.io/en/latest/configs/evok_configuration/).
-- Dropped support of rarely used functions/entities (Eeprom,i2cbus,adchip,mcp,gpiobus,pca9685,unipi2,uart,wifi,light_channel,light_device,ext_config)
-- Example website aka 'Unipi Control Panel' has been split into separate project [evok-web-jq](https://github.com/UnipiTechnology/evok-web-jq) and can be installed manually.
-- Added option 'all' instead of circuit using API (/rest/relay/all).
-- The device names in the API now match the name in the configuration. For more information see [evok configuration](https://evok.readthedocs.io/en/latest/configs/evok_configuration/#device-configuration).
-- [Aliases](https://evok.readthedocs.io/en/latest/configs/aliases/) system has been rewritten. Aliases are automatically saved 5 mins after a change, not immediately. Saving of aliases can be forced via API.
-- Aliases definition file structure has been changed. Evok automatically updates the aliases definition file if a version from Evok v2 is found.
-- Modbus RTU durability has been improved. Loss of communication with one device will not affect the functionality of the entire bus.
-- Added support to communicate with more Modbus TCP servers.
+- **Python 3.12 and Debian 13 Trixie**, `tmodbus` instead of `pymodbus`; Evok can be installed also into a virtual
+  environment by pip.
+- **Security:** the API listens on `127.0.0.1` by default, an optional `token` and a read-only `read_token`
+  for all APIs, CORS and the WebSocket from a browser only for `allowed_origins`.
+- **Stricter checks:** invalid values and configurations are refused with an error instead of being processed
+  silently; the errors have the HTTP statuses 400, 401, 403, 404, 409, 503 and 500.
+- **MQTT API** with the Home Assistant discovery.
+- **Communication of the devices:** every state of a device of a Modbus unit and of a 1-Wire sensor has `comm`
+  and `last_comm`; a unit which does not respond does not slow down the others on the bus.
+- **1-Wire by the kernel** instead of owserver, an OWFS bus is configured by its `master`.
+- **Sequencer:** the pulses and sequences of RO, DO and LED are set by the device `sequencer` of the output,
+  the outputs have no `pulse_duration`, `timeout` and `pending`.
+- **OpenAPI document** generated from the sources and attached to every release.
+
+The complete list, with the incompatible changes first and the commits of each change, is in
+[docs/api-changes-dev-src.md](docs/api-changes-dev-src.md).
 
 ## Developer Note
 
@@ -48,10 +65,11 @@ Do you feel like contributing to Evok, or perhaps have a neat idea for an improv
 
 Apache License, Version 2.0
 
-[NEURON]:https://www.unipi.technology/products/unipi-neuron-3?categoryId=2
-[PATRON]:https://www.unipi.technology/products/unipi-patron-374
-[GATE]:https://www.unipi.technology/products/unipi-gate-388
+[Neuron]:https://www.unipi.technology/products/unipi-neuron-3?categoryId=2
+[Patron]:https://www.unipi.technology/products/unipi-patron-374
+[Gate]:https://www.unipi.technology/products/unipi-gate-388
 [Unipi 1.1]:https://www.unipi.technology/products/unipi-1-1-1-1-lite-19?categoryId=1
 [Evok-web]:https://github.com/UnipiTechnology/evok-web-jq
 [Extension modules]:https://www.unipi.technology/products?category=32
 [Unipi technology]:https://www.unipi.technology/
+[unipi-tools]:https://github.com/UnipiTechnology/unipi-tools

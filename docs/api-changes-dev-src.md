@@ -1,6 +1,4 @@
-# API changes in the dev-3.1 branch
-
-Evok · branch `dev-3.1` against `main` (`b2e241c`)
+# API changes in Evok 3.1 against 3.0
 
 The changes which affect the clients of REST, JSON, Bulk, WebSocket, RPC and the webhook, the configuration and
 the HW definitions. The incompatible changes come first. Every change names its commits
