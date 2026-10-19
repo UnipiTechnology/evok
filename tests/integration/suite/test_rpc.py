@@ -2,8 +2,6 @@
 
 import pytest
 
-pytestmark = pytest.mark.replay
-
 
 def test_rpc_input_get(rpc):
     # returns [value, debounce] per Evok RPC contract

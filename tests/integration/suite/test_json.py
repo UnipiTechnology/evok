@@ -3,8 +3,6 @@
 import pytest
 from tests.integration.oracles.shapes import assert_full_shape, assert_value_in_range
 
-pytestmark = pytest.mark.replay
-
 
 @pytest.mark.parametrize("dev, circuit", [("di", "2_01"), ("ai", "1_01"), ("ro", "2_01")])
 def test_json_get(http, park_output, dev, circuit):

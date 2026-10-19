@@ -1,4 +1,4 @@
-"""Standalone launcher for the functional tier: mockbus + fake 1-Wire + evok.
+"""Standalone launcher for the functional tier: mockbus + fake 1-Wire + MQTT broker + evok.
 
 Run this in a terminal to start a mockbus-backed evok instance, then point the
 harness at it from another terminal:
@@ -8,15 +8,17 @@ harness at it from another terminal:
     uv run python mockbus/start.py
 
     # terminal 2
-    EVOK_TEST_MODE=functional EVOK_BASE_URL=http://127.0.0.1:8090 uv run pytest
+    EVOK_BASE_URL=http://127.0.0.1:8090 EVOK_MQTT=127.0.0.1:1884 EVOK_WEBHOOK_CONFIGURED=1 \
+        uv run pytest
 
-The mockbus (fake Modbus TCP server) listens on 127.0.0.1:5020; the real evok
+The mockbus (fake Modbus TCP server) listens on 127.0.0.1:5020, the MQTT broker
+(amqtt) on 127.0.0.1:1884; the real evok
 server listens on 127.0.0.1:8090 and connects to the mockbus as its bus. The
 1-Wire bus is a fake sysfs tree under /sys/bus/w1/devices: this script re-execs
 itself in a private mount namespace (``unshare -rm``) and mounts the tree there
 before starting evok, so no hardware and no root are needed.
 
-Ctrl-C stops both. The harness stays a pure black-box client — it never launches
+Ctrl-C stops all. The harness stays a pure black-box client — it never launches
 processes. This script is the only thing that manages the mockbus + evok
 lifecycle.
 """
@@ -34,7 +36,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from tests.integration.mockbus.config import generate_config  # noqa: E402
+from amqtt.broker import Broker  # noqa: E402
+from tests.integration.mockbus.config import MQTT_PORT, generate_config  # noqa: E402
 from tests.integration.mockbus.server import MockBus  # noqa: E402
 from tests.integration.mockbus.w1sysfs import (  # noqa: E402
     create_tree,
@@ -75,6 +78,18 @@ async def main() -> None:
     await bus.start()
     print(f"[start] mockbus (fake Modbus TCP) listening on 127.0.0.1:{MOCKBUS_PORT}")
 
+    # 3b. Start the MQTT broker of the MQTT API of evok.
+    broker = Broker(
+        {
+            "listeners": {"default": {"type": "tcp", "bind": f"127.0.0.1:{MQTT_PORT}"}},
+            "plugins": {
+                "amqtt.plugins.authentication.AnonymousAuthPlugin": {"allow_anonymous": True}
+            },
+        }
+    )
+    await broker.start()
+    print(f"[start] MQTT broker listening on 127.0.0.1:{MQTT_PORT}")
+
     # 4. Launch the real evok server (foreground subprocess; inherits stdout/stderr).
     # Blocking subprocess in an async function is intentional — this is a
     # foreground launcher, not a concurrent coroutine. Runs via the main
@@ -105,6 +120,7 @@ async def main() -> None:
     while evok.poll() is None:  # noqa: ASYNC110 -- intentional poll loop for a foreground launcher
         await asyncio.sleep(0.5)
     await bus.stop()
+    await broker.shutdown()
     print("[start] stopped.")
 
 

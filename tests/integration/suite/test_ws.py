@@ -1,12 +1,8 @@
 """WebSocket API functional tests."""
 
-import pytest
-
-pytestmark = pytest.mark.replay
-
 
 async def test_ws_filter_command(ws):
-    # open + send a filter; in record mode the harness captures the resulting stream.
+    # open + send a filter and collect the stream.
     msgs = await ws.will_send({"cmd": "filter", "devices": ["do", "ao"]}).run(receive_for=1.0)
     # After a filter, subsequent server pushes should only contain filtered devs.
     # (Initial connection may also receive a default dump; assert no unfiltered dev.)

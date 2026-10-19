@@ -1,7 +1,7 @@
 """Write/property-read coverage across device types.
 
-Recorded against a Neuron M103 (Evok v3.0.6). The device is standalone (nothing
-connected), so writes are safe. Each test leaves the device in a safe/restored
+The inventory of a Neuron M103 (the mockbus or a device with nothing connected),
+so writes are safe. Each test leaves the device in a safe/restored
 state where the property is configuration-shaped (mode/interval), since
 test-run order in `live` mode could otherwise leave stale output state.
 
@@ -12,12 +12,9 @@ here; sensor (1-Wire) coverage is pending an OW sensor. See fixtures/devices.yam
 import pytest
 from tests.integration.oracles.shapes import assert_full_shape
 
-pytestmark = pytest.mark.replay
-
-
 # --- property-read path: GET /rest/<dev>/<circuit>/<prop> ----------------------
 # Distinct from full(): returns a single-key dict {prop: value}, and the server
-# guards against underscore-prefixed properties (see test_rest_property_read).
+# guards against underscore-prefixed properties (see test_rest_property_read_guarded).
 
 
 @pytest.mark.parametrize(
@@ -49,8 +46,7 @@ def test_write_ao_value(http):
 
 def test_write_ao_mode_switch_and_restore(http):
     # Switch to Current, then back to Voltage (safe default). Nothing connected,
-    # so mode switching is harmless. We assert success, not the cached value
-    # (the scan cache lags the write; see test_boundaries.py for why).
+    # so mode switching is harmless. The reply is the state read after the write.
     for mode in ("Current", "Voltage"):
         r = http.post_json("/rest/ao/1_01/", {"mode": mode})
         assert r.status == 200, r.raw_text

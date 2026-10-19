@@ -1,10 +1,8 @@
 """REST API functional tests.
 
-Black-box: exercises /rest/* over HTTP. Shape assertions from the spec; exact
-values hardware-dependent so we assert ranges/membership, not literals.
-
-In replay mode every response comes from a cassette; to (re)generate cassettes
-run with EVOK_TEST_MODE=record against a server (real or mock-backed).
+Black-box: exercises /rest/* over HTTP. Every state is validated against the
+definition of the API by the client; exact values depend on the hardware, so we
+assert ranges/membership, not literals.
 """
 
 import pytest
@@ -13,8 +11,6 @@ from tests.integration.oracles.shapes import (
     assert_value_in_range,
     resolve_devtype,
 )
-
-pytestmark = pytest.mark.replay
 
 
 def test_version(http):
@@ -36,7 +32,7 @@ def test_version(http):
 )
 def test_get_device_full(http, park_output, dev, circuit):
     # Park writable outputs in a known state so the read `value` is stable
-    # across record/compare runs (inputs are volatile anyway).
+    # (inputs are volatile anyway).
     if dev in ("ro", "do", "ao"):
         next(park_output(dev, circuit, 0))
     r = http.get(f"/rest/{dev}/{circuit}/")
@@ -63,7 +59,7 @@ def test_rest_property_read_guarded(http):
     """
     r = http.get("/rest/ro/2_01/_internal")
     # server returns 404 + error envelope for invalid property
-    assert r.status in (404, 400), r.raw_text
+    assert r.status == 404, r.raw_text
     assert isinstance(r.body, dict)
     assert r.body.get("success") is False or "errors" in r.body
 

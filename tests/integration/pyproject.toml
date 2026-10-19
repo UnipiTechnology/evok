@@ -11,18 +11,12 @@ dependencies = [
     "pyyaml >=6.0",
     "jsonschema >=4.0",
     "pymodbus >=3.5,<3.7",
+    "amqtt>=0.11",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["suite"]
-markers = [
-    "record: capture live responses into golden cassettes (run manually, not CI)",
-    "replay: serve assertions from cassettes (CI default)",
-    "live: run against a real running server",
-    "functional: mock-bus backed, no hardware",
-    "integration: requires real hardware / golden captures",
-]
 
 [tool.ruff]
 line-length = 100
