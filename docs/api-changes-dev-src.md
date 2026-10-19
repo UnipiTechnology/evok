@@ -121,7 +121,8 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - **New events:** — `60e2287`, `08d9f56`, `62b37ef`, `891bd4a`
   - a changed alias of a device on a Modbus unit,
   - a lost and a restored communication with a unit,
-  - a change of `counter_mode`, the mode and the debounce of a DI.
+  - a change of `counter_mode`, the mode and the debounce of a DI,
+  - a changed PWM frequency, of all DOs which share it.
 - A successful bulk reply has `"success": true`. — `ba4212f`
 - `scan_error` of `modbus_slave` and the errors of an unavailable unit name the root cause, e.g. a missing serial
   port. — `d990fe1`

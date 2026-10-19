@@ -150,7 +150,21 @@ async def test_do_set_pwm_freq_updates_all_outputs(unit):
     assert client.mb_client.holding[1017] == 7
     # the other output keeps its duty cycle with the new period
     assert client.mb_client.holding[22] == 30000
-    assert dev(DO, '1_02').pwm_freq == 100
+    # the scan after the change reads the frequency (the same 100 Hz by other registers), set_devices() does it
+    await dev(DO, '1_02').check_new_data()
+    assert (dev(DO, '1_02').pwm_freq, dev(DO, '1_02').pwm_duty) == (100, 50.0)
+
+
+async def test_do_set_pwm_freq_sends_all_outputs(unit, monkeypatch):
+    """ The frequency is shared by the outputs, the scan after the change sends all of them """
+    events = []
+    monkeypatch.setattr(devents, 'status', lambda device, **kw: events.append(device))
+    await unit({1018: 47999, 1017: 9, 22: 24000})            # 100 Hz, 1_02 at 50 %
+    state, = await set_devices([(dev(DO, '1_01'), {'pwm_freq': 200})])
+    assert state['pwm_freq'] == 200
+    sent = {device.circuit: device.full() for proxy in events for device in proxy.changeset if device.devtype == DO}
+    assert sent['1_01']['pwm_freq'] == sent['1_02']['pwm_freq'] == 200
+    assert sent['1_02']['pwm_duty'] == 50.0                 # the duty cycle is kept
 
 
 async def test_do_set_pwm_duty(unit):
