@@ -311,6 +311,7 @@ async def main():
     try:
         auth.set_token(evok_config.apis.get("token"), evok_config.apis.get("read_token"))
         auth.set_allowed_origins(evok_config.apis.get("allowed_origins"))
+        auth.set_trusted_downstream(evok_config.apis.get("trusted_downstream"))
     except ValueError as E:
         sys.exit(f"evok: {E}")
     if auth.is_enabled():

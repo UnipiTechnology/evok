@@ -316,3 +316,55 @@ def test_allowed_origins_with_the_default_port(configured, origin, allowed):
         assert auth.is_allowed_origin(origin) is allowed
     finally:
         auth.set_allowed_origins(None)
+
+
+@pytest.fixture
+def trusted_downstream():
+    """ nginx of evok-web on the controller and a proxy of the network """
+    auth.set_trusted_downstream(['127.0.0.1', '10.0.0.0/8'])
+    yield
+    auth.set_trusted_downstream(None)
+
+
+def request_from(remote_ip, **headers):
+    from types import SimpleNamespace
+    headers = {key.replace('_', '-'): value for key, value in headers.items()}
+    return SimpleNamespace(remote_ip=remote_ip, headers=headers)
+
+
+@pytest.mark.parametrize('request_, client', [
+    (request_from('127.0.0.1', X_Forwarded_For='192.168.1.20'), '192.168.1.20'),
+    (request_from('127.0.0.1', X_Real_IP='192.168.1.20'), '192.168.1.20'),
+    (request_from('127.0.0.1', X_Forwarded_For='192.168.1.20', X_Real_IP='192.168.1.99'), '192.168.1.20'),
+    # the client prepends a forged address, the proxies append the real one
+    (request_from('127.0.0.1', X_Forwarded_For='1.2.3.4, 192.168.1.20, 10.0.0.5'), '192.168.1.20'),
+    (request_from('127.0.0.1', X_Forwarded_For='10.0.0.6, 10.0.0.5'), '10.0.0.6'),     # only proxies
+    (request_from('127.0.0.1', X_Forwarded_For='nonsense'), '127.0.0.1'),
+    (request_from('127.0.0.1', X_Real_IP='nonsense'), '127.0.0.1'),
+    (request_from('127.0.0.1'), '127.0.0.1'),
+    (request_from('::1', X_Forwarded_For='192.168.1.20'), '::1'),                       # not a trusted proxy
+    (request_from('192.168.1.30', X_Forwarded_For='1.2.3.4', X_Real_IP='1.2.3.4'), '192.168.1.30'),
+])
+def test_client_ip_by_a_trusted_proxy(trusted_downstream, request_, client):
+    assert auth.client_ip(request_) == client
+
+
+def test_client_ip_without_trusted_downstream():
+    """ The headers are ignored by default, any client could forge them """
+    assert auth.client_ip(request_from('127.0.0.1', X_Forwarded_For='1.2.3.4', X_Real_IP='1.2.3.4')) == '127.0.0.1'
+
+
+@pytest.mark.parametrize('proxies', ['127.0.0.1', ['localhost'], [1], ['10.0.0.0/33'], ['']])
+def test_invalid_trusted_downstream_is_rejected(proxies):
+    with pytest.raises(ValueError, match='trusted_downstream'):
+        auth.set_trusted_downstream(proxies)
+
+
+async def test_unauthorized_request_is_logged_with_the_client_of_the_proxy(server, token, trusted_downstream, caplog):
+    await fetch(server, '/rest/all', headers={'X-Forwarded-For': '192.168.1.20', 'X-Real-IP': '192.168.1.20'})
+    assert 'Unauthorized GET /rest/all from 192.168.1.20' in caplog.text
+
+
+async def test_unauthorized_request_is_logged_without_the_headers_of_a_client(server, token, caplog):
+    await fetch(server, '/rest/all', headers={'X-Forwarded-For': '1.2.3.4', 'X-Real-IP': '1.2.3.4'})
+    assert 'Unauthorized GET /rest/all from 127.0.0.1' in caplog.text

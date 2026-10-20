@@ -9,11 +9,16 @@ in the logs of proxies and in the history of browsers.
 
 The optional read_token gives the access only for reading: the requests which change a device
 raise ReadOnlyAccess, reported as 403.
+
+The address of a client behind a reverse proxy, e.g. nginx of evok-web, is taken from its headers
+X-Forwarded-For and X-Real-IP only when the request comes from a proxy of apis: trusted_downstream,
+another client could forge them.
 """
 
 import base64
 import binascii
 import hmac
+import ipaddress
 import json
 import logging
 from urllib.parse import urlparse
@@ -27,6 +32,7 @@ WRITE, READ = "write", "read"  # the access of a request
 _token: str | None = None
 _read_token: str | None = None
 _allowed_origins: frozenset[tuple] = frozenset()  # (scheme, host, port), the default port of the scheme
+_trusted_downstream: tuple = ()  # the networks of the trusted reverse proxies, e.g. 127.0.0.1 of nginx
 
 # a browser sends no default port in the origin, nginx of evok-web forwards the host with it, e.g. host:80
 DEFAULT_PORTS = {"http": 80, "https": 443}
@@ -77,6 +83,62 @@ def set_allowed_origins(origins) -> None:
             raise ValueError(f"apis: invalid origin {origin!r} in 'allowed_origins', e.g. http://192.168.1.10:1880")
         allowed.add(key)
     _allowed_origins = frozenset(allowed)
+
+
+def set_trusted_downstream(proxies) -> None:
+    """Set the reverse proxies of the configuration whose headers of the client are trusted, their addresses
+    or networks, e.g. ['127.0.0.1'] of nginx of evok-web; raise ValueError if they are invalid
+    """
+    global _trusted_downstream
+    if proxies is None:
+        proxies = []
+    if not isinstance(proxies, list):
+        raise ValueError("apis: 'trusted_downstream' must be a list of addresses, e.g. ['127.0.0.1']")
+    networks = []
+    for proxy in proxies:
+        try:
+            if not isinstance(proxy, str):
+                raise ValueError(proxy)
+            networks.append(ipaddress.ip_network(proxy.strip(), strict=False))
+        except ValueError:
+            raise ValueError(
+                f"apis: invalid address {proxy!r} in 'trusted_downstream', e.g. 127.0.0.1 or 192.168.1.0/24"
+            ) from None
+    _trusted_downstream = tuple(networks)
+
+
+def _ip(address: str):
+    """The address as an object of ipaddress, None if it is not an IP address"""
+    try:
+        return ipaddress.ip_address(address.strip())
+    except ValueError:
+        return None
+
+
+def _is_trusted(address: str) -> bool:
+    ip = _ip(address)
+    return ip is not None and any(ip in network for network in _trusted_downstream)
+
+
+def client_ip(request) -> str:
+    """The address of the client of the request: of the connection, or by X-Forwarded-For (else X-Real-IP)
+    of a trusted proxy. The addresses of X-Forwarded-For are read from the end, the trusted proxies are
+    skipped, the first other one is the client; the addresses before it could be forged by the client.
+    """
+    address = request.remote_ip
+    if not _is_trusted(address):
+        return address
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        for candidate in reversed(forwarded.split(",")):
+            if _ip(candidate) is None:
+                break
+            address = candidate.strip()
+            if not _is_trusted(address):
+                break
+        return address
+    real_ip = request.headers.get("X-Real-IP", "")
+    return real_ip.strip() if _ip(real_ip) is not None else address
 
 
 def _host_port(netloc: str, default_port: int | None) -> tuple[str, int | None] | None:
@@ -191,6 +253,8 @@ class TokenAuth:
             raise ReadOnlyAccess("The token allows only reading")
 
     def prepare(self):
+        # the client behind a trusted proxy, also in the log of the requests
+        self.request.remote_ip = client_ip(self.request)
         if self.auth_exempt or self.request.method == "OPTIONS":
             return
         request_access = access(self.request, self.query_token)
