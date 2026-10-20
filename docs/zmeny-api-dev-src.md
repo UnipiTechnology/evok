@@ -116,7 +116,8 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
   - změna aliasu zařízení na Modbus jednotce,
   - ztráta a obnovení komunikace s jednotkou,
   - změna `counter_mode`, režimu a debounce DI,
-  - změna frekvence PWM, u všech DO, které ji sdílejí.
+  - změna frekvence PWM, u všech DO, které ji sdílejí,
+  - změna napájení 1-Wire (`owpower`, hodnota 1 je sběrnice bez napájení).
 - Úspěšná odpověď bulk obsahuje `"success": true`. — `ba4212f`
 - `scan_error` u `modbus_slave` a chyby nedostupné jednotky uvádějí původní příčinu, např. chybějící sériový port.
   — `d990fe1`

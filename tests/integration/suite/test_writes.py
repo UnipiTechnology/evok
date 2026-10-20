@@ -117,5 +117,5 @@ def test_write_owpower_toggle(http):
     r = http.post_json("/rest/owpower/1/", {"value": 1})
     assert r.status == 200, r.raw_text
     assert r.body.get("success") is True
-    # restore to off
+    # restore the power, value 1 is the bus without power
     http.post_json("/rest/owpower/1/", {"value": 0})

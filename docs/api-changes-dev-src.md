@@ -120,7 +120,8 @@ the HW definitions. Breaking changes come first. Every change names its commits
   - a changed alias of a device on a Modbus unit,
   - a lost and a restored communication with a unit,
   - a change of `counter_mode`, the mode and the debounce of a DI,
-  - a changed PWM frequency, of all DOs which share it.
+  - a changed PWM frequency, of all DOs which share it,
+  - a change of the 1-Wire power (`owpower`, value 1 is the bus without power).
 - A successful bulk reply has `"success": true`. — `ba4212f`
 - `scan_error` of `modbus_slave` and the errors of an unavailable unit name the root cause, e.g. a missing serial
   port. — `d990fe1`

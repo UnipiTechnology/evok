@@ -629,6 +629,23 @@ async def test_owpower_value_is_0_or_1(value, coil):
     assert owpower.full()['value'] == coil and type(owpower.full()['value']) is int
 
 
+async def test_owpower_change_is_sent(monkeypatch):
+    """ The coil is not read, the scan after the change sent no event of the new value """
+    events = []
+    monkeypatch.setattr(devents, 'status', lambda device, **kw: events.append(device))
+    client = make_client([])
+    owpower = OwPower('1', client, 1001)
+    client.devices.append(owpower)
+    client.eventable_devices.append(owpower)
+    state, = await set_devices([(owpower, {'value': 1})])           # the bus without power
+    assert state['value'] == 1
+    assert [proxy.full() for proxy in events] == [[state]]
+    await set_devices([(owpower, {'value': 1})])                    # the same value, no event
+    assert len(events) == 1
+    await set_devices([(owpower, {'value': 0})])
+    assert events[-1].full()[0]['value'] == 0
+
+
 async def test_led(unit):
     client = await unit({3998: 0b101})
     assert [dev(LED, c).value for c in ('1_01', '1_02', '1_03')] == [1, 0, 1]

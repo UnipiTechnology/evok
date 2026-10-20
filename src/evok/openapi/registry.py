@@ -262,7 +262,10 @@ _DESCRIPTIONS: dict[str, tuple[str, str]] = {
         "The state of the master watchdog of a Modbus unit." + _ALL,
         "Enable or disable the master watchdog, set its timeout or restart the unit." + _SET,
     ),
-    "owpower": ("The power of a 1-Wire bus." + _ALL, "Switch the power of a 1-Wire bus." + _SET),
+    "owpower": (
+        "The power of a 1-Wire bus, value 1 is the bus without power." + _ALL,
+        "Switch off (value 1) or on (value 0) the power of a 1-Wire bus." + _SET,
+    ),
     "owbus": (
         "The state of a 1-Wire bus read by the kernel." + _ALL,
         "Set the intervals of a 1-Wire bus, start a search or reset its master." + _SET,
