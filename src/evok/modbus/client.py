@@ -64,6 +64,8 @@ class Client:
         self.failing_devices = set()  # logged once, until they check new data again
         self.sent_aliases = {}  # the alias of each device by the last check, Devices.set_alias() sends no event
         self.lock = asyncio.Lock()  # not reentrant, set() of a device must not change the unit again
+        # the registers (address, is_input) written by the running change, None reads all blocks after it
+        self._written: set[tuple[int, bool]] | None = None
         # comm by the last event of the devices, a change sends all of them; the devices are created after
         # a successful scan
         self.sent_comm = "ok"
@@ -101,6 +103,8 @@ class Client:
                 raise
             logger.debug(f"Unit {self.name}: no response to the write of coil {coil}, it restarts: {E}")
             responded = False
+        # the unit restarted or saved its settings, a change reads all its blocks
+        self._written = None
         await asyncio.sleep(RESTART_WAIT if wait is None else wait)
         return responded
 
@@ -111,16 +115,23 @@ class Client:
         else:
             await self.mb_client.write_multiple_registers(index, values)
         self.cache.set_register(index, values)
+        if self._written is not None:
+            self._written.update((index + i, False) for i in range(len(values)))
 
     async def do_scan(self) -> bool:
         """The periodic scan of the unit"""
         async with self.lock:
             return await self._scan()
 
-    async def change(self, operation, check_available: bool = True, read: bool = True):
+    async def change(self, operation, check_available: bool = True, read: bool = True, devices=None):
         """Run the writes of operation() under the lock of the unit, then read all register blocks
         and check the devices, also after a failed operation, its writes before the error are seen;
         without read, e.g. a change of only the alias, the devices are checked without a read
+
+        With devices, the changed devices of the unit, only the blocks read by every scan, the blocks
+        of the states of the devices and of the written registers are read; the other blocks are read
+        by the periodic scan by their scan_divider. A restart of the unit (write_coil_without_response)
+        reads all blocks.
 
         A unit which failed its last scan raises UnitUnavailable without a write, check_available=False
         writes anyway, e.g. the end of a pulse. A unit without a periodic scan is read first, nothing else
@@ -130,7 +141,7 @@ class Client:
         the running scan of the unit, the writes and the read, they do not wait for the scans of the other units.
         """
         with self._priority():
-            await self._change(operation, check_available, read)
+            await self._change(operation, check_available, read, devices)
 
     def _priority(self):
         """The priority of the requests of the unit on its bus (BusTransport), none of another transport"""
@@ -139,19 +150,24 @@ class Client:
             return transport.priority(self.mb_client.unit_id)
         return contextlib.nullcontext()
 
-    async def _change(self, operation, check_available: bool, read: bool):
+    async def _change(self, operation, check_available: bool, read: bool, devices):
         async with self.lock:
             if check_available and self.cache.scan_error is not None:
                 if self.periodic_scan or not await self.cache.do_scan(all_groups=True):
                     raise UnitUnavailable(f"Unit {self.name} is not available: {describe_error(self.cache.scan_error)}")
+            self._written = None if devices is None else set()
             try:
                 await operation()
             except (TModbusError, TimeoutError) as E:
                 # it was an internal error with a traceback, the unit did not respond or refused the request
                 raise UnitCommunicationError(f"Unit {self.name}: {describe_error(E)}") from E
             finally:
+                registers, self._written = self._written, None
                 if read:
-                    await self._scan(all_groups=True)
+                    if registers is not None:
+                        # the accessors after the writes, e.g. of a new mode of an analog input
+                        registers |= {register for device in devices for register in device_registers(device)}
+                    await self._scan(all_groups=True, registers=registers)
                 else:
                     await self._check_devices()
 
@@ -160,9 +176,9 @@ class Client:
         async with self.lock:
             await self._check_devices()
 
-    async def _scan(self, all_groups: bool = False) -> bool:
+    async def _scan(self, all_groups: bool = False, registers: set[tuple[int, bool]] | None = None) -> bool:
         """Read the register blocks, send the changed devices as one event; under the lock"""
-        if not await self.cache.do_scan(all_groups=all_groups):
+        if not await self.cache.do_scan(all_groups=all_groups, registers=registers):
             # the values are stale, the devices are sent with the changed comm
             self.send_comm_change()
             return False
@@ -226,6 +242,16 @@ class Proxy:
 
     def full(self):
         return self.states
+
+
+def device_registers(device) -> set[tuple[int, bool]]:
+    """The registers (address, is_input) of the state of a device (its accessor), e.g. of an output written
+    by its coil; its settings written by write_registers() are read as the written registers
+    """
+    accessor = getattr(device, "accessor", None)
+    if not isinstance(accessor, Accessor) or accessor.index is None:
+        return set()
+    return {(accessor.index + i, accessor.is_input) for i in range(accessor.count)}
 
 
 class Accessor:

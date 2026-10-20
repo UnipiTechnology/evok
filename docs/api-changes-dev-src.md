@@ -168,6 +168,10 @@ An invalid value is an error: the unit or the feature is not created and the err
 - **Priority of the changes on a bus:** the requests of a unit with a waiting change (the rest of its running scan,
   the writes and the read after them) go before the scans of the other units of the bus. A change waited for
   the scans of all units of a busy bus, e.g. about 30 requests with 6 units, now about 7. — #267
+- **Read after a change:** only the register blocks read by every scan (`scan_divider: 1`), the blocks of the states
+  of the changed devices and of the written registers, the other blocks are read by the periodic scan. A change read
+  all blocks, e.g. a LED of an xS51 a write and 6 reads, now a write and 2 reads (the fast block, the block of the LED).
+  A reset of the unit or NV save reads all blocks. — #267
 - **Modbus addresses:** a serial port can be used by one `MODBUSRTU` bus only, the `slave-id` must be unique on an RTU
   bus and on a TCP server (`hostname`, `port`) over all `MODBUSTCP` buses. The second bus or device is not created,
   before both read and wrote the same unit. — `dc7b1ee`

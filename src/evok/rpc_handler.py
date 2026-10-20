@@ -192,7 +192,7 @@ class Handler(TokenAuth, JSONRPCHandler):
         async def operation():
             written.append(await ao.set_value(value))
 
-        await ao.client.change(operation)
+        await ao.client.change(operation, devices=[ao])
         return written[0]
 
     async def ao_set(self, circuit, value, mode):

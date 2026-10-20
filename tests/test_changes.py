@@ -14,6 +14,7 @@ from evok.errors import UnitCommunicationError, UnitUnavailable
 from evok.handlers_base import client_error
 from evok.modbus import set_devices
 from evok.modbus.builder import IOParser
+from evok.modbus.client import AccessorU16
 from evok.modbus.scanner import ModbusScanner
 from evok.rpc_handler import Handler, UnitUnavailableError, create_response
 
@@ -73,6 +74,63 @@ async def test_change_reads_all_groups_and_keeps_their_phase():
     await client.change(firmware)
     assert client.read_registers(10) == [7]
     assert [group.f_counter for group in client.cache.groups] == counters
+
+
+SLOW_BLOCKS = [{'start_reg': 0, 'count': 1, 'scan_divider': 1},
+               {'start_reg': 10, 'count': 1, 'scan_divider': 3},
+               {'start_reg': 20, 'count': 1, 'scan_divider': 3},
+               {'start_reg': 30, 'count': 1, 'scan_divider': 3, 'type': 'input'}]
+
+
+def recorded_reads(client):
+    """ The addresses of the blocks read by the fake unit """
+    reads = []
+    for name in ('read_holding_registers', 'read_input_registers'):
+        read = getattr(client.mb_client, name)
+
+        async def recorded(address, quantity=1, _read=read):
+            reads.append(address)
+            return await _read(address, quantity)
+        setattr(client.mb_client, name, recorded)
+    return reads
+
+
+async def test_change_of_devices_reads_the_fast_and_their_groups():
+    """ The blocks of the states of the devices and of the written registers, not the other slow blocks """
+    client = make_client(SLOW_BLOCKS)
+    await client.cache.do_scan(initial=True)
+    await client.cache.do_scan()
+    counters = [group.f_counter for group in client.cache.groups + client.cache.igroups]
+    reads = recorded_reads(client)
+    device = SimpleNamespace(accessor=AccessorU16(30, is_input=True), accessor_setting=AccessorU16(10))
+
+    async def operation():
+        await client.write_registers(20, [5])
+    await client.change(operation, devices=[device])
+    assert reads == [0, 20, 30]
+    assert [group.f_counter for group in client.cache.groups + client.cache.igroups] == counters
+
+
+async def test_change_with_restart_reads_all_groups():
+    client = make_client(SLOW_BLOCKS)
+    await client.cache.do_scan(initial=True)
+    reads = recorded_reads(client)
+
+    async def operation():
+        await client.write_coil_without_response(1, 1, wait=0)
+    await client.change(operation, devices=[SimpleNamespace()])
+    assert reads == [0, 10, 20, 30]
+
+
+async def test_set_devices_reads_the_group_of_the_device(units):
+    """ A digital output: its coil, the register of its state in the block read by every scan """
+    client, = await units('1')
+    coil_drives_register(client, 0, 1, 0b01)
+    reads = recorded_reads(client)
+    await set_devices([(Devices.by_name(DO, '1_01'), {'value': 1})])
+    fast = [group.address for group in client.cache.groups + client.cache.igroups if group.f_divider == 1]
+    assert reads == fast
+    assert Devices.by_name(DO, '1_01').full()['value'] == 1
 
 
 async def test_unavailable_unit_is_not_changed(units):
@@ -158,9 +216,9 @@ async def test_scan_waits_for_the_change(units):
     await asyncio.sleep(0)
     do_scan = client._scan
 
-    async def periodic(all_groups=False):
+    async def periodic(all_groups=False, registers=None):
         order.append('scan' if not all_groups else 'scan of the change')
-        return await do_scan(all_groups)
+        return await do_scan(all_groups, registers)
     client._scan = periodic
     periodic_scan = asyncio.create_task(client.do_scan())
     await asyncio.sleep(0.01)
