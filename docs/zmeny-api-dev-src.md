@@ -115,7 +115,8 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - **Nové události:** — `60e2287`, `08d9f56`, `62b37ef`, `891bd4a`
   - změna aliasu zařízení na Modbus jednotce,
   - ztráta a obnovení komunikace s jednotkou,
-  - změna `counter_mode`, režimu a debounce DI.
+  - změna `counter_mode`, režimu a debounce DI,
+  - změna frekvence PWM, u všech DO, které ji sdílejí.
 - Úspěšná odpověď bulk obsahuje `"success": true`. — `ba4212f`
 - `scan_error` u `modbus_slave` a chyby nedostupné jednotky uvádějí původní příčinu, např. chybějící sériový port.
   — `d990fe1`

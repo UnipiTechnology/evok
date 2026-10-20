@@ -140,12 +140,14 @@ class DigitalOutput(BinaryOutput):
     async def set_pwm_freq(self, freq: float, keep_duty=True):
         """Set the frequency shared by the group, keep the duty cycle of all its outputs,
         of this output only with keep_duty
+
+        pwm_freq of the outputs is set by check_new_data() of the scan after the change, which sends
+        all outputs of the group as changed; set here, the scan saw no change and sent no event.
         """
         await self.pwm.set(freq)
         for dev in Devices.by_name(DO, major_group=self.major_group):
             if dev.pwm is not self.pwm:
                 continue
-            dev.pwm_freq = self.pwm.freq
             if dev is self and not keep_duty:
                 continue
             if dev.pwm_duty:
