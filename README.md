@@ -52,7 +52,10 @@ The same hardware definition is exposed using multiple APIs, including:
 - Unipi controllers - [Neuron], [Patron], [Gate] and [Unipi 1.1]
 - Unipi [Extension Modules]
 - Modbus RTU/TCP devices (need additional definitions)
-- 1-Wire devices (need additional definitions)
+- 1-Wire devices on the 1-Wire bus of the controller (read by the kernel):
+    - thermometers DS18B20 and DS18S20
+    - DS2438 (e.g. humidity sensors with HIH4000): temperature, VDD, VAD and humidity
+    - DS2408, DS2406 and DS2413: the levels of the PIOs, read-only
 
 
 ## Documentation
