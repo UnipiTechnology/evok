@@ -103,6 +103,8 @@ the HW definitions. Breaking changes come first. Every change names its commits
   known one. The entities of Home Assistant are unavailable without the communication. — `969798e`
 - **Security:** an optional `token` for all APIs (Bearer, Basic, `?token=` for the WebSocket) and `allowed_origins`.
   — `763016c`, `2b7f668`
+- **Client behind a proxy:** `trusted_downstream` of `apis`, the addresses of the reverse proxies (e.g. nginx
+  of evok-web) whose `X-Forwarded-For` / `X-Real-IP` give the address of the client in the log of Evok.
 - **Read-only token:** an optional `read_token` (requires `token`). It allows reading by REST and JSON, the queries
   of bulk, `all`, `full`, `filter` and the events of the WebSocket, the reading methods of RPC and `/log`. A change of
   a device returns 403 `ReadOnlyAccess`, by RPC `-32001`; a bulk with a change is refused as a whole. — `4003436`

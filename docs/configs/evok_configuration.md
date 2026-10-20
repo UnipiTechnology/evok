@@ -36,7 +36,11 @@ In this section you can configure address and port for API listening. These sett
 - `allowed_origins` - an optional list of the origins of the web applications on other addresses
   which use the API from a browser, e.g. `["http://192.168.1.10:1880"]`. Only they get the CORS headers
   and can connect to the WebSocket from a browser, a web page of the same address as the API needs no entry.
-  Evok does not start with an invalid `token` or `allowed_origins`.
+- `trusted_downstream` - an optional list of the addresses or networks of the reverse proxies in front of the API,
+  e.g. `["127.0.0.1"]` for the nginx of evok-web on the controller. Only the requests from them use the address
+  of the client of their headers `X-Forwarded-For` (else `X-Real-IP`) in the log of Evok, e.g. of a request
+  without the token; another client could forge the headers, they are ignored by default.
+  Evok does not start with an invalid `token`, `allowed_origins` or `trusted_downstream`.
 
 ### RPC
 
@@ -96,6 +100,7 @@ apis:
   token: 3f6c2a8e5b1d4f7a9c0e2b4d6f8a1c3e5b7d9f0a2c4e6b8d0f1a3c5e7b9d2f4a
   read_token: 9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b
   allowed_origins: ["http://192.168.1.10:1880"]
+  trusted_downstream: ["127.0.0.1"]   # nginx of evok-web passes the address of the client
   rpc:
     enabled: true                 # default true
   websocket:

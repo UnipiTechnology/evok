@@ -100,6 +100,8 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
   a obnovení jednotky pošle stavy všech jejích zařízení, `value` je poslední známá. Entity Home Assistantu jsou bez komunikace nedostupné. — `969798e`
 - **Zabezpečení:** volitelný `token` pro všechna API (Bearer, Basic, `?token=` u WebSocketu) a `allowed_origins`.
   — `763016c`, `2b7f668`
+- **Klient za proxy:** `trusted_downstream` v `apis`, adresy reverzních proxy (např. nginx evok-web), jejichž
+  `X-Forwarded-For` / `X-Real-IP` určují adresu klienta v logu Evoku.
 - **Token jen pro čtení:** volitelný `read_token` (vyžaduje `token`). Povolí čtení REST a JSON, dotazy bulk, `all`,
   `full`, `filter` a události WebSocketu, metody RPC pro čtení a `/log`. Změna zařízení vrátí 403 `ReadOnlyAccess`,
   v RPC `-32001`; bulk se změnou se odmítne celý. — `4003436`

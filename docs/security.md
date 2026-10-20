@@ -113,6 +113,23 @@ location /ws {
 `proxy_set_header Host $host:$server_port` of the nginx of evok-web works too, the default port of the scheme
 (`80` for http, `443` for https) is the same as an origin without a port.
 
+Evok sees the proxy as the client of all requests, e.g. `127.0.0.1` in the log of a request without the token.
+The proxy passes the address of the client in `X-Forwarded-For` or `X-Real-IP`; Evok uses them only for
+the requests from the proxies of `trusted_downstream`, any other client could forge them:
+
+```yaml
+apis:
+  trusted_downstream: ["127.0.0.1"]
+```
+
+```nginx
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $remote_addr;   # not $proxy_add_x_forwarded_for, a client could forge it
+```
+
+The addresses of `X-Forwarded-For` are read from its end, the trusted proxies are skipped and the first other
+address is the client.
+
 ## Limits
 
 The body of a request can have at most 1 MB, a message of a WebSocket client at most 64 kB, a larger one
