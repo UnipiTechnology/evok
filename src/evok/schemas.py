@@ -557,7 +557,10 @@ data_point_resp_schema = _response(
 owpower_resp_schema = _response(
     "1-Wire power supply",
     {
-        "value": {"type": "integer", "description": "1 when the power is on."},
+        "value": {
+            "type": "integer",
+            "description": "The coil which disables the power: 1 is the bus without power, 0 is powered.",
+        },
         "alias": _ALIAS_RESP,
     },
     required=("value",),

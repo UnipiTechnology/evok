@@ -9,7 +9,10 @@ logger = logging.getLogger(__name__)
 
 
 class OwPower(IODevice):
-    """The coil disables the power of the 1-Wire bus, value 1 is the bus without power"""
+    """The coil disables the power of the 1-Wire bus, value 1 is the bus without power
+
+    The coil is not read from the unit, the value is the last one written, 0 after the start.
+    """
 
     devtype = OWPOWER
 
@@ -17,6 +20,15 @@ class OwPower(IODevice):
         super().__init__(circuit, client, major_group)
         self.coil = coil
         self.value = 0
+        self.checked_value = 0  # the value of the last check, a changed one is sent as an event
+
+    async def check_new_data(self):
+        """A value written since the last check, the scan after the change sends it as an event;
+        without it a change of the power was sent to no client
+        """
+        changed = self.value != self.checked_value
+        self.checked_value = self.value
+        return changed
 
     def full(self):
         ret = {"dev": "owpower", "circuit": self.circuit, "value": self.value}
