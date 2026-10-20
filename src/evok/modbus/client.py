@@ -47,9 +47,11 @@ def to_registers(fmt: struct.Struct, value):
 class Client:
     """The registers of a Modbus unit and its devices
 
-    The scans and the changes of the devices of the unit run under its lock: a change writes,
-    then reads all register blocks and checks the devices, so their states and events follow
-    the writes at once and a scan does not read between the writes of a change.
+    The changes of the devices of the unit run under its lock and in the session of the unit on its bus
+    (BusTransport.session()): a change writes, then reads the register blocks and checks the devices,
+    so their states and events follow the writes at once; the scan of the unit waits for the session,
+    it does not read between the writes of a change. The cache is updated in the order of the requests
+    on the bus, a read sent before a write does not overwrite the read after it.
     """
 
     def __init__(self, name: str, mb_client: AsyncModbusClient, cache: ModbusCacheMap):
@@ -63,7 +65,9 @@ class Client:
         self.devices = []  # all devices of the unit, also without check_new_data()
         self.failing_devices = set()  # logged once, until they check new data again
         self.sent_aliases = {}  # the alias of each device by the last check, Devices.set_alias() sends no event
-        self.lock = asyncio.Lock()  # not reentrant, set() of a device must not change the unit again
+        # the changes of the unit, also the scans on a transport without the sessions; not reentrant,
+        # set() of a device must not change the unit again
+        self.lock = asyncio.Lock()
         # the registers (address, is_input) written by the running change, None reads all blocks after it
         self._written: set[tuple[int, bool]] | None = None
         # comm by the last event of the devices, a change sends all of them; the devices are created after
@@ -119,9 +123,20 @@ class Client:
             self._written.update((index + i, False) for i in range(len(values)))
 
     async def do_scan(self) -> bool:
-        """The periodic scan of the unit"""
-        async with self.lock:
+        """The periodic scan of the unit, it waits for a change of the unit by the session of its bus"""
+        async with self._scan_lock():
             return await self._scan()
+
+    def _session(self):
+        """The session of the unit on its bus (BusTransport.session()), None on another transport"""
+        session = getattr(getattr(self.mb_client, "transport", None), "session", None)
+        return session(self.mb_client.unit_id) if session is not None else None
+
+    def _scan_lock(self):
+        """The lock of the unit for a scan on a transport without the sessions, e.g. a fake unit of the tests"""
+        if hasattr(getattr(self.mb_client, "transport", None), "session"):
+            return contextlib.nullcontext()
+        return self.lock
 
     async def change(self, operation, check_available: bool = True, read: bool = True, devices=None):
         """Run the writes of operation() under the lock of the unit, then read all register blocks
@@ -137,47 +152,43 @@ class Client:
         writes anyway, e.g. the end of a pulse. A unit without a periodic scan is read first, nothing else
         would read it again, its failed scan after a change refused all next changes.
 
-        The requests of the unit have the priority on the bus while the change waits and runs: the rest of
-        the running scan of the unit, the writes and the read, they do not wait for the scans of the other units.
+        The changes of the unit run one after another under its lock. The change runs in the session
+        of the unit on its bus: its requests go before the scans, the scan of the unit waits until the change
+        ends, it does not read the unit between the writes; a running scan does not delay the change.
         """
-        with self._priority():
-            await self._change(operation, check_available, read, devices)
-
-    def _priority(self):
-        """The priority of the requests of the unit on its bus (BusTransport), none of another transport"""
-        transport = getattr(self.mb_client, "transport", None)
-        if hasattr(transport, "priority"):
-            return transport.priority(self.mb_client.unit_id)
-        return contextlib.nullcontext()
+        session = self._session()
+        # the session under the lock: each change ends its session, the scans get the bus between the changes
+        async with self.lock:
+            with session if session is not None else contextlib.nullcontext():
+                await self._change(operation, check_available, read, devices)
 
     async def _change(self, operation, check_available: bool, read: bool, devices):
-        async with self.lock:
-            if check_available and self.cache.scan_error is not None:
-                if self.periodic_scan or not await self.cache.do_scan(all_groups=True):
-                    raise UnitUnavailable(f"Unit {self.name} is not available: {describe_error(self.cache.scan_error)}")
-            self._written = None if devices is None else set()
-            try:
-                await operation()
-            except (TModbusError, TimeoutError) as E:
-                # it was an internal error with a traceback, the unit did not respond or refused the request
-                raise UnitCommunicationError(f"Unit {self.name}: {describe_error(E)}") from E
-            finally:
-                registers, self._written = self._written, None
-                if read:
-                    if registers is not None:
-                        # the accessors after the writes, e.g. of a new mode of an analog input
-                        registers |= {register for device in devices for register in device_registers(device)}
-                    await self._scan(all_groups=True, registers=registers)
-                else:
-                    await self._check_devices()
+        if check_available and self.cache.scan_error is not None:
+            if self.periodic_scan or not await self.cache.do_scan(all_groups=True):
+                raise UnitUnavailable(f"Unit {self.name} is not available: {describe_error(self.cache.scan_error)}")
+        self._written = None if devices is None else set()
+        try:
+            await operation()
+        except (TModbusError, TimeoutError) as E:
+            # it was an internal error with a traceback, the unit did not respond or refused the request
+            raise UnitCommunicationError(f"Unit {self.name}: {describe_error(E)}") from E
+        finally:
+            registers, self._written = self._written, None
+            if read:
+                if registers is not None:
+                    # the accessors after the writes, e.g. of a new mode of an analog input
+                    registers |= {register for device in devices for register in device_registers(device)}
+                await self._scan(all_groups=True, registers=registers)
+            else:
+                await self._check_devices()
 
     async def check_devices(self):
         """Check the devices by the registers read before, e.g. by the first scan before they were created"""
-        async with self.lock:
+        async with self._scan_lock():
             await self._check_devices()
 
     async def _scan(self, all_groups: bool = False, registers: set[tuple[int, bool]] | None = None) -> bool:
-        """Read the register blocks, send the changed devices as one event; under the lock"""
+        """Read the register blocks, send the changed devices as one event"""
         if not await self.cache.do_scan(all_groups=all_groups, registers=registers):
             # the values are stale, the devices are sent with the changed comm
             self.send_comm_change()
@@ -194,7 +205,10 @@ class Client:
                 devents.status(Proxy(devices))
 
     async def _check_devices(self):
-        """Send the devices changed since their last check as one event, also by their alias; under the lock"""
+        """Send the devices changed since their last check as one event, also by their alias
+
+        check_new_data() of the devices does no I/O, the check of a scan and of a change are not interleaved.
+        """
         changeset = []
         for device in dict.fromkeys(self.eventable_devices + self.devices):
             changed = False

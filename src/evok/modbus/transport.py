@@ -3,37 +3,74 @@ import collections
 import contextlib
 import contextvars
 import time
-from collections.abc import Callable
 
 from tmodbus import AsyncSmartTransport
 
-# the unit id of the request of the running task, the key of its priority in the lock of the bus
+# the unit id of the request of the running task, the key of its waiter in the lock of the bus
 _REQUEST_UNIT: contextvars.ContextVar[int | None] = contextvars.ContextVar("request_unit", default=None)
+# the unit id of the session (a change) of the running task, see BusTransport.session()
+_SESSION_UNIT: contextvars.ContextVar[int | None] = contextvars.ContextVar("session_unit", default=None)
 
 
-class PriorityLock:
-    """An asyncio lock whose release hands it to the first waiter of the high priority, else to the first waiter
+class SessionLock:
+    """The asyncio lock of a bus with the sessions of its units, e.g. the changes
 
-    The priority of a waiter is the priority of its key at the release, a waiter which waits already gets
-    the high priority when it is raised, e.g. the request of the running scan of a unit with a waiting change.
-    The key of a waiter is the unit id of its request (_REQUEST_UNIT), tmodbus uses the lock by async with.
+    A request of a session of its unit goes before the other requests. The other requests of a unit with
+    a session wait until it ends, e.g. its scan does not read the unit between the writes of a change;
+    the other requests of the other units wait in the order of their arrival and use the bus while
+    a session has no request. After each session the first waiting other request of its unit and the first
+    one of another unit go first, a stream of the changes does not stop the scans.
+
+    The key of a waiter is the unit id of its request (_REQUEST_UNIT) and whether it runs in the session
+    of the unit (_SESSION_UNIT), tmodbus uses the lock by async with.
     """
 
-    def __init__(self, high: Callable[[int | None], bool]):
-        self._high = high
+    def __init__(self):
         self._locked = False
-        self._waiters: collections.deque[tuple[asyncio.Future, int | None]] = collections.deque()
+        self._waiters: collections.deque[tuple[asyncio.Future, int | None, bool]] = collections.deque()
+        self._sessions: collections.Counter[int] = collections.Counter()  # the running and waiting ones
+        self._turns: set[int] = set()  # the units whose other request goes first after their session
+        self._other_turn = False  # an other request of another unit goes first after a session
 
     def locked(self) -> bool:
         return self._locked
 
+    @contextlib.contextmanager
+    def session(self, unit_id: int):
+        self._sessions[unit_id] += 1
+        token = _SESSION_UNIT.set(unit_id)
+        try:
+            yield
+        finally:
+            _SESSION_UNIT.reset(token)
+            self._sessions[unit_id] -= 1
+            if not self._sessions[unit_id]:
+                del self._sessions[unit_id]
+            others = [unit for _, unit, in_session in self._pending() if not in_session]
+            if unit_id in others:
+                self._turns.add(unit_id)
+            if any(unit != unit_id for unit in others):
+                self._other_turn = True
+            self._schedule_wake()
+
+    def _pending(self):
+        return [waiter for waiter in self._waiters if not waiter[0].done()]
+
+    def _blocked(self, unit_id: int | None, in_session: bool) -> bool:
+        return not in_session and unit_id in self._sessions and unit_id not in self._turns
+
     async def acquire(self) -> bool:
-        if not self._locked and not any(not waiter[0].done() for waiter in self._waiters):
+        unit_id = _REQUEST_UNIT.get()
+        # a task created in a session inherits its context, e.g. a pulse, after the session it is not in it
+        in_session = unit_id is not None and _SESSION_UNIT.get() == unit_id and unit_id in self._sessions
+        if not self._locked and not self._pending() and not self._blocked(unit_id, in_session):
             self._locked = True
             return True
-        waiter = (asyncio.get_running_loop().create_future(), _REQUEST_UNIT.get())
+        waiter = (asyncio.get_running_loop().create_future(), unit_id, in_session)
         self._waiters.append(waiter)
         try:
+            if not self._locked:
+                self._wake()
             await waiter[0]
         except asyncio.CancelledError:
             if waiter[0].done() and not waiter[0].cancelled():
@@ -49,17 +86,34 @@ class PriorityLock:
         if not self._locked:
             raise RuntimeError("Lock is not acquired")
         self._locked = False
-        if any(not waiter[0].done() for waiter in self._waiters):
-            # the next owner is chosen in the next step of the loop: the task which released the lock queues
-            # its next request first, the consecutive requests of a change are not interleaved by the scans
+        # the next owner is chosen in the next step of the loop: the task which released the lock queues
+        # its next request first, the consecutive requests of a change are not interleaved by the scans
+        self._schedule_wake()
+
+    def _schedule_wake(self) -> None:
+        if self._pending():
             asyncio.get_running_loop().call_soon(self._wake)
 
     def _wake(self) -> None:
-        """Hand the lock to the waiter of the high priority, else to the first one"""
-        waiting = [waiter for waiter in self._waiters if not waiter[0].done()]
+        """Hand the lock to the other requests after a session, else to a request of a session, else
+        to the first other request which is not blocked by the session of its unit
+        """
+        waiting = self._pending()
         if self._locked or not waiting:
             return
-        waiter = next((waiter for waiter in waiting if self._high(waiter[1])), waiting[0])
+        waiter = (
+            next((w for w in waiting if not w[2] and w[1] in self._turns), None)
+            or (self._other_turn and next((w for w in waiting if not self._blocked(w[1], w[2])), None))
+            or next((w for w in waiting if w[2]), None)
+            or next((w for w in waiting if not self._blocked(w[1], w[2])), None)
+        )
+        if not waiter:
+            return
+        if not waiter[2]:
+            if waiter[1] in self._turns:
+                self._turns.discard(waiter[1])
+            else:
+                self._other_turn = False
         self._waiters.remove(waiter)
         self._locked = True
         waiter[0].set_result(True)
@@ -81,8 +135,8 @@ class BusTransport(AsyncSmartTransport):
     The probe uses the lock of the bus and the reconnection of AsyncSmartTransport (tmodbus 0.6.2),
     a cancelled request is discarded by the transport as a timed out one, its late response too.
 
-    The lock of the bus is a PriorityLock: the requests of a unit with a waiting change (priority()) go
-    before the requests of the scans of the other units, which wait in the order of their arrival.
+    The lock of the bus is a SessionLock: the requests of a change of a unit (session()) go before the scans,
+    the scan of the unit waits until the change ends.
     """
 
     def __init__(self, base_transport, *, probe_timeout: float, **kwargs):
@@ -90,8 +144,7 @@ class BusTransport(AsyncSmartTransport):
         self.probe_timeout = probe_timeout
         self.failing_units: set[int] = set()  # the unit ids probed by one request, set by ModbusScanner
         self._single_units: set[int] = set()  # the unit ids sent one request, see single_request()
-        self._priority_units: collections.Counter[int] = collections.Counter()  # see priority()
-        self._communication_lock = PriorityLock(lambda unit_id: self._priority_units[unit_id] > 0)
+        self._communication_lock = SessionLock()
 
     def set_failing(self, unit_id: int, failing: bool):
         if failing:
@@ -110,18 +163,11 @@ class BusTransport(AsyncSmartTransport):
         finally:
             self._single_units.discard(unit_id)
 
-    @contextlib.contextmanager
-    def priority(self, unit_id: int):
-        """The requests of the unit go first, also the waiting ones, e.g. while a change of the unit waits for
-        the scan of the unit, then writes and reads the unit
+    def session(self, unit_id: int):
+        """The requests of the running task to the unit go first, the other requests of the unit, its scan,
+        wait until the session ends, e.g. a change of the unit: its writes and the read after them
         """
-        self._priority_units[unit_id] += 1
-        try:
-            yield
-        finally:
-            self._priority_units[unit_id] -= 1
-            if not self._priority_units[unit_id]:
-                del self._priority_units[unit_id]
+        return self._communication_lock.session(unit_id)
 
     async def send_and_receive(self, unit_id, pdu):
         _REQUEST_UNIT.set(unit_id)

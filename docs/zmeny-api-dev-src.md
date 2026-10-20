@@ -158,9 +158,11 @@ Neplatná hodnota je chyba: jednotka nebo feature se nevytvoří a chyba se zalo
   nevytvoří, dřív v API nahradilo první a chyběly jeho IO. — `d8acc38`
 - **Jednotka, která neodpovídá:** zkouší se jedním požadavkem s `probe_timeout` sběrnice (0,1 s na RTU) bez retries,
   dřív každý pokus blokoval sběrnici na `(retries + 1) * timeout` (výchozí 1 s) a ostatní jednotky čekaly. — `30cb46f`
-- **Priorita změn na sběrnici:** požadavky jednotky s čekající změnou (zbytek jejího běžícího scanu, zápisy a čtení
-  po nich) jdou před scany ostatních jednotek sběrnice. Změna čekala na scany všech jednotek vytížené sběrnice,
-  např. asi 30 požadavků při 6 jednotkách, teď asi 7. — #267
+- **Priorita změn na sběrnici:** zápisy změny a čtení po nich jdou před scany sběrnice, změna nečeká na běžící scan
+  své jednotky, jen na právě odesílaný požadavek. Scan jednotky čeká, dokud změna neskončí, nečte jednotku mezi jejími
+  zápisy; ostatní jednotky zatím sběrnici používají. Po každé změně jde nejdřív čekající scan jednotky a jiné
+  jednotky, proud změn scany nezastaví. Změna čekala na scany všech jednotek vytížené sběrnice, např. asi
+  30 požadavků při 6 jednotkách, teď asi 5. — #267
 - **Čtení po změně:** jen bloky registrů čtené každým scanem (`scan_divider: 1`), bloky stavů měněných zařízení
   a zapsaných registrů, ostatní bloky přečte periodický scan. Změna četla všechny bloky, např. LED na xS51 zápis
   a 6 čtení, teď zápis a 2 čtení (rychlý blok, blok LED). Reset jednotky nebo NV save čte všechny bloky. — #267

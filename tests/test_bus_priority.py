@@ -1,5 +1,7 @@
-""" The priority of the changes on a bus (#267): the requests of a unit with a waiting change go first """
+""" The priority of the changes on a bus (#267): the requests of a change go first, the scan of its unit waits """
 import asyncio
+import contextlib
+import contextvars
 import time
 
 import pytest
@@ -8,7 +10,7 @@ from tmodbus.pdu import ReadHoldingRegistersPDU, ReadInputRegistersPDU
 
 from evok.modbus.cache import ModbusCacheMap
 from evok.modbus.client import Client
-from evok.modbus.transport import _REQUEST_UNIT, BusTransport, PriorityLock
+from evok.modbus.transport import _REQUEST_UNIT, BusTransport, SessionLock
 
 REQUEST_TIME = 0.01  # s, a request of the slow fake bus
 
@@ -41,48 +43,81 @@ def bus_transport(base):
                         retry_on_device_busy=False, retry_on_device_failure=False)
 
 
-# ---- PriorityLock ----
+# ---- SessionLock ----
 
-async def _hold(lock, order, name, unit=None, hold=0.0):
+async def _hold(lock, order, name, unit=None, hold=0.0, session=False):
     _REQUEST_UNIT.set(unit)
-    async with lock:
-        order.append(name)
-        await asyncio.sleep(hold)
+    with lock.session(unit) if session else contextlib.nullcontext():
+        async with lock:
+            order.append(name)
+            await asyncio.sleep(hold)
 
 
-async def test_waiters_of_one_priority_in_their_order():
-    lock, order = PriorityLock(lambda unit: False), []
-    tasks = [asyncio.create_task(_hold(lock, order, i, hold=0.01)) for i in range(4)]
+async def test_waiters_without_session_in_their_order():
+    lock, order = SessionLock(), []
+    tasks = [asyncio.create_task(_hold(lock, order, i, unit=i, hold=0.01)) for i in range(4)]
     await asyncio.gather(*tasks)
     assert order == [0, 1, 2, 3]
     assert not lock.locked()
 
 
-async def test_high_priority_goes_first():
-    lock, order = PriorityLock(lambda unit: unit == 9), []
+async def test_request_of_session_goes_first():
+    lock, order = SessionLock(), []
     first = asyncio.create_task(_hold(lock, order, 'first', hold=0.05))
     await asyncio.sleep(0)
-    tasks = [asyncio.create_task(_hold(lock, order, name, unit)) for name, unit in
-             (('a', 1), ('b', 2), ('high', 9), ('c', 3))]
+    tasks = [asyncio.create_task(_hold(lock, order, name, unit, session=unit == 9)) for name, unit in
+             (('a', 1), ('b', 2), ('session', 9), ('c', 3))]
     await asyncio.gather(first, *tasks)
-    assert order == ['first', 'high', 'a', 'b', 'c']
+    assert order == ['first', 'session', 'a', 'b', 'c']
 
 
-async def test_priority_raised_while_waiting():
-    """ The priority is given at the release, a request which waits already goes first after the raise """
-    high = set()
-    lock, order = PriorityLock(lambda unit: unit in high), []
-    first = asyncio.create_task(_hold(lock, order, 'first', hold=0.05))
+async def test_other_request_of_unit_waits_for_its_session():
+    """ The scan of the unit waits until the change ends, the other units use the bus meanwhile """
+    lock, order = SessionLock(), []
+    _REQUEST_UNIT.set(1)
+    with lock.session(1):
+        async with lock:
+            order.append('write')
+        # the scans run out of the session, not in a task created in it
+        scan = asyncio.create_task(_hold(lock, order, 'scan of 1', unit=1), context=contextvars.Context())
+        other = asyncio.create_task(_hold(lock, order, 'scan of 2', unit=2), context=contextvars.Context())
+        await asyncio.sleep(0.01)                       # the change computes, it has no request
+        async with lock:
+            order.append('read')
+    await asyncio.gather(scan, other)
+    assert order == ['write', 'scan of 2', 'read', 'scan of 1']
+    assert not lock.locked()
+
+
+async def test_other_request_of_unit_goes_before_its_next_session():
+    """ A stream of the changes of a unit does not stop its scan """
+    lock, order = SessionLock(), []
+    first = asyncio.create_task(_hold(lock, order, 'change 1', unit=1, hold=0.02, session=True))
     await asyncio.sleep(0)
-    tasks = [asyncio.create_task(_hold(lock, order, name, unit)) for name, unit in (('a', 1), ('b', 2))]
+    scan = asyncio.create_task(_hold(lock, order, 'scan', unit=1))
     await asyncio.sleep(0.01)
-    high.add(2)
-    await asyncio.gather(first, *tasks)
-    assert order == ['first', 'b', 'a']
+    second = asyncio.create_task(_hold(lock, order, 'change 2', unit=1, session=True))
+    await asyncio.gather(first, scan, second)
+    assert order == ['change 1', 'scan', 'change 2']
+
+
+async def test_task_created_in_session_is_not_in_it_after_it():
+    lock, order = SessionLock(), []
+    _REQUEST_UNIT.set(1)
+    with lock.session(1):
+        later = asyncio.create_task(_hold(lock, order, 'pulse', unit=1, hold=0.0))
+    await asyncio.sleep(0)
+    await lock.acquire()
+    other = asyncio.create_task(_hold(lock, order, 'scan', unit=2))
+    await asyncio.sleep(0)
+    lock.release()
+    await asyncio.gather(later, other)
+    assert order == ['pulse', 'scan'] or order == ['scan', 'pulse']
+    assert not lock.locked()
 
 
 async def test_cancelled_waiter_is_skipped():
-    lock, order = PriorityLock(lambda unit: False), []
+    lock, order = SessionLock(), []
     first = asyncio.create_task(_hold(lock, order, 'first', hold=0.05))
     await asyncio.sleep(0)
     cancelled = asyncio.create_task(_hold(lock, order, 'cancelled'))
@@ -96,12 +131,13 @@ async def test_cancelled_waiter_is_skipped():
 
 async def test_lock_handed_to_cancelled_waiter_goes_on():
     """ A waiter cancelled after the release handed it the lock passes it to the next one """
-    lock, order = PriorityLock(lambda unit: False), []
+    lock, order = SessionLock(), []
     await lock.acquire()
     waiter = asyncio.create_task(_hold(lock, order, 'cancelled'))
     last = asyncio.create_task(_hold(lock, order, 'last'))
     await asyncio.sleep(0)
-    lock.release()              # handed to the first waiter, it did not run yet
+    lock.release()
+    await asyncio.sleep(0)      # handed to the first waiter, it did not run yet
     waiter.cancel()
     await asyncio.gather(last)
     assert order == ['last']
@@ -110,7 +146,7 @@ async def test_lock_handed_to_cancelled_waiter_goes_on():
 
 def test_release_of_unlocked_lock():
     with pytest.raises(RuntimeError):
-        PriorityLock(lambda unit: False).release()
+        SessionLock().release()
 
 
 # ---- BusTransport ----
@@ -122,12 +158,12 @@ async def _scan(transport, unit_id, stop):
         await client.read_holding_registers(0, 1)
 
 
-async def test_request_of_prioritized_unit_goes_before_the_scans():
+async def test_request_of_session_goes_before_the_scans():
     base = SlowBus()
     transport, stop = bus_transport(base), asyncio.Event()
     scans = [asyncio.create_task(_scan(transport, unit, stop)) for unit in range(1, 7)]
     await asyncio.sleep(0.05)
-    with transport.priority(7):
+    with transport.session(7):
         before = len(base.requests)
         await AsyncModbusClient(transport, unit_id=7).write_single_coil(0, True)
     stop.set()
@@ -137,11 +173,11 @@ async def test_request_of_prioritized_unit_goes_before_the_scans():
     assert done <= 1
 
 
-async def test_priority_of_unit_ends_after_the_change():
+async def test_session_of_unit_ends_after_the_change():
     transport = bus_transport(SlowBus())
-    with transport.priority(3), transport.priority(3):
-        assert transport._priority_units[3] == 2
-    assert 3 not in transport._priority_units
+    with transport.session(3), transport.session(3):
+        assert transport._communication_lock._sessions[3] == 2
+    assert 3 not in transport._communication_lock._sessions
 
 
 # ---- the change of a unit on a busy bus ----
@@ -168,7 +204,7 @@ async def change_latency(prioritized: bool, units: int = 6) -> float:
     await asyncio.sleep(0.1)
     client = clients[0]
     if not prioritized:
-        client._priority = lambda: transport.priority(None)     # no unit is prioritized
+        client._session = lambda: None                          # the change without a session
     start = time.monotonic()
     await client.change(lambda: client.mb_client.write_single_coil(0, True))
     latency = time.monotonic() - start
@@ -177,11 +213,59 @@ async def change_latency(prioritized: bool, units: int = 6) -> float:
     return latency
 
 
-async def test_change_does_not_wait_for_the_scans_of_the_other_units():
-    """ A write and the read of 3 blocks, after the rest of the running scan of the unit: about 7 requests;
-        without the priority each of them waits behind the scans of the other 5 units
+async def test_change_does_not_wait_for_the_scans():
+    """ A write and the read of 3 blocks after the request on the bus: about 5 requests, the change does not
+        wait for the scan of its unit; without the session each of them waits behind the scans of the other units
     """
     latency = await change_latency(prioritized=True)
     without = await change_latency(prioritized=False)
-    assert latency < 9 * REQUEST_TIME, latency
+    assert latency < 7 * REQUEST_TIME, latency
     assert without > 2 * latency, (latency, without)
+
+
+async def test_scan_does_not_read_the_unit_between_the_writes_of_a_change():
+    base = SlowBus()
+    transport, stop = bus_transport(base), asyncio.Event()
+    clients = [unit(transport, unit_id) for unit_id in range(1, 4)]
+    scans = [asyncio.create_task(_scan_unit(client, stop)) for client in clients]
+    await asyncio.sleep(0.05)
+    client = clients[0]
+
+    async def operation():
+        await client.mb_client.write_single_coil(0, True)
+        await asyncio.sleep(3 * REQUEST_TIME)                   # e.g. the computation of the next value
+        await client.mb_client.write_single_coil(1, True)
+    before = len(base.requests)
+    await client.change(operation)
+    stop.set()
+    await asyncio.gather(*scans)
+    requests = base.requests[before:]
+    first, second = requests.index((1, 'WriteSingleCoilPDU')), len(requests) - 1 - requests[::-1].index(
+        (1, 'WriteSingleCoilPDU'))
+    between = requests[first + 1:second]
+    assert between and all(unit_id != 1 for unit_id, _ in between)  # the other units used the bus
+
+
+async def test_stream_of_changes_does_not_stop_the_scans():
+    """ After each change one waiting scan request of another unit goes first, also of the changed unit """
+    base = SlowBus()
+    transport, stop = bus_transport(base), asyncio.Event()
+    clients = [unit(transport, unit_id) for unit_id in range(1, 5)]
+    scans = [asyncio.create_task(_scan_unit(client, stop)) for client in clients]
+    client = clients[0]
+
+    async def changes():
+        while not stop.is_set():
+            await client.change(lambda: client.mb_client.write_single_coil(0, True))
+    writers = [asyncio.create_task(changes()) for _ in range(2)]
+    await asyncio.sleep(0.05)
+    before = len(base.requests)
+    await asyncio.sleep(60 * REQUEST_TIME)
+    requests = base.requests[before:]
+    stop.set()
+    await asyncio.gather(*scans, *writers)
+    changes_done = requests.count((1, 'WriteSingleCoilPDU'))
+    # a change is a write and the read of 3 blocks, then a scan request of unit 1 and of another unit
+    assert changes_done >= 8, changes_done
+    for unit_id in range(2, 5):
+        assert sum(1 for request in requests if request[0] == unit_id) >= changes_done // 3 - 1, unit_id
