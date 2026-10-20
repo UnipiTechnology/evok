@@ -1,7 +1,7 @@
 # API changes in Evok 3.1 against 3.0
 
 The changes which affect the clients of REST, JSON, Bulk, WebSocket, RPC and the webhook, the configuration and
-the HW definitions. The incompatible changes come first. Every change names its commits
+the HW definitions. Breaking changes come first. Every change names its commits
 (`https://github.com/UnipiTechnology/evok/commit/<hash>`).
 
 ## Check on a device before the release
@@ -14,7 +14,7 @@ the HW definitions. The incompatible changes come first. Every change names its 
 - **Firmware and the scan after a change:** if the firmware shows a write in its registers with a delay, the reply
   to a change still has the old state, the next scan corrects it.
 
-## Incompatible changes
+## Breaking changes
 
 ### Access to the API
 

@@ -1,75 +1,102 @@
 # Evok - the Unipi API
 
-Evok is a bridge between the hardware of [Unipi technology] and the applications. It turns the Modbus registers of the Unipi
-units and the 1-Wire sensors into named devices with a clear state, e.g. the digital input `di 1_01`, the relay
-`ro 2_03` or a thermometer `temp`, so the applications do not need to know Modbus or the register maps.
+Evok is a bridge between the hardware manufactured by [Unipi technology] (controllers, extensions and 1-Wire sensors) and user applications.
+It turns the Modbus registers of the hardware into named devices (digital input `di 1_01`) with known state (`On/Off`),
+abstracting away Modbus communication and the register maps.
 
-- **Abstraction of the hardware:** the devices are created by the HW definitions of the units, their values
-  are in the units of their modes, with checked modes and ranges.
-- **One state:** Evok scans the units and keeps the actual state of every device, also the quality
-  of the communication (`comm`, `last_comm`); the changes are sent as events.
-- **One way of writing:** a change from any API is validated, written under the lock of the unit and read back;
-  the pulses and sequences of the outputs are timed by the sequencer.
-- **Integration:** the same devices for web applications, Node-RED and Home Assistant, with tokens and CORS
-  for the remote clients.
+> **Warning:** Evok is **not suitable** for applications with any real-time guarantees.
+> For users looking to implement those applications, please use the Modbus protocol directly or use [unipi-tools], which provide faster access to the controller hardware via a kernel interface.
 
-It provides multiple ways to easily access the I/Os of the devices, including:
+
+## Main Features
+
+
+### Software-Defined Hardware
+
+Hardware exposed by Evok is defined in a YAML file, matching real physical I/O to sub-devices with defined operating modes, units and allowed ranges.
+
+
+### Always Up-to-date State
+
+Evok periodically reads the state of the underlying hardware and updates it so that no explicit reads from hardware are needed from the user side.
+The state is also timestamped - the user can check for stale data (fields `comm` and `last_comm`).
+Changes of the state can also be observed by subscribing to events.
+
+
+### Deterministic and Rich Writes
+
+Any change made through the bridge is validated, written to the underlying hardware without data races.
+The bridge also supports output sequences, driven by its sequencer.
+
+
+### One Definition, Multiple APIs
+
+The same hardware definition is exposed using multiple APIs, including:
 
 - RESTful WebForms API
-- RESTful JSON API
+- RESTful JSON API (OpenAPI spec available)
 - Bulk request JSON API
 - WebSocket API
 - JSON-RPC API
-- MQTT API with Home Assistant discovery
+- MQTT API with Home Assistant auto-discovery
+- Webhook notifications
 
-Besides that, Evok also supports sending notifications via webhook.
 
-[evok-web] is a simple demo web application using Evok demonstrating its usage and allowing easy control of the devices configured in Evok.
+### (Optional) Web Interface
 
-Natively supported hardware: [Neuron], [Patron], [Gate] and [Unipi 1.1] including [Extension modules].
-Other devices that communicate via Modbus can be described using configuration files.
+[evok-web] is a simple demo web application using the APIs exposed by Evok, demonstrating its usage and allowing easy control of the devices configured in Evok.
 
-If you develop your own control application where the real-time behaviour matters, the application should
-use the Modbus protocol directly or the library of [unipi-tools], which communicates with the kernel driver
-via unipichannel.
+
+## Supported Hardware
+
+- Unipi controllers - [Neuron], [Patron], [Gate] and [Unipi 1.1]
+- Unipi [Extension Modules]
+- Modbus RTU/TCP devices (need additional definitions)
+- 1-Wire devices (need additional definitions)
+
 
 ## Documentation
-Installation, basic usage examples, configuration and further information can be found on [https://evok.readthedocs.io/](https://evok.readthedocs.io/)
 
-The OpenAPI document of the REST and JSON API is generated from the sources (`python -m evok.openapi`) and published with every release: [Evok_API_OAS.yaml](https://github.com/UnipiTechnology/evok/releases/latest/download/Evok_API_OAS.yaml). The other APIs are described in the [documentation](https://evok.readthedocs.io/).
+Installation, basic usage examples, configuration and further information can be found in the [documentation].
 
-## Major changes between Evok 3.0 and 3.1
+[Evok_API_OAS.yaml] is the specification of evok's RESTful JSON API. It is automatically generated and published upon every release.
+The other APIs are described in the [documentation].
 
-- **Python 3.12 and Debian 13 Trixie**, `tmodbus` instead of `pymodbus`; Evok can be installed also into a virtual
-  environment by pip.
-- **Security:** the API listens on `127.0.0.1` by default, an optional `token` and a read-only `read_token`
+
+## Major Changes Between Evok 3.0 and 3.1
+
+- **Python 3.12 and Debian 13 Trixie**, `tmodbus` instead of `pymodbus`, `uv` package and project manager system, support for venv installation.
+- **Enhanced security:** the API listens on `127.0.0.1` by default, an optional `token` and a read-only `read_token`
   for all APIs, CORS and the WebSocket from a browser only for `allowed_origins`.
 - **Stricter checks:** invalid values and configurations are refused with an error instead of being processed
   silently; the errors have the HTTP statuses 400, 401, 403, 404, 409, 503 and 500.
-- **MQTT API** with the Home Assistant discovery.
-- **Communication of the devices:** every state of a device of a Modbus unit and of a 1-Wire sensor has `comm`
+- **MQTT API** with Home Assistant auto-discovery.
+- **Timestamped state:** every state of a device of a Modbus unit and of a 1-Wire sensor has `comm`
   and `last_comm`; a unit which does not respond does not slow down the others on the bus.
-- **1-Wire by the kernel** instead of owserver, an OWFS bus is configured by its `master`.
-- **Sequencer:** the pulses and sequences of RO, DO and LED are set by the device `sequencer` of the output,
-  the outputs have no `pulse_duration`, `timeout` and `pending`.
-- **OpenAPI document** generated from the sources and attached to every release.
+- **Linux-native 1-Wire** instead of using owserver the OWFS bus is configured by its `master` provided by the Linux kernel.
+- **Sequencer:** the pulses and sequences of RO, DO and LED are set by the output device `sequencer`,
+  the outputs no longer have `pulse_duration`, `timeout` and `pending`.
+- **OpenAPI spec** generated from the sources and published with every release.
 
-The complete list, with the incompatible changes first and the commits of each change, is in
-[docs/api-changes-dev-src.md](docs/api-changes-dev-src.md).
+For a complete changelog, see [docs/api-changes-dev-src.md](docs/api-changes-dev-src.md).
 
-## Developer Note
+
+## Contributing
 
 Do you feel like contributing to Evok, or perhaps have a neat idea for an improvement to our system? Feel free to contribute to this repository.
+
 
 ## License
 
 Apache License, Version 2.0
 
-[Neuron]:https://www.unipi.technology/products/unipi-neuron-3?categoryId=2
-[Patron]:https://www.unipi.technology/products/unipi-patron-374
-[Gate]:https://www.unipi.technology/products/unipi-gate-388
-[Unipi 1.1]:https://www.unipi.technology/products/unipi-1-1-1-1-lite-19?categoryId=1
-[Evok-web]:https://github.com/UnipiTechnology/evok-web-jq
-[Extension modules]:https://www.unipi.technology/products?category=32
-[Unipi technology]:https://www.unipi.technology/
-[unipi-tools]:https://github.com/UnipiTechnology/unipi-tools
+[Neuron]: https://www.unipi.technology/products/unipi-neuron-3?categoryId=2
+[Patron]: https://www.unipi.technology/products/unipi-patron-374
+[Gate]: https://www.unipi.technology/products/unipi-gate-388
+[Unipi 1.1]: https://www.unipi.technology/products/unipi-1-1-1-1-lite-19?categoryId=1
+[evok-web]: https://github.com/UnipiTechnology/evok-web-jq
+[Extension Modules]: https://www.unipi.technology/products?category=32
+[Unipi technology]: https://www.unipi.technology/
+[unipi-tools]: https://github.com/UnipiTechnology/unipi-tools
+[Evok_API_OAS.yaml]: https://github.com/UnipiTechnology/evok/releases/latest/download/Evok_API_OAS.yaml
+[documentation]: https://evok.readthedocs.io/
