@@ -125,7 +125,21 @@ class Client:
         A unit which failed its last scan raises UnitUnavailable without a write, check_available=False
         writes anyway, e.g. the end of a pulse. A unit without a periodic scan is read first, nothing else
         would read it again, its failed scan after a change refused all next changes.
+
+        The requests of the unit have the priority on the bus while the change waits and runs: the rest of
+        the running scan of the unit, the writes and the read, they do not wait for the scans of the other units.
         """
+        with self._priority():
+            await self._change(operation, check_available, read)
+
+    def _priority(self):
+        """The priority of the requests of the unit on its bus (BusTransport), none of another transport"""
+        transport = getattr(self.mb_client, "transport", None)
+        if hasattr(transport, "priority"):
+            return transport.priority(self.mb_client.unit_id)
+        return contextlib.nullcontext()
+
+    async def _change(self, operation, check_available: bool, read: bool):
         async with self.lock:
             if check_available and self.cache.scan_error is not None:
                 if self.periodic_scan or not await self.cache.do_scan(all_groups=True):
