@@ -539,3 +539,12 @@ def test_invalid_serial_ports(l0306, caplog, ports):
     }), SimpleNamespace(definitions={'L0306': l0306}))
     assert 'local' not in Devices[MODBUS_SLAVE]
     assert 'serial_ports must be a list of the serial ports served by the device' in caplog.text
+
+
+def test_serial_ports_of_a_bus_with_a_numeric_name(l0306):
+    """ Devices has the bus under str(2), the unit has its transport """
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'TCP': tcp_bus('localhost', 502, {'local': {'slave-id': 1, 'model': 'L0306', 'serial_ports': ['/dev/null']}}),
+        2: modbus_bus('/dev/null', {'ext': {'slave-id': 1, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert Devices[MODBUS_SLAVE]['local'].client.serial_buses == [Devices[SERIALBUS]['2'].bus_driver]

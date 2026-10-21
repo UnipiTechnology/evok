@@ -126,8 +126,10 @@ class Client:
                     raise
                 logger.debug(f"Unit {self.name}: no response to the write of coil {coil}, it restarts: {E}")
                 responded = False
-            if self.serial_buses:
-                await asyncio.sleep(SERIAL_HOLD_TIME)
+            finally:
+                # also after an error, e.g. a lost connection: the coil may have been sent, the unit writes its flash
+                if self.serial_buses:
+                    await asyncio.sleep(SERIAL_HOLD_TIME)
         # the unit restarted or saved its settings, a change reads all its blocks
         self._written = None
         await asyncio.sleep(RESTART_WAIT if wait is None else wait)

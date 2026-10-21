@@ -195,13 +195,14 @@ class BusClaims:
         # the circuits of the created Modbus devices -> their bus, the circuit is only the name of the device
         self.names: dict[str, str] = {}
         # the real paths of the serial ports -> their bus, two buses would mix their requests on one line
-        self.serial_ports: dict[str, str] = {}
+        # and its transport, see link_serial_ports()
+        self.serial_ports: dict[str, tuple[str, BusTransport]] = {}
         # (line, slave-id) -> the device and its bus, the line is the serial port or (host, port) of TCP
         self.units: dict[tuple, tuple[str, str]] = {}
         # the 1-Wire master (None is the first one) -> its OWFS bus, two buses created all its sensors twice
         self.w1_masters: dict[str | None, str] = {}
-        # (the device, its bus, its Client, its option serial_ports), linked after all buses are created
-        self.serial_links: list[tuple[str, str, object, list[str]]] = []
+        # (the Client of a unit, its option serial_ports), linked after all buses are created
+        self.serial_links: list[tuple[object, list[str]]] = []
 
 
 def create_devices(evok_config: EvokConfig, hw_dict):
@@ -219,12 +220,12 @@ def link_serial_ports(claims: BusClaims):
     """Give the units the serial buses of the ports they serve (serial_ports of the device), held by their
     nv_save and reset; a port of no MODBUSRTU bus is skipped, e.g. a port used by another program
     """
-    for _circuit, _bus_name, client, ports in claims.serial_links:
+    for client, ports in claims.serial_links:
         buses = {}
         for port in ports:
             path = os.path.realpath(port)
             if path in claims.serial_ports:
-                buses[path] = Devices[SERIALBUS][claims.serial_ports[path]].bus_driver
+                buses[path] = claims.serial_ports[path][1]
         client.serial_buses = [buses[path] for path in sorted(buses)]
 
 
@@ -340,7 +341,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
         line = ("rtu", os.path.realpath(serial_port))
         if line[1] in claims.serial_ports:
             raise EvokConfigError(
-                f"Serial port '{serial_port}' is already used by bus '{claims.serial_ports[line[1]]}'"
+                f"Serial port '{serial_port}' is already used by bus '{claims.serial_ports[line[1]][0]}'"
             )
         serial_baud_rate = bus_data.get("baudrate", 19200)
         serial_parity = bus_data.get("parity", "N")
@@ -373,7 +374,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
             probe_timeout=probe,
         )
         Devices.register_device(SERIALBUS, bus)
-        claims.serial_ports[line[1]] = bus_name
+        claims.serial_ports[line[1]] = (bus_name, bus_driver)
 
     else:
         # e.g. 'OWBUS', the 1-Wire bus type before it was renamed to 'OWFS'
@@ -456,7 +457,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
                 claims.units[unit] = (circuit, bus_name)
                 bus.devices.append(circuit)
                 if serial_ports:
-                    claims.serial_links.append((circuit, bus_name, slave.client, serial_ports))
+                    claims.serial_links.append((slave.client, serial_ports))
 
                 if bus_device_info is None or "device_info" in device_data:
                     device_info = {"model": device_data.get("model", device_name)}

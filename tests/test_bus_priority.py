@@ -6,6 +6,7 @@ import time
 
 import pytest
 from tmodbus import AsyncModbusClient
+from tmodbus.exceptions import ModbusConnectionError
 from tmodbus.pdu import ReadHoldingRegistersPDU, ReadInputRegistersPDU
 
 from evok.modbus.cache import ModbusCacheMap
@@ -333,3 +334,23 @@ async def test_save_of_unit_holds_its_serial_bus(monkeypatch, held):
     write = local_bus.times[0]                  # the end of the write, it took REQUEST_TIME
     during = [t for t in serial.times if write - REQUEST_TIME / 2 < t < write + 10 * REQUEST_TIME]
     assert (not during) if held else during
+
+
+async def test_serial_bus_is_held_after_a_failed_write(monkeypatch):
+    """ The coil may have been sent before the error, e.g. a lost connection: the unit writes its flash """
+    monkeypatch.setattr('evok.modbus.client.SERIAL_HOLD_TIME', 5 * REQUEST_TIME)
+    rtu = bus_transport(SlowBus())
+    local = unit(bus_transport(SlowBus()), 1)
+    local.serial_buses = [rtu]
+
+    async def lost_connection(*args, **kwargs):
+        raise ModbusConnectionError('connection lost')
+    local.mb_client.write_single_coil = lost_connection
+    start = time.monotonic()
+    save = asyncio.create_task(local.write_coil_without_response(5, 1))
+    await asyncio.sleep(2 * REQUEST_TIME)
+    assert rtu._communication_lock.locked()
+    with pytest.raises(ModbusConnectionError):
+        await save
+    assert time.monotonic() - start >= 5 * REQUEST_TIME
+    assert not rtu._communication_lock.locked()
