@@ -174,7 +174,8 @@ An invalid value is an error: the unit or the feature is not created and the err
 - **Read after a change:** only the register blocks read by every scan (`scan_divider: 1`), the blocks of the states
   of the changed devices and of the written registers, the other blocks are read by the periodic scan. A change read
   all blocks, e.g. a LED of an xS51 a write and 6 reads, now a write and 2 reads (the fast block, the block of the LED).
-  A reset of the unit or NV save reads all blocks. — #267
+  A reset of the unit or NV save reads all blocks, a change without such a block reads the first block of the unit,
+  it finds whether the unit responds. — #267
 - **Modbus addresses:** a serial port can be used by one `MODBUSRTU` bus only, the `slave-id` must be unique on an RTU
   bus and on a TCP server (`hostname`, `port`) over all `MODBUSTCP` buses. The second bus or device is not created,
   before both read and wrote the same unit. — `dc7b1ee`

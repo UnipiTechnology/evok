@@ -204,7 +204,7 @@ async def change_latency(prioritized: bool, units: int = 6) -> float:
     await asyncio.sleep(0.1)
     client = clients[0]
     if not prioritized:
-        client._session = lambda: None                          # the change without a session
+        client._bus = None                                      # the change without a session
     start = time.monotonic()
     await client.change(lambda: client.mb_client.write_single_coil(0, True))
     latency = time.monotonic() - start
@@ -269,3 +269,31 @@ async def test_stream_of_changes_does_not_stop_the_scans():
     assert changes_done >= 8, changes_done
     for unit_id in range(2, 5):
         assert sum(1 for request in requests if request[0] == unit_id) >= changes_done // 3 - 1, unit_id
+
+
+async def test_turn_of_cancelled_scan_is_dropped():
+    """ The scan of the unit waiting for its turn after a session is cancelled, e.g. the unit stops its scan:
+        the next scan of the unit waits for the next session
+    """
+    lock, order = SessionLock(), []
+    await lock.acquire()                        # a request of another unit on the bus
+    scan = asyncio.create_task(_hold(lock, order, 'cancelled scan', unit=1), context=contextvars.Context())
+    await asyncio.sleep(0)
+    with lock.session(1):                       # a change of unit 1 ends while its scan waits
+        pass
+    assert 1 in lock._turns
+    scan.cancel()
+    await asyncio.sleep(0)
+    lock.release()
+    assert 1 not in lock._turns
+
+    _REQUEST_UNIT.set(1)
+    with lock.session(1):
+        async with lock:
+            order.append('write')
+        later = asyncio.create_task(_hold(lock, order, 'scan', unit=1), context=contextvars.Context())
+        await asyncio.sleep(0.01)
+        async with lock:
+            order.append('read')
+    await later
+    assert order == ['write', 'read', 'scan']

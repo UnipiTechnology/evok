@@ -80,7 +80,17 @@ class SessionLock:
         finally:
             with contextlib.suppress(ValueError):
                 self._waiters.remove(waiter)
+            self._prune_turns()
         return True
+
+    def _prune_turns(self) -> None:
+        """Drop the turns of the cancelled requests, a turn left without its request would let the next scan
+        of the unit into its session
+        """
+        others = {unit for _, unit, in_session in self._pending() if not in_session}
+        self._turns &= others
+        if not others:
+            self._other_turn = False
 
     def release(self) -> None:
         if not self._locked:

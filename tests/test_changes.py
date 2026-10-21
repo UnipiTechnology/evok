@@ -4,7 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 from conftest import make_client, scan
-from tmodbus import AsyncSmartTransport, AsyncTcpTransport
+from test_bus_priority import SlowBus
+from tmodbus import AsyncModbusClient, AsyncSmartTransport, AsyncTcpTransport
 from tmodbus.exceptions import CRCError, RequestRetryFailedError
 
 from evok import devents
@@ -13,9 +14,12 @@ from evok.devices import DI, DO, NV_SAVE, WATCHDOG, Devices
 from evok.errors import UnitCommunicationError, UnitUnavailable
 from evok.handlers_base import client_error
 from evok.modbus import set_devices
+from evok.modbus.analog import AnalogOutputBrain
 from evok.modbus.builder import IOParser
-from evok.modbus.client import AccessorU16
+from evok.modbus.cache import ModbusCacheMap
+from evok.modbus.client import AccessorU16, Client, device_registers
 from evok.modbus.scanner import ModbusScanner
+from evok.modbus.transport import BusTransport
 from evok.rpc_handler import Handler, UnitUnavailableError, create_response
 
 
@@ -122,6 +126,58 @@ async def test_change_with_restart_reads_all_groups():
     assert reads == [0, 10, 20, 30]
 
 
+async def test_change_without_its_groups_reads_the_first_group():
+    """ A coil which is not read, on a unit without a group read by every scan: the read after the change finds
+        whether the unit responds, a failed write does not leave the unit available
+    """
+    client = make_client(SLOW_BLOCKS[1:])
+    await client.cache.do_scan(initial=True)
+    reads = recorded_reads(client)
+    await client.change(lambda: client.mb_client.write_single_coil(0, 1), devices=[SimpleNamespace()])
+    assert reads == [10]
+
+    async def failed_write():
+        client.mb_client.connected = False
+        raise TimeoutError('no response')
+    with pytest.raises(UnitCommunicationError):
+        await client.change(failed_write, devices=[SimpleNamespace()])
+    assert client.comm() == 'error'
+
+
+async def test_state_of_other_mode_is_read_after_the_change():
+    """ The value of the resistance of an AO is read after the change of its mode, also in a slow block """
+    client = make_client([{'start_reg': 0, 'count': 1, 'scan_divider': 1},
+                          {'start_reg': 2, 'count': 3, 'scan_divider': 50}])
+    ao = AnalogOutputBrain('x', client, 0, regmode=4, reg_res=2)
+    assert {(0, False), (1, False), (2, False), (3, False)} <= device_registers(ao)
+
+
+async def test_scan_does_not_check_the_devices_between_the_writes_of_a_change():
+    """ A scan with no group to read during a change: the cache has the first write, the change checks the
+        devices after its writes
+    """
+    transport = BusTransport(SlowBus(), probe_timeout=1.0, wait_between_requests=0.0, wait_after_connect=0.0,
+                             retry_on_device_busy=False, retry_on_device_failure=False)
+    mb = AsyncModbusClient(transport, unit_id=1)
+    client = Client('1', mb, ModbusCacheMap(SLOW_BLOCKS[1:3], mb))
+    await client.cache.do_scan(initial=True)
+    checks = []
+    check = client._check_devices
+
+    async def recorded():
+        checks.append(client.read_registers(10) + client.read_registers(20))
+        await check()
+    client._check_devices = recorded
+
+    async def operation():
+        await client.write_registers(10, [1])
+        await client.do_scan()                              # the periodic scan, no group to read
+        await client.check_devices()
+        await client.write_registers(20, [1])
+    await client.change(operation, devices=[])
+    assert len(checks) == 1                                 # not [1, 0] between the writes
+
+
 async def test_set_devices_reads_the_group_of_the_device(units):
     """ A digital output: its coil, the register of its state in the block read by every scan """
     client, = await units('1')
@@ -216,9 +272,9 @@ async def test_scan_waits_for_the_change(units):
     await asyncio.sleep(0)
     do_scan = client._scan
 
-    async def periodic(all_groups=False, registers=None):
-        order.append('scan' if not all_groups else 'scan of the change')
-        return await do_scan(all_groups, registers)
+    async def periodic(read=None):
+        order.append('scan' if read is None else 'scan of the change')
+        return await do_scan(read)
     client._scan = periodic
     periodic_scan = asyncio.create_task(client.do_scan())
     await asyncio.sleep(0.01)

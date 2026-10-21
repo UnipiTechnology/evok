@@ -61,6 +61,9 @@ class Client:
         # set by ModbusScanner by scan_enabled; without a periodic scan a change reads a failed unit again
         self.periodic_scan = True
         self.mb_client = mb_client
+        # the transport with the sessions of the units (BusTransport), None e.g. for a fake unit of the tests
+        transport = getattr(mb_client, "transport", None)
+        self._bus = transport if hasattr(transport, "session") else None
         self.eventable_devices = []  # the devices with check_new_data()
         self.devices = []  # all devices of the unit, also without check_new_data()
         self.failing_devices = set()  # logged once, until they check new data again
@@ -70,6 +73,8 @@ class Client:
         self.lock = asyncio.Lock()
         # the registers (address, is_input) written by the running change, None reads all blocks after it
         self._written: set[tuple[int, bool]] | None = None
+        # a change runs, the scan does not check the devices between its writes, the change checks them
+        self._changing = False
         # comm by the last event of the devices, a change sends all of them; the devices are created after
         # a successful scan
         self.sent_comm = "ok"
@@ -112,13 +117,16 @@ class Client:
         await asyncio.sleep(RESTART_WAIT if wait is None else wait)
         return responded
 
-    async def write_registers(self, index: int, values: list[int]):
-        """Write holding registers and update the cache, so the next check does not see a stale value"""
+    async def write_registers(self, index: int, values: list[int], cache: bool = True):
+        """Write holding registers and update the cache, so the next check does not see a stale value;
+        without cache the caller updates it, e.g. after all writes of a setting
+        """
         if len(values) == 1:
             await self.mb_client.write_single_register(index, values[0])
         else:
             await self.mb_client.write_multiple_registers(index, values)
-        self.cache.set_register(index, values)
+        if cache:
+            self.cache.set_register(index, values)
         if self._written is not None:
             self._written.update((index + i, False) for i in range(len(values)))
 
@@ -127,16 +135,9 @@ class Client:
         async with self._scan_lock():
             return await self._scan()
 
-    def _session(self):
-        """The session of the unit on its bus (BusTransport.session()), None on another transport"""
-        session = getattr(getattr(self.mb_client, "transport", None), "session", None)
-        return session(self.mb_client.unit_id) if session is not None else None
-
     def _scan_lock(self):
         """The lock of the unit for a scan on a transport without the sessions, e.g. a fake unit of the tests"""
-        if hasattr(getattr(self.mb_client, "transport", None), "session"):
-            return contextlib.nullcontext()
-        return self.lock
+        return contextlib.nullcontext() if self._bus is not None else self.lock
 
     async def change(self, operation, check_available: bool = True, read: bool = True, devices=None):
         """Run the writes of operation() under the lock of the unit, then read all register blocks
@@ -156,11 +157,14 @@ class Client:
         of the unit on its bus: its requests go before the scans, the scan of the unit waits until the change
         ends, it does not read the unit between the writes; a running scan does not delay the change.
         """
-        session = self._session()
         # the session under the lock: each change ends its session, the scans get the bus between the changes
         async with self.lock:
-            with session if session is not None else contextlib.nullcontext():
-                await self._change(operation, check_available, read, devices)
+            with self._bus.session(self.mb_client.unit_id) if self._bus is not None else contextlib.nullcontext():
+                self._changing = True
+                try:
+                    await self._change(operation, check_available, read, devices)
+                finally:
+                    self._changing = False
 
     async def _change(self, operation, check_available: bool, read: bool, devices):
         if check_available and self.cache.scan_error is not None:
@@ -175,25 +179,34 @@ class Client:
         finally:
             registers, self._written = self._written, None
             if read:
-                if registers is not None:
-                    # the accessors after the writes, e.g. of a new mode of an analog input
+                if registers is None:
+                    await self._scan(self.cache.do_scan(all_groups=True))
+                else:
                     registers |= {register for device in devices for register in device_registers(device)}
-                await self._scan(all_groups=True, registers=registers)
+                    await self._scan(self.cache.read_changed(registers))
             else:
                 await self._check_devices()
 
     async def check_devices(self):
-        """Check the devices by the registers read before, e.g. by the first scan before they were created"""
+        """Check the devices by the registers read before, e.g. by the first scan before they were created;
+        a running change checks them at its end
+        """
         async with self._scan_lock():
-            await self._check_devices()
+            if not self._changing:
+                await self._check_devices()
 
-    async def _scan(self, all_groups: bool = False, registers: set[tuple[int, bool]] | None = None) -> bool:
-        """Read the register blocks, send the changed devices as one event"""
-        if not await self.cache.do_scan(all_groups=all_groups, registers=registers):
+    async def _scan(self, read=None) -> bool:
+        """Read the register blocks by read, the coroutine of the cache, by default the periodic scan, then
+        send the changed devices as one event; the periodic scan during a change does not check them
+        """
+        periodic = read is None
+        if not await (self.cache.do_scan() if periodic else read):
             # the values are stale, the devices are sent with the changed comm
-            self.send_comm_change()
+            if not (periodic and self._changing):
+                self.send_comm_change()
             return False
-        await self._check_devices()
+        if not (periodic and self._changing):
+            await self._check_devices()
         return True
 
     def send_comm_change(self):
@@ -259,13 +272,17 @@ class Proxy:
 
 
 def device_registers(device) -> set[tuple[int, bool]]:
-    """The registers (address, is_input) of the state of a device (its accessor), e.g. of an output written
-    by its coil; its settings written by write_registers() are read as the written registers
+    """The registers (address, is_input) of the state of a device, e.g. of an output written by its coil:
+    its accessors named by state_accessors ("accessor" by default), also of the other modes, the mode
+    is switched by the check after the read; its settings written by write_registers() are read as the
+    written registers
     """
-    accessor = getattr(device, "accessor", None)
-    if not isinstance(accessor, Accessor) or accessor.index is None:
-        return set()
-    return {(accessor.index + i, accessor.is_input) for i in range(accessor.count)}
+    registers = set()
+    for name in getattr(device, "state_accessors", ("accessor",)):
+        accessor = getattr(device, name, None)
+        if isinstance(accessor, Accessor) and accessor.index is not None:
+            registers.update((accessor.index + i, accessor.is_input) for i in range(accessor.count))
+    return registers
 
 
 class Accessor:

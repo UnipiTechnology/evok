@@ -101,42 +101,60 @@ class ModbusCacheMap:
                     )
             groups.append(group)
 
-    async def do_scan(self, initial: bool = False, all_groups: bool = False,
-                      registers: set[tuple[int, bool]] | None = None) -> bool:
+    async def do_scan(self, initial: bool = False, all_groups: bool = False) -> bool:
         """Read the groups by their scan_divider, with all_groups read all of them and keep their counters,
-        the scan after a change does not shift the phase of the slow groups; with registers (address, is_input)
-        read only the groups read by every scan and the groups of the registers, e.g. after a change
+        the scan after a change does not shift the phase of the slow groups
         """
         if initial:
             for group in self.groups + self.igroups:
                 group.clear_counter()
-
-        if registers is not None:
-            def wanted(group, is_input):
-                return group.f_divider == 1 or any(
-                    input_ == is_input and group.is_member(address) for address, input_ in registers
-                )
-        elif all_groups:
-            def wanted(group, is_input):
-                return True
-        else:
-            def wanted(group, is_input):
-                return group.f_counter == 0
-
-        read = 0
-        for groups, func, is_input in (
-            (self.groups, self.modbus_client.read_holding_registers, False),
-            (self.igroups, self.modbus_client.read_input_registers, True),
-        ):
-            count = await self._do_scan_groups([group for group in groups if wanted(group, is_input)], func)
-            if count is None:
-                return False
-            read += count
+        if not await self._read_groups(lambda group, is_input: all_groups or group.f_counter == 0):
+            return False
         # the counters are ticked after the whole scan, a failed scan is repeated with the same groups,
         # the slow groups keep their phase
-        if not all_groups and registers is None:
+        if not all_groups:
             for group in self.groups + self.igroups:
                 group.tick_counter()
+        return True
+
+    async def read_changed(self, registers: set[tuple[int, bool]]) -> bool:
+        """Read the groups read by every scan (scan_divider 1) and the groups of the registers (address,
+        is_input), e.g. after a change, and keep the counters; at least one group, the read after a failed
+        write finds whether the unit responds
+        """
+
+        def wanted(group, is_input):
+            return group.f_divider == 1 or any(
+                input_ == is_input and group.is_member(address) for address, input_ in registers
+            )
+
+        if not any(wanted(group, False) for group in self.groups) and not any(
+            wanted(group, True) for group in self.igroups
+        ):
+            # e.g. a coil which is not read, on a unit without a group read by every scan
+            first = next(iter(self.groups + self.igroups), None)
+            return await self._read_groups(lambda group, is_input: group is first)
+        return await self._read_groups(wanted)
+
+    async def _read_groups(self, wanted) -> bool:
+        """Read the groups wanted(group, is_input), False after a communication error"""
+        read = 0
+        try:
+            for groups, func, is_input in (
+                (self.groups, self.modbus_client.read_holding_registers, False),
+                (self.igroups, self.modbus_client.read_input_registers, True),
+            ):
+                for group in groups:
+                    if wanted(group, is_input):
+                        group.update(await func(group.address, quantity=group.count))
+                        read += 1
+
+        except (TModbusError, TimeoutError) as E:
+            # also the retries of the transport (RequestRetryFailedError), a noise on RS485 (CRCError)
+            # and the exception responses of the unit, e.g. an address out of its registers
+            self.scan_error = E
+            return False
+
         # a scan without a read, e.g. of a unit without register blocks, is not a communication
         if read > 0:
             self.last_comm_time = time.monotonic()
@@ -173,20 +191,3 @@ class ModbusCacheMap:
             vals = await self.modbus_client.read_holding_registers(index, quantity=count)
         self.set_register(index, vals, is_input)
         return vals
-
-    async def _do_scan_groups(self, groups: list[RegisterGroup], func) -> int | None:
-        """The number of the read groups, None after a communication error"""
-        read = 0
-        try:
-            for group in groups:
-                vals = await func(group.address, quantity=group.count)
-                group.update(vals)
-                read += 1
-
-        except (TModbusError, TimeoutError) as E:
-            # also the retries of the transport (RequestRetryFailedError), a noise on RS485 (CRCError)
-            # and the exception responses of the unit, e.g. an address out of its registers
-            self.scan_error = E
-            return None
-
-        return read
