@@ -220,6 +220,10 @@ comm_channels:
   Its devices are created after the first read, their values are then changed only by the writes of Evok.
   The scan can be enabled or disabled at runtime by `POST /json/modbus_slave/<device_name>` with `scan_enabled`.
 - `device_info` - an optional parameter, describes the device: `family`, `model`, `sn`, `board_count`.
+- `serial_ports` - an optional parameter, the list of the serial ports served by the device, e.g. `[/dev/ttyNS0]`
+  of the local unit 1 of a Patron M527. The `MODBUSRTU` buses of the ports send no request during the reset and the NV save
+  of the device and 0.5 s after it, a request on the port corrupts the write of the flash of the device (a bug of
+  the firmware). A port of no `MODBUSRTU` bus is logged as a warning, the port of the bus of the device as an error.
 
 #### OWFS
 
@@ -253,6 +257,30 @@ RS485_1:
       slave-id: 1
       model: xS51
 ```
+
+#### Unit serving a serial port
+
+```yaml title="The local units of a Patron M527 serve /dev/ttyNS0 and /dev/ttyNS1"
+LOCAL_TCP:
+  type: MODBUSTCP
+  hostname: 127.0.0.1
+  port: 50200
+  devices:
+    1:
+      slave-id: 1
+      model: '00'
+      serial_ports: [/dev/ttyNS0]   # RS485_1 is held during its reset and NV save
+    2:
+      slave-id: 2
+      model: '13'
+      serial_ports: [/dev/ttyNS1]
+RS485_1:
+  type: MODBUSRTU
+  port: /dev/ttyNS0
+```
+
+The port of a unit is shown by sysfs, e.g. `/sys/class/tty/ttyNS0/device` of the M527 is in `iogroup1`,
+the unit with the slave-id 1.
 
 #### Modbus TCP device
 

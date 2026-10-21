@@ -200,6 +200,10 @@ class BusClaims:
         self.units: dict[tuple, tuple[str, str]] = {}
         # the 1-Wire master (None is the first one) -> its OWFS bus, two buses created all its sensors twice
         self.w1_masters: dict[str | None, str] = {}
+        # the real paths of the serial ports -> the transports of their buses, see link_serial_ports()
+        self.serial_transports: dict[str, BusTransport] = {}
+        # (the device, its bus, its Client, its option serial_ports), linked after all buses are created
+        self.serial_links: list[tuple[str, str, object, list[str]]] = []
 
 
 def create_devices(evok_config: EvokConfig, hw_dict):
@@ -210,6 +214,30 @@ def create_devices(evok_config: EvokConfig, hw_dict):
             _create_bus(bus_name, bus_data or {}, hw_dict, claims)
         except Exception:
             logger.exception(f"Error in config of bus '{bus_name}'")
+    link_serial_ports(claims)
+
+
+def link_serial_ports(claims: BusClaims):
+    """Give the units the serial buses of the ports they serve (serial_ports of the device), held by their
+    nv_save and reset; a port of no MODBUSRTU bus is not held, a port of the bus of the unit cannot be
+    """
+    for circuit, bus_name, client, ports in claims.serial_links:
+        buses = {}
+        for port in ports:
+            path = os.path.realpath(port)
+            if path not in claims.serial_ports:
+                logger.warning(
+                    f"Modbus device '{circuit}': serial port '{port}' is not used by a MODBUSRTU bus, "
+                    f"it is not held by the nv_save and the reset of the device"
+                )
+            elif claims.serial_ports[path] == bus_name:
+                logger.error(
+                    f"Modbus device '{circuit}': serial port '{port}' is the port of its bus '{bus_name}', "
+                    f"the device cannot hold it"
+                )
+            else:
+                buses[path] = claims.serial_transports[path]
+        client.serial_buses = [buses[path] for path in sorted(buses)]
 
 
 def bus_retries(bus_data: dict) -> int:
@@ -358,6 +386,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
         )
         Devices.register_device(SERIALBUS, bus)
         claims.serial_ports[line[1]] = bus_name
+        claims.serial_transports[line[1]] = bus_driver
 
     else:
         # e.g. 'OWBUS', the 1-Wire bus type before it was renamed to 'OWFS'
@@ -415,6 +444,12 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
                     logger.error("Unsupported device model %s. Check HW definitions", device_model)
                     raise EvokConfigError("")
                 hw_model_dict = hw_dict.definitions[device_model]
+                serial_ports = device_data.get("serial_ports", [])
+                if not isinstance(serial_ports, list) or not all(isinstance(port, str) for port in serial_ports):
+                    raise EvokConfigError(
+                        f"serial_ports must be a list of the serial ports served by the device, "
+                        f"e.g. [/dev/ttyNS0], not '{serial_ports}'"
+                    )
 
                 slave = ModbusScanner(bus.bus_driver, circuit, scanfreq, scan_enabled, hw_model_dict, unit_id=slave_id)
                 # the scanner validated the slave-id, two devices would read and write the same unit
@@ -429,6 +464,8 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
                 claims.names[circuit] = bus_name
                 claims.units[unit] = (circuit, bus_name)
                 bus.devices.append(circuit)
+                if serial_ports:
+                    claims.serial_links.append((circuit, bus_name, slave.client, serial_ports))
 
                 if bus_device_info is None or "device_info" in device_data:
                     device_info = {"model": device_data.get("model", device_name)}

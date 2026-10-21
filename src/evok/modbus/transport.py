@@ -173,6 +173,23 @@ class BusTransport(AsyncSmartTransport):
         finally:
             self._single_units.discard(unit_id)
 
+    @contextlib.asynccontextmanager
+    async def hold(self):
+        """Hold the bus, its requests wait, e.g. while a unit which serves its serial port writes its flash
+        (Client.write_coil_without_response()); the request being sent ends first
+        """
+        # the request of another bus in the context, e.g. of the unit which holds the bus, is not of this bus
+        unit, session = _REQUEST_UNIT.set(None), _SESSION_UNIT.set(None)
+        try:
+            await self._communication_lock.acquire()
+        finally:
+            _SESSION_UNIT.reset(session)
+            _REQUEST_UNIT.reset(unit)
+        try:
+            yield
+        finally:
+            self._communication_lock.release()
+
     def session(self, unit_id: int):
         """The requests of the running task to the unit go first, the other requests of the unit, its scan,
         wait until the session ends, e.g. a change of the unit: its writes and the read after them

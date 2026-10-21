@@ -137,6 +137,9 @@ the HW definitions. Breaking changes come first. Every change names its commits
   of the buses. — `f7ebda1`, `0044241`, `16463d5`, `a6ede44`
 - **Outputs without coils:** RO, DO and LED without `val_coil` write their bit of `val_reg` (a holding register),
   e.g. a unit which has no coils. A DO without the PWM registers is a simple output, `modes` is optional. — `05ad76c`
+- **Serial ports of a unit:** `serial_ports` of a Modbus device lists the serial ports it serves, e.g. the local unit
+  1 of a Patron M527 with `/dev/ttyNS0`. Their `MODBUSRTU` buses are held during the reset and the NV save of the unit and
+  0.5 s after it, a request on the port corrupts the write of its flash (a bug of the firmware).
 
 ## Deprecated
 

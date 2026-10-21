@@ -18,6 +18,9 @@ from .cache import ModbusCacheMap
 logger = logging.getLogger(__name__)
 
 RESTART_WAIT = 0.1  # s, the wait after a write after which the unit restarts, before it is read
+# s, the serial buses of the unit are held after its restart or the save of its settings, a request
+# on the serial port served by the unit corrupts the write of its flash (a bug of the firmware)
+SERIAL_HOLD_TIME = 0.5
 
 UINT16 = struct.Struct(">H")
 INT16 = struct.Struct(">h")
@@ -61,6 +64,9 @@ class Client:
         # set by ModbusScanner by scan_enabled; without a periodic scan a change reads a failed unit again
         self.periodic_scan = True
         self.mb_client = mb_client
+        # the serial buses (BusTransport) of the ports served by the unit, the option serial_ports of the device,
+        # sorted by their ports; held by write_coil_without_response()
+        self.serial_buses: list = []
         # the transport with the sessions of the units (BusTransport), None e.g. for a fake unit of the tests
         transport = getattr(mb_client, "transport", None)
         self._bus = transport if hasattr(transport, "session") else None
@@ -101,17 +107,26 @@ class Client:
         """Write a coil after which the unit restarts, e.g. its reset or the save of its settings, it may not
         respond: the coil is written once without the retries, a missing or a broken response is not an error;
         wait for the restart before the unit is read. Return True if the unit responded.
+
+        The serial buses of the ports served by the unit (serial_buses) are held from before the write until
+        SERIAL_HOLD_TIME after it, a request on the port corrupts the write of the flash of the unit.
         """
         single_request = getattr(getattr(self.mb_client, "transport", None), "single_request", None)
-        try:
-            with single_request(self.mb_client.unit_id) if single_request else contextlib.nullcontext():
-                await self.mb_client.write_single_coil(coil, value)
-            responded = True
-        except Exception as E:
-            if not isinstance(root_cause(E), (TimeoutError, InvalidResponseError)):
-                raise
-            logger.debug(f"Unit {self.name}: no response to the write of coil {coil}, it restarts: {E}")
-            responded = False
+        async with contextlib.AsyncExitStack() as held:
+            # sorted by their ports, two units holding the same buses do not wait for each other
+            for bus in self.serial_buses:
+                await held.enter_async_context(bus.hold())
+            try:
+                with single_request(self.mb_client.unit_id) if single_request else contextlib.nullcontext():
+                    await self.mb_client.write_single_coil(coil, value)
+                responded = True
+            except Exception as E:
+                if not isinstance(root_cause(E), (TimeoutError, InvalidResponseError)):
+                    raise
+                logger.debug(f"Unit {self.name}: no response to the write of coil {coil}, it restarts: {E}")
+                responded = False
+            if self.serial_buses:
+                await asyncio.sleep(SERIAL_HOLD_TIME)
         # the unit restarted or saved its settings, a change reads all its blocks
         self._written = None
         await asyncio.sleep(RESTART_WAIT if wait is None else wait)

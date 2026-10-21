@@ -502,3 +502,28 @@ async def test_single_request_is_sent_once():
         await transport.send_and_receive(1, 'pdu')
     assert base.requests == 1 and time.monotonic() - start < 0.5
     assert 1 not in transport._single_units                 # the next requests have the retries again
+
+
+def test_serial_ports_of_a_unit(l0306, tmp_path, caplog):
+    """ The unit holds the serial buses of the ports it serves, also of a bus created after it """
+    link = tmp_path / 'ttyNS0'
+    link.symlink_to('/dev/null')
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'TCP': tcp_bus('localhost', 502, {'local': {'slave-id': 1, 'model': 'L0306',
+                                                     'serial_ports': [str(link), '/dev/ttyNS9']}}),
+        'RTU1': modbus_bus('/dev/null', {'ext': {'slave-id': 1, 'model': 'L0306', 'serial_ports': ['/dev/null']}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    local, ext = Devices[MODBUS_SLAVE]['local'].client, Devices[MODBUS_SLAVE]['ext'].client
+    assert local.serial_buses == [Devices[SERIALBUS]['RTU1'].bus_driver]
+    assert ext.serial_buses == []
+    assert ("Modbus device 'local': serial port '/dev/ttyNS9' is not used by a MODBUSRTU bus" in caplog.text)
+    assert "Modbus device 'ext': serial port '/dev/null' is the port of its bus 'RTU1'" in caplog.text
+
+
+@pytest.mark.parametrize('ports', ['/dev/ttyNS0', [1], {'port': '/dev/ttyNS0'}])
+def test_invalid_serial_ports(l0306, caplog, ports):
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'TCP': tcp_bus('localhost', 502, {'local': {'slave-id': 1, 'model': 'L0306', 'serial_ports': ports}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert 'local' not in Devices[MODBUS_SLAVE]
+    assert 'serial_ports must be a list of the serial ports served by the device' in caplog.text
