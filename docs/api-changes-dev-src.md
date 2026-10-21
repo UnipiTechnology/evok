@@ -165,6 +165,17 @@ An invalid value is an error: the unit or the feature is not created and the err
 - **Unit which does not respond:** it is probed by one request with `probe_timeout` of the bus (0.1 s on RTU)
   without the retries, before every attempt locked the bus for `(retries + 1) * timeout` (1 s by default)
   and the other units of the bus waited. — `30cb46f`
+- **Priority of the changes on a bus:** the writes of a change and the read after them go before the scans of the bus,
+  the change does not wait for the running scan of its unit, only for the request being sent. The scan of the unit
+  waits until the change ends, it does not read the unit between its writes; the other units use the bus meanwhile.
+  After each change a waiting scan of the unit and of another unit go first, a stream of changes does not stop
+  the scans. A change waited for the scans of all units of a busy bus, e.g. about 30 requests with 6 units, now
+  about 5. — #267
+- **Read after a change:** only the register blocks read by every scan (`scan_divider: 1`), the blocks of the states
+  of the changed devices and of the written registers, the other blocks are read by the periodic scan. A change read
+  all blocks, e.g. a LED of an xS51 a write and 6 reads, now a write and 2 reads (the fast block, the block of the LED).
+  A reset of the unit or NV save reads all blocks, a change without such a block reads the first block of the unit,
+  it finds whether the unit responds. — #267
 - **Modbus addresses:** a serial port can be used by one `MODBUSRTU` bus only, the `slave-id` must be unique on an RTU
   bus and on a TCP server (`hostname`, `port`) over all `MODBUSTCP` buses. The second bus or device is not created,
   before both read and wrote the same unit. — `dc7b1ee`

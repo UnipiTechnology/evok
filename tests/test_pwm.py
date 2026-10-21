@@ -86,3 +86,21 @@ async def test_soft_set_preset_and_custom():
     with pytest.raises(ValueError):
         await pwm.set(5000)
     assert (pwm.duty(40), pwm.duty_raw(40.4)) == (40, 40)
+
+
+async def test_set_reads_the_written_registers_after_the_change():
+    """ The registers of the frequency are read after the change, also in a slow block """
+    client = make_client([{'start_reg': 0, 'count': 1, 'scan_divider': 1},
+                          {'start_reg': 10, 'count': 2, 'scan_divider': 50}], {10: 47999, 11: 9})
+    await client.cache.do_scan(initial=True)
+    pwm = HardPwmFrequency(client, 10, 11)
+    pwm.update()
+    reads = []
+    read = client.mb_client.read_holding_registers
+
+    async def recorded(address, quantity=1):
+        reads.append(address)
+        return await read(address, quantity)
+    client.mb_client.read_holding_registers = recorded
+    await client.change(lambda: pwm.set(100), devices=[])
+    assert reads == [0, 10]

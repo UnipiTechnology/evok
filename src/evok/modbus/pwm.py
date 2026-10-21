@@ -57,10 +57,8 @@ class PwmFrequency:
             else:
                 runs.append((index, [value]))
         for index, run in runs:
-            if len(run) == 1:
-                await self.client.mb_client.write_single_register(index, run[0])
-            else:
-                await self.client.mb_client.write_multiple_registers(index, run)
+            # the written registers are read after the change (Client.change())
+            await self.client.write_registers(index, run, cache=False)
         for index, value in registers:
             self.client.cache.set_register(index, [value])
 

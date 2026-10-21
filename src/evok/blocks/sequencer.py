@@ -184,7 +184,7 @@ class Sequencer:
         change = getattr(getattr(device, "client", None), "change", None)
         if change is not None:
             # also on an unavailable unit, the output must not stay in the state of the sequence
-            await change(operation, check_available=False)
+            await change(operation, check_available=False, devices=[device])
         else:
             await operation()
             devents.status(device)

@@ -148,6 +148,9 @@ class AnalogOutputBrain(AnalogInput):
             AccessorFactory.get(reg_res, "float32", decimals=3) if reg_res is not None else Accessor(None)
         )
 
+    # the value of both modes, a change of the mode reads the new one (Client.change())
+    state_accessors = ("accessor", "ao_accessor", "res_accessor")
+
     def _make_accessor(self) -> Accessor:
         return self.res_accessor if self.mode == "Resistance" else self.ao_accessor
 
