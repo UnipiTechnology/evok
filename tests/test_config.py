@@ -502,3 +502,49 @@ async def test_single_request_is_sent_once():
         await transport.send_and_receive(1, 'pdu')
     assert base.requests == 1 and time.monotonic() - start < 0.5
     assert 1 not in transport._single_units                 # the next requests have the retries again
+
+
+def test_serial_ports_of_a_unit(l0306, tmp_path, caplog):
+    """ The unit holds the serial buses of the ports it serves, also of a bus created after it; a port
+        of no bus is skipped, e.g. a port used by another program
+    """
+    link = tmp_path / 'ttyNS0'
+    link.symlink_to('/dev/null')
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'TCP': tcp_bus('localhost', 502, {'local': {'slave-id': 1, 'model': 'L0306',
+                                                     'serial_ports': [str(link), '/dev/ttyNS9']},
+                                           'other': {'slave-id': 2, 'model': 'L0306', 'serial_ports': None}}),
+        'RTU1': modbus_bus('/dev/null', {'ext': {'slave-id': 1, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    local, other = Devices[MODBUS_SLAVE]['local'].client, Devices[MODBUS_SLAVE]['other'].client
+    assert local.serial_buses == [Devices[SERIALBUS]['RTU1'].bus_driver]
+    assert other.serial_buses == []                     # an empty option
+    assert 'ttyNS9' not in caplog.text
+
+
+def test_serial_ports_of_a_unit_of_a_serial_bus(l0306, caplog):
+    """ A unit of a serial bus holding another one could wait for it while it holds its bus """
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {'ext1': {'slave-id': 1, 'model': 'L0306', 'serial_ports': ['/dev/zero']}}),
+        'RTU2': modbus_bus('/dev/zero', {'ext2': {'slave-id': 1, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert list(Devices[MODBUS_SLAVE]) == ['ext2']
+    assert 'serial_ports is an option of a device of a MODBUSTCP bus' in caplog.text
+
+
+@pytest.mark.parametrize('ports', ['/dev/ttyNS0', [1], {'port': '/dev/ttyNS0'}])
+def test_invalid_serial_ports(l0306, caplog, ports):
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'TCP': tcp_bus('localhost', 502, {'local': {'slave-id': 1, 'model': 'L0306', 'serial_ports': ports}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert 'local' not in Devices[MODBUS_SLAVE]
+    assert 'serial_ports must be a list of the serial ports served by the device' in caplog.text
+
+
+def test_serial_ports_of_a_bus_with_a_numeric_name(l0306):
+    """ Devices has the bus under str(2), the unit has its transport """
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'TCP': tcp_bus('localhost', 502, {'local': {'slave-id': 1, 'model': 'L0306', 'serial_ports': ['/dev/null']}}),
+        2: modbus_bus('/dev/null', {'ext': {'slave-id': 1, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert Devices[MODBUS_SLAVE]['local'].client.serial_buses == [Devices[SERIALBUS]['2'].bus_driver]

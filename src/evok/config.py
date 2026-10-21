@@ -195,11 +195,14 @@ class BusClaims:
         # the circuits of the created Modbus devices -> their bus, the circuit is only the name of the device
         self.names: dict[str, str] = {}
         # the real paths of the serial ports -> their bus, two buses would mix their requests on one line
-        self.serial_ports: dict[str, str] = {}
+        # and its transport, see link_serial_ports()
+        self.serial_ports: dict[str, tuple[str, BusTransport]] = {}
         # (line, slave-id) -> the device and its bus, the line is the serial port or (host, port) of TCP
         self.units: dict[tuple, tuple[str, str]] = {}
         # the 1-Wire master (None is the first one) -> its OWFS bus, two buses created all its sensors twice
         self.w1_masters: dict[str | None, str] = {}
+        # (the Client of a unit, its option serial_ports), linked after all buses are created
+        self.serial_links: list[tuple[object, list[str]]] = []
 
 
 def create_devices(evok_config: EvokConfig, hw_dict):
@@ -210,6 +213,20 @@ def create_devices(evok_config: EvokConfig, hw_dict):
             _create_bus(bus_name, bus_data or {}, hw_dict, claims)
         except Exception:
             logger.exception(f"Error in config of bus '{bus_name}'")
+    link_serial_ports(claims)
+
+
+def link_serial_ports(claims: BusClaims):
+    """Give the units the serial buses of the ports they serve (serial_ports of the device), held by their
+    nv_save and reset; a port of no MODBUSRTU bus is skipped, e.g. a port used by another program
+    """
+    for client, ports in claims.serial_links:
+        buses = {}
+        for port in ports:
+            path = os.path.realpath(port)
+            if path in claims.serial_ports:
+                buses[path] = claims.serial_ports[path][1]
+        client.serial_buses = [buses[path] for path in sorted(buses)]
 
 
 def bus_retries(bus_data: dict) -> int:
@@ -324,7 +341,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
         line = ("rtu", os.path.realpath(serial_port))
         if line[1] in claims.serial_ports:
             raise EvokConfigError(
-                f"Serial port '{serial_port}' is already used by bus '{claims.serial_ports[line[1]]}'"
+                f"Serial port '{serial_port}' is already used by bus '{claims.serial_ports[line[1]][0]}'"
             )
         serial_baud_rate = bus_data.get("baudrate", 19200)
         serial_parity = bus_data.get("parity", "N")
@@ -357,7 +374,7 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
             probe_timeout=probe,
         )
         Devices.register_device(SERIALBUS, bus)
-        claims.serial_ports[line[1]] = bus_name
+        claims.serial_ports[line[1]] = (bus_name, bus_driver)
 
     else:
         # e.g. 'OWBUS', the 1-Wire bus type before it was renamed to 'OWFS'
@@ -415,6 +432,16 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
                     logger.error("Unsupported device model %s. Check HW definitions", device_model)
                     raise EvokConfigError("")
                 hw_model_dict = hw_dict.definitions[device_model]
+                # an empty option is no port, as the other empty sections
+                serial_ports = device_data.get("serial_ports") or []
+                if not isinstance(serial_ports, list) or not all(isinstance(port, str) for port in serial_ports):
+                    raise EvokConfigError(
+                        f"serial_ports must be a list of the serial ports served by the device, "
+                        f"e.g. [/dev/ttyNS0], not '{serial_ports}'"
+                    )
+                # a unit of a serial bus holding another one could wait for it while it holds its bus
+                if serial_ports and bus_type != "MODBUSTCP":
+                    raise EvokConfigError("serial_ports is an option of a device of a MODBUSTCP bus, e.g. a local unit")
 
                 slave = ModbusScanner(bus.bus_driver, circuit, scanfreq, scan_enabled, hw_model_dict, unit_id=slave_id)
                 # the scanner validated the slave-id, two devices would read and write the same unit
@@ -429,6 +456,8 @@ def _create_bus(bus_name, bus_data: dict, hw_dict, claims: BusClaims):
                 claims.names[circuit] = bus_name
                 claims.units[unit] = (circuit, bus_name)
                 bus.devices.append(circuit)
+                if serial_ports:
+                    claims.serial_links.append((slave.client, serial_ports))
 
                 if bus_device_info is None or "device_info" in device_data:
                     device_info = {"model": device_data.get("model", device_name)}

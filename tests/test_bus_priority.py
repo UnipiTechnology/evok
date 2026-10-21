@@ -6,6 +6,7 @@ import time
 
 import pytest
 from tmodbus import AsyncModbusClient
+from tmodbus.exceptions import ModbusConnectionError
 from tmodbus.pdu import ReadHoldingRegistersPDU, ReadInputRegistersPDU
 
 from evok.modbus.cache import ModbusCacheMap
@@ -297,3 +298,59 @@ async def test_turn_of_cancelled_scan_is_dropped():
             order.append('read')
     await later
     assert order == ['write', 'read', 'scan']
+
+
+# ---- the serial buses held by the save of the flash of a unit ----
+
+class TimedBus(SlowBus):
+    """ The times of the ends of the requests """
+
+    def __init__(self):
+        super().__init__()
+        self.times = []
+
+    async def send_and_receive(self, unit_id, pdu):
+        result = await super().send_and_receive(unit_id, pdu)
+        self.times.append(time.monotonic())
+        return result
+
+
+@pytest.mark.parametrize('held', [True, False])
+async def test_save_of_unit_holds_its_serial_bus(monkeypatch, held):
+    """ No request on the serial port served by the unit from before the write of the coil (nv_save, reset)
+        until SERIAL_HOLD_TIME after it, the request being sent ends first
+    """
+    monkeypatch.setattr('evok.modbus.client.SERIAL_HOLD_TIME', 10 * REQUEST_TIME)
+    monkeypatch.setattr('evok.modbus.client.RESTART_WAIT', 0)
+    serial, local_bus = TimedBus(), TimedBus()
+    rtu, stop = bus_transport(serial), asyncio.Event()
+    scans = [asyncio.create_task(_scan(rtu, unit_id, stop)) for unit_id in (1, 2)]
+    local = unit(bus_transport(local_bus), 1)
+    local.serial_buses = [rtu] if held else []
+    await asyncio.sleep(0.05)
+    await local.change(lambda: local.write_coil_without_response(5, 1), devices=[])
+    stop.set()
+    await asyncio.gather(*scans)
+    write = local_bus.times[0]                  # the end of the write, it took REQUEST_TIME
+    during = [t for t in serial.times if write - REQUEST_TIME / 2 < t < write + 10 * REQUEST_TIME]
+    assert (not during) if held else during
+
+
+async def test_serial_bus_is_held_after_a_failed_write(monkeypatch):
+    """ The coil may have been sent before the error, e.g. a lost connection: the unit writes its flash """
+    monkeypatch.setattr('evok.modbus.client.SERIAL_HOLD_TIME', 5 * REQUEST_TIME)
+    rtu = bus_transport(SlowBus())
+    local = unit(bus_transport(SlowBus()), 1)
+    local.serial_buses = [rtu]
+
+    async def lost_connection(*args, **kwargs):
+        raise ModbusConnectionError('connection lost')
+    local.mb_client.write_single_coil = lost_connection
+    start = time.monotonic()
+    save = asyncio.create_task(local.write_coil_without_response(5, 1))
+    await asyncio.sleep(2 * REQUEST_TIME)
+    assert rtu._communication_lock.locked()
+    with pytest.raises(ModbusConnectionError):
+        await save
+    assert time.monotonic() - start >= 5 * REQUEST_TIME
+    assert not rtu._communication_lock.locked()
