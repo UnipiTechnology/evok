@@ -91,8 +91,9 @@ async def set_devices(assignments: list[tuple], states: dict | None = None) -> l
         try:
             if isinstance(unit, Client):
                 writes = any(set(kw) - {"alias"} for _, _, kw in items)
-                await unit.change(operation, check_available=writes, read=writes,
-                                  devices=[device for _, device, _ in items])
+                await unit.change(
+                    operation, check_available=writes, read=writes, devices=[device for _, device, _ in items]
+                )
             else:
                 await operation()
         finally:
