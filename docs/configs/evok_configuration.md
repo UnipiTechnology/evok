@@ -225,7 +225,8 @@ comm_channels:
   during the reset and the NV save of the device and 0.5 s after it, a request on the port corrupts the write
   of the flash of the device (a bug of the firmware). A port of no `MODBUSRTU` bus is skipped, e.g. a port used
   by another program. Only the reset and the NV save by Evok hold the buses, not the ones by another Modbus master
-  of the unit, e.g. another client of its Modbus TCP server.
+  of the unit, e.g. another client of its Modbus TCP server. `autogen.yaml` sets it for the boards BRAIN,
+  E4AI4AO4DI5RO and E4AI4AO6DI5RO of the controller, `/dev/ttyNS0`, `/dev/ttyNS1`... by their order.
 
 #### OWFS
 
