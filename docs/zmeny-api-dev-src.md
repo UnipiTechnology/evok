@@ -136,8 +136,8 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
 - **Sériové porty jednotky:** `serial_ports` u Modbus zařízení je seznam sériových portů, které obsluhuje, např. lokální
   jednotka 1 Patronu M527 s `/dev/ttyNS0`. Jejich sběrnice `MODBUSRTU` stojí během resetu a NV save jednotky a 0,5 s po něm,
   požadavek na portu poškodí zápis do její flash (chyba firmware). Parametr zařízení sběrnice `MODBUSTCP`; reset a NV save
-  jiným Modbus masterem jednotky se nepokrývají. `evok-autogen.py` ho nastaví deskám BRAIN, E4AI4AO4DI5RO
-  a E4AI4AO6DI5RO, `ttyNS0`, `ttyNS1`... podle jejich pořadí.
+  jiným Modbus masterem jednotky se nepokrývají. `evok-autogen.py` ho nastaví deskám BRAIN, E4AI4AO4DI5RO,
+  E4AI4AO6DI5RO a E8AI4DI5RO, `ttyNS0`, `ttyNS1`... podle jejich pořadí.
 
 ## Zastaralé
 

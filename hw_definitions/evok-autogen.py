@@ -16,7 +16,7 @@ E8AI4DI5RO = "30"
 
 # the boards which serve a serial port ttyNSx too, x by their order from 0; a request on the port corrupts
 # the NV save of the board (a bug of the firmware), Evok holds the bus of the port by serial_ports
-SERIAL_PORT_BOARDS = (BRAIN, E4AI4AO4DI5RO, E4AI4AO6DI5RO)
+SERIAL_PORT_BOARDS = (BRAIN, E4AI4AO4DI5RO, E4AI4AO6DI5RO, E8AI4DI5RO)
 
 UNIPI11 = "UNIPI11"
 UNIPI11LITE = "UNIPI11LITE"

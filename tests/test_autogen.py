@@ -27,10 +27,10 @@ def devices(product_id):
     (0x0303, {1: ['/dev/ttyNS0'], 2: None}),                                   # M203
     (0x0103, {1: ['/dev/ttyNS0']}),                                            # S103
     (0x0207, {1: None}),                                                       # S207, E8DI8DO
-    (0x1007, {1: ['/dev/ttyNS0'], 2: None}),                                   # M537, E8AI4DI5RO
+    (0x1007, {1: ['/dev/ttyNS0'], 2: ['/dev/ttyNS1']}),                        # M537, E8AI4DI5RO
 ])
 def test_serial_ports_of_the_boards(product_id, ports):
-    """ BRAIN, E4AI4AO4DI5RO and E4AI4AO6DI5RO serve a serial port ttyNSx, x by their order from 0 """
+    """ BRAIN, E4AI4AO4DI5RO, E4AI4AO6DI5RO and E8AI4DI5RO serve a serial port ttyNSx, x by their order from 0 """
     assert {name: device.get('serial_ports') for name, device in devices(product_id).items()} == ports
 
 
