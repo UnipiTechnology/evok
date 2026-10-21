@@ -113,7 +113,8 @@ class Client:
         """
         single_request = getattr(getattr(self.mb_client, "transport", None), "single_request", None)
         async with contextlib.AsyncExitStack() as held:
-            # sorted by their ports, two units holding the same buses do not wait for each other
+            # in the order of their ports, two units holding the same buses do not hold one each and wait
+            # for the other; the units of MODBUSTCP buses only, their own bus is not held
             for bus in self.serial_buses:
                 await held.enter_async_context(bus.hold())
             try:

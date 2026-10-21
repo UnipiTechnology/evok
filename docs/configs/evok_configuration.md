@@ -220,10 +220,12 @@ comm_channels:
   Its devices are created after the first read, their values are then changed only by the writes of Evok.
   The scan can be enabled or disabled at runtime by `POST /json/modbus_slave/<device_name>` with `scan_enabled`.
 - `device_info` - an optional parameter, describes the device: `family`, `model`, `sn`, `board_count`.
-- `serial_ports` - an optional parameter, the list of the serial ports served by the device, e.g. `[/dev/ttyNS0]`
-  of the local unit 1 of a Patron M527. The `MODBUSRTU` buses of the ports send no request during the reset and the NV save
-  of the device and 0.5 s after it, a request on the port corrupts the write of the flash of the device (a bug of
-  the firmware). A port of no `MODBUSRTU` bus is logged as a warning, the port of the bus of the device as an error.
+- `serial_ports` - an optional parameter of a device of a `MODBUSTCP` bus, the list of the serial ports served by the
+  device, e.g. `[/dev/ttyNS0]` of the local unit 1 of a Patron M527. The `MODBUSRTU` buses of the ports send no request
+  during the reset and the NV save of the device and 0.5 s after it, a request on the port corrupts the write
+  of the flash of the device (a bug of the firmware). A port of no `MODBUSRTU` bus is skipped, e.g. a port used
+  by another program. Only the reset and the NV save by Evok hold the buses, not the ones by another Modbus master
+  of the unit, e.g. another client of its Modbus TCP server.
 
 #### OWFS
 

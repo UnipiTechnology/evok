@@ -135,7 +135,8 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
   bez coilů. DO bez PWM registrů je jednoduchý výstup, `modes` je nepovinné. — `05ad76c`
 - **Sériové porty jednotky:** `serial_ports` u Modbus zařízení je seznam sériových portů, které obsluhuje, např. lokální
   jednotka 1 Patronu M527 s `/dev/ttyNS0`. Jejich sběrnice `MODBUSRTU` stojí během resetu a NV save jednotky a 0,5 s po něm,
-  požadavek na portu poškodí zápis do její flash (chyba firmware).
+  požadavek na portu poškodí zápis do její flash (chyba firmware). Parametr zařízení sběrnice `MODBUSTCP`; reset a NV save
+  jiným Modbus masterem jednotky se nepokrývají.
 
 ## Zastaralé
 
