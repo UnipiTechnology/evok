@@ -22,7 +22,7 @@ In order to install Evok on Neuron/Unipi1.X with RaspberryPi OS, you will need a
 
 To add Evok repositories and install required modules, connect to your controller using SSH. The username and password for Raspberry Pi OS are set using the Raspberry Pi OS Imager. After you connect to your controller execute the following commands:
 
-=== "For Neuron"
+#### Neuron
 
 ```bash
 sudo su
@@ -30,7 +30,7 @@ wget -qO - https://repo.unipi.technology/debian/raspberry-neuron.sh | bash
 reboot
 ```
 
-=== "For Unipi1.X"
+#### Unipi 1.X
 
 ```bash
 sudo su
@@ -65,9 +65,10 @@ a development branch. It needs Python 3.12 or newer (Debian 13 Trixie).
 > **Note**
 > 
 > The Debian package `evok` must not run at the same time, both use the port 8080:
-    `sudo systemctl disable --now evok`.
+> `sudo systemctl disable --now evok`.
 
 ```bash title="Installing Evok into ~/evok"
+sudo apt install -y python3-venv git
 python3 -m venv ~/evok/venv
 ~/evok/venv/bin/pip install "git+https://github.com/UnipiTechnology/evok@dev-3.1"
 ```
@@ -83,8 +84,9 @@ of `config.yaml`.
 EVOK_VER=dev-3.1
 mkdir -p ~/evok/etc
 curl -o ~/evok/etc/config.yaml https://raw.githubusercontent.com/UnipiTechnology/evok/$EVOK_VER/examples/config.yaml
-curl -sL https://github.com/UnipiTechnology/evok/archive/$EVOK_VER.tar.gz | tar xz --wildcards */hw_definitions
-mv evok-$EVOK_VER/hw_definitions ~/evok/etc/
+mkdir -p ~/evok/etc/hw_definitions
+curl -sL https://github.com/UnipiTechnology/evok/archive/$EVOK_VER.tar.gz \
+  | tar xz -C ~/evok/etc/hw_definitions --strip-components=3 --wildcards '*/hw_definitions/*/*.yaml'
 ln -s /etc/evok/autogen.yaml ~/evok/etc/autogen.yaml
 ```
 

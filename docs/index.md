@@ -22,11 +22,11 @@ Besides that, Evok also supports sending notifications via webhook.
 Quickly start using Evok:
 
 - In order to use Evok, you need any [Unipi controller](https://www.unipi.technology/shop/).
-- Obtain an OS for controller of your choice [Base OS](https://kb.unipi.technology/en:files:software:os-images:00-start).
+- Obtain the [Base OS](https://kb.unipi.technology/en:files:software:os-images:00-start) for your controller.
 - Use service mode to flash [Patron](https://kb.unipi.technology/en:hw:007-patron:service-mode) or [Gate](https://kb.unipi.technology/en:hw:025-gate:service-mode), for Neuron, [flash an SD card](https://kb.unipi.technology/en:hw:02-neuron:image).
 - Install Evok:
     - Connect to the unit via [ssh](https://kb.unipi.technology/en:automation:unipi-ssh-connect-hidden#selecting_a_suitable_communication_software)
-    - Run apt to install evok package. For detailed walktrough see the [detailed article](./installation.md).
+    - Run apt to install evok package. For a detailed walkthrough see the [detailed article](./installation.md).
       ```
       apt update
       apt install -y evok
@@ -53,7 +53,9 @@ Following commands will work only via SSH, executed on the unit itself. If you w
   ```
 
 ### Evok web
+
 [evok-web](https://github.com/UnipiTechnology/evok-web-jq) is a simple demo web application using Evok demonstrating its usage and allowing easy control of the devices configured in Evok.
+
 - Install Evok web:
     - Connect to the unit via [ssh](https://kb.unipi.technology/en:automation:unipi-ssh-connect-hidden#selecting_a_suitable_communication_software)
     - Run apt to install evok-web package.
@@ -64,7 +66,8 @@ Following commands will work only via SSH, executed on the unit itself. If you w
     ![Evok-web interface](./img/evok-web.png)
 
 ### Node-RED
-Follow the documentation how to install and use Node-RED with Evok on this page [Node-RED for Unipi]
+
+Follow the documentation how to install and use Node-RED with Evok on the page [Node-RED for Unipi].
 
 [NEURON]:https://www.unipi.technology/products/unipi-neuron-3?categoryId=2
 [PATRON]:https://www.unipi.technology/products/unipi-patron-374
