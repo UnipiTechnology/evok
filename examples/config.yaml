@@ -23,12 +23,26 @@ apis:
   port: 8080
   # ^ API listen port
   # ^ only change if you are certain you know what you are doing
-  # ^ FOR OUR WEB INTERFACE THE PORT SHOULD BE CHANGED IN "etc/nginx/sites-available/evok" TOO !!!
+  # ^ FOR OUR WEB INTERFACE THE PORT SHOULD BE CHANGED IN "/etc/nginx/sites-available/evok" TOO !!!
 
   address: 127.0.0.1
   # ^ API listen address
-  # ^ to listen on all interfaces set this paramater to empty or remove it
-  # ^ FOR OUR WEB INTERFACE THE PORT SHOULD BE CHANGED IN "etc/nginx/sites-available/evok" TOO !!!
+  # ^ to listen on all interfaces set this parameter to empty, 127.0.0.1 is used if it is missing
+  # ^ FOR OUR WEB INTERFACE THE PORT SHOULD BE CHANGED IN "/etc/nginx/sites-available/evok" TOO !!!
+
+  # token: <a long random string, e.g. made by: openssl rand -hex 32>
+  # ^ required by all APIs except /version, as 'Authorization: Bearer <token>', the password of Basic auth,
+  # ^ or ?token=<token> of the WebSocket; without it the APIs are not authenticated
+
+  # read_token: <another long random string>
+  # ^ only reading, a change of a device with it is refused with 403; it requires 'token'
+
+  # allowed_origins: ["http://192.168.1.10:1880"]
+  # ^ web applications on other addresses which use the API from a browser (CORS and WebSocket)
+
+  rpc:
+    enabled: true
+    # ^ JSON-RPC API at /rpc, enabled if this section is missing
 
   websocket:
     enabled: true
@@ -39,9 +53,23 @@ apis:
     enabled: false
     address: http://127.0.0.1:80
     device_mask: ["input","wd"]
-    # ^ List of device types to notify on (written as a JSON list) - adding AI will generate a large amount of messages!
+    # ^ List of the device types to notify on, also the other names as input, wd, temp
+    # ^ adding AI will generate a large amount of messages!
     complex_events: false
     # ^ EVOK will send POST requests with the same data as WebSocket, rather than an empty GET request
+    min_interval: 1.0
+    # ^ Minimum time between two requests in seconds, the changes in the meantime are merged into one request
+
+  mqtt:
+    enabled: false
+    hostname: 127.0.0.1
+    # ^ The broker, e.g. a local mosquitto
+    prefix: evok
+    # ^ The topics <prefix>/<device>/<circuit> with the states, <prefix>/<device>/<circuit>/set for the commands
+    read_only: false
+    # ^ true: the commands are not received
+    ha_discovery: false
+    # ^ true: the devices are announced to Home Assistant by the MQTT discovery
 
 #   +------------------------+
 #   | Hardware Configuration |
@@ -58,15 +86,20 @@ apis:
 #     devices:
 #       <device_name>:
 #         slave-id: <slave_id>
-#         model: <model_id>
+#         model: <model>
 
 # notes:
 #   <bus_name>: Your choice, but cannot be duplicates!
 #   <bus_type>:
-#       - MODBUSTCP (specific settings: [hostname, port])
-#       - MODBUSRTU (specific settings: [port, boudrate, parity])
+#       - MODBUSTCP (specific settings: [hostname, port, timeout, connect_timeout, retries, probe_timeout])
+#       - MODBUSRTU (specific settings: [port, baudrate, parity, stopbits, timeout, retries, probe_timeout])
+#       - OWFS (specific settings: [master, interval, scan_interval, owpower])
+#       ^ timeout of a response is 0.5 s, connect_timeout 1.0 s and retries of a request 1 by default
+#       ^ probe_timeout is the timeout of a request to a unit which does not respond,
+#       ^ by default 'timeout' on MODBUSTCP and 0.1 s (at most 'timeout') on MODBUSRTU
+#       ^ master is the 1-Wire master of the kernel, e.g. w1_bus_master1, the first one by default
 #   <device_name>: Under this name, the device will be available in the API. Cannot be duplicates!
-#   <model_id>: Defines a modbus register map. Source is in '.yaml' files in '/etc/evok/hw_definitions'.
+#   <model>: Defines a modbus register map. Source is in '.yaml' files in '/etc/evok/hw_definitions'.
 #               ^ examples [xS51, xS11, ]
 
 
@@ -97,10 +130,12 @@ apis:
 #    type: MODBUSTCP
 #    hostname: 192.168.0.54
 #    port: 502
+#    timeout: 1.0
+#    connect_timeout: 2.0
 #    devices:
 #      my_device_name_3:
 #        slave-id: 1
-#        model: 00
+#        model: '00'
 #  MY_TCP:
 #    type: MODBUSTCP
 #    hostname: 192.168.0.55

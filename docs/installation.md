@@ -1,7 +1,8 @@
 # Installation guide
 
-Evok can be installed on Unipi OS or RaspberryPi OS.
-To install Evok, you will have to [prepare the OS](#os-preparation) and then [install the package](#installing-and-updating-evok).
+Evok can be installed on Unipi OS or RaspberryPi OS based on Debian 13 Trixie, Evok 3.1 needs Python 3.12 or newer.
+To install Evok, you will have to [prepare the OS](#os-preparation) and then [install the package](#installing-and-updating-evok),
+or install it [into a virtual environment](#installing-into-a-virtual-environment).
 
 ## OS preparation
 
@@ -55,48 +56,95 @@ sudo apt install -y evok
     sudo apt install -y evok-web
     ```
 
-## Beta version
+## Installing into a virtual environment
 
-!!! danger
-    Do not use in production environment, use solely for development.
-    Beta version includes new features.
-    These features may change or be removed during development.
+Evok can be installed by pip into a Python virtual environment without its Debian package, e.g. to try
+a development branch. It needs Python 3.12 or newer (Debian 13 Trixie).
 
-There are several ways of getting beta version.
+!!! note
 
-### Switching to the beta repository
+    The Debian package `evok` must not run at the same time, both use the port 8080:
+    `sudo systemctl disable --now evok`.
 
-**To be able use the beta version, you need to have the [OS prepared](#os-preparation) already**. You can switch to the beta version of Evok by adding the repository to the apt sources:
+On Unipi controllers the local I/Os are read from the Modbus TCP server of the Unipi OS (`127.0.0.1`,
+the port `LISTEN_PORT` of `/etc/default/unipitcp`, e.g. `50200`).
 
-=== "Neuron"
+`EVOK_VER` is the branch, the tag or the commit of Evok, the same for Evok and its configuration below.
 
-    ```bash
-    echo "deb https://repo.unipi.technology/debian betaevok:bookworm main neuron-main neuron-test test" >> /etc/apt/sources.list.d/unipi.list
-    apt update
-    ```
+```bash title="Installing Evok into ~/evok"
+EVOK_VER=3.1.0
+sudo apt install -y python3-venv git
+python3 -m venv ~/evok/venv
+~/evok/venv/bin/pip install "git+https://github.com/UnipiTechnology/evok@$EVOK_VER"
+```
 
-=== "Patron"
+The same command with `--upgrade` updates Evok.
 
-    ```bash
-    echo "deb https://repo.unipi.technology/debian betaevok:bookworm main patron-main patron-test test" >> /etc/apt/sources.list.d/unipi.list
-    apt update
-    ```
+The configuration directory contains `config.yaml` and `hw_definitions/`
+(see [configuration](./configs/evok_configuration.md)). With `autogen: true` it also needs `autogen.yaml`,
+which the Unipi OS generates to `/etc/evok/autogen.yaml`; without it the buses are configured in `comm_channels`
+of `config.yaml`.
 
-=== "Gate"
+```bash title="Preparing the configuration"
+mkdir -p ~/evok/etc/hw_definitions
+curl -fsSL -o ~/evok/etc/config.yaml https://raw.githubusercontent.com/UnipiTechnology/evok/$EVOK_VER/examples/config.yaml
+curl -fsSL https://github.com/UnipiTechnology/evok/archive/$EVOK_VER.tar.gz \
+  | tar xz -C ~/evok/etc/hw_definitions --strip-components=3 --wildcards '*/hw_definitions/*/*.yaml'
+ln -s /etc/evok/autogen.yaml ~/evok/etc/autogen.yaml
+```
 
-    ```bash
-    echo "deb https://repo.unipi.technology/debian betaevok:bookworm main g1-main g1-test test" >> /etc/apt/sources.list.d/unipi.list
-    apt update
-    ```
+`autogen.yaml` of the version of Evok can be generated into `~/evok/etc` instead of the link, by
+[evok-autogen.py](./configs/evok_configuration.md#evok-autogenpy) with the product of the controller: its id
+(the table `hw_data` of the script, e.g. `0407` of the Patron M527), the model, the serial number and
+`HAS_DS2482=1` if it has the 1-Wire master DS2482 (else `OWBUS` is not generated):
 
-=== "Unipi 1.1"
+```bash title="Generating autogen.yaml"
+curl -fsSL -o ~/evok/evok-autogen.py https://raw.githubusercontent.com/UnipiTechnology/evok/$EVOK_VER/hw_definitions/evok-autogen.py
+UNIPI_PRODUCT_NAME=M527 UNIPI_PRODUCT_SERIAL=1234 HAS_DS2482=1 \
+  python3 ~/evok/evok-autogen.py --config-dir ~/evok/etc --product-id 0407
+```
 
-    ```bash
-    echo "deb https://repo.unipi.technology/debian betaevok:bookworm main unipi1-main unipi1-test test" >> /etc/apt/sources.list.d/unipi.list
-    apt update
-    ```
+```bash title="Running Evok"
+~/evok/venv/bin/evok --config-dir ~/evok/etc --alias-file ~/evok/alias.yaml
+```
 
-You can proceed to [Installing and updating Evok](#installing-and-updating-evok) section.
+The user running Evok needs the access to the serial ports of the Modbus RTU buses (the group `dialout`)
+and to the 1-Wire bus (the group `evok` of the [udev rule](#1-wire-bus)). Evok can be started by systemd,
+e.g. with `/etc/systemd/system/evok-venv.service` for the user `unipi`:
+
+```ini title="evok-venv.service"
+[Unit]
+Description=Evok in a virtual environment
+After=network.target
+
+[Service]
+User=unipi
+ExecStart=/home/unipi/evok/venv/bin/evok --config-dir /home/unipi/evok/etc --alias-file /home/unipi/evok/alias.yaml
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash title="Enabling the service"
+sudo systemctl daemon-reload
+sudo systemctl enable --now evok-venv
+```
+
+## 1-Wire bus
+
+Evok 3.1 reads the 1-Wire sensors by the kernel, owserver is not needed. The 1-Wire master (e.g. the DS2482)
+and the modules of the sensors (`w1_therm` and others) have to be loaded by the kernel. The udev rule
+[`60-evok-w1.rules`](https://github.com/UnipiTechnology/evok/blob/3.1.0/etc/udev/rules.d/60-evok-w1.rules)
+gives Evok the access to the forced search and to the conversion of all thermometers at once:
+
+```bash title="Installing the udev rule"
+sudo cp 60-evok-w1.rules /etc/udev/rules.d/
+sudo udevadm control --reload
+sudo udevadm trigger --subsystem-match=w1 --action=add
+```
+
+See [OWFS bus](./configs/evok_configuration.md#bus-configuration) in the configuration.
 
 ## Uninstallation
 

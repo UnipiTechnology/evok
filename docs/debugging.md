@@ -17,6 +17,20 @@ Now, you can manually run Evok in debug mode, the output will be printed to the 
 /opt/evok/bin/evok -d
 ```
 
+The debug messages of the Modbus library `tmodbus` are logged only with `-dd`: the raw Modbus traffic (every sent
+and received frame) and the traceback of every failed attempt to connect a unit. They add many lines to every scan:
+
+```bash title="Running Evok manually with the debug messages of tmodbus"
+/opt/evok/bin/evok -dd
+```
+
+With `-d` (as with the `DEBUG` level of the configuration) the other libraries log their debug messages too,
+e.g. `tornado.access` a line for every request of the API; `tmodbus` logs its messages from `INFO` up.
+
+Evok started manually uses the configuration in `/etc/evok` and the aliases in `/var/lib/evok/alias.yaml`, other ones
+are set by `-c` / `--config-dir` and `-a` / `--alias-file` or by the variables `EVOK_CONFIG_DIR` and `EVOK_ALIAS_FILE`,
+see [Configuration](configs/evok_configuration.md).
+
 ## Setting permanent debug mode
 
 If you need to debug an issue that occurs rarely, you can set Evok to run in debug mode permanently.
@@ -34,7 +48,7 @@ Find this section:
 #   | Logging settings |
 #   +------------------+
 logging:
-  level: WARNING
+  level: INFO
   # ^ Minimum severity of messages to be logged, where minimum is CRITICAL.
   # ^ Options: [CRITICAL, ERROR, WARNING, INFO, DEBUG]
 ```
@@ -50,6 +64,8 @@ logging:
   # ^ Minimum severity of messages to be logged, where minimum is CRITICAL.
   # ^ Options: [CRITICAL, ERROR, WARNING, INFO, DEBUG]
 ```
+
+The debug messages of `tmodbus` are not logged with the `DEBUG` level of the configuration, only with `-dd`.
 
 Now, save via `CTRL+X`, then press `ENTER` and exit by `CTRL+X`.
 The Evok service has to be restarted now.
@@ -75,6 +91,16 @@ journalctl --no-pager -u evok -u unipi-one-modbus
 
 This is more practical, as it's almost impossible to copy larger section of the log, when you have to scroll trough it.
 
+With `file` in the [logging](configs/evok_configuration.md#logging) settings Evok also writes the log to a file
+(rotated daily, 7 old files kept), its end is returned by the API: `GET /log?lines=N` (255 lines by default, at most 1000).
+
+### Loggers of the modules
+
+Each module of Evok logs by its own logger, e.g. `evok.modbus.client`, `evok.modbus.scanner` or `evok.w1.bus`,
+the name is in each line of the log. They are children of the logger `evok`, which has the level
+of the configuration and the file handler. The configuration sets one level for all of them, the level of one part
+of Evok can be set by Python logging, e.g. `logging.getLogger('evok.w1').setLevel(logging.DEBUG)`.
+
 !!! success
 
     You can examine or copy the output.
@@ -88,5 +114,5 @@ You can obtain the version of Evok by executing following command:
 ```
 
 ```bash title="Output"
-v3.0.0
+v3.1.0
 ```

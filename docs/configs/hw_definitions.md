@@ -6,25 +6,29 @@ Hardware definitions specify the communication with Modbus devices. They are loc
 
 Contains a list that defines the Modbus register groups. These registers must be placed consecutively. Each block is read in a separate request. Parameters:
 
-- `start_reg` - first Modbus register address of the block
-- `count` - number of Modbus registers to read
-- `frequency` - denominator of the scanning frequency. The block will be read each [scan_frequency](./evok_configuration.md#modbustcp-modbusrtu)÷`frequency` seconds (division).
-- `type` - Modbus register type, set to `holding` (default) or `input`
+- `start_reg` - first Modbus register address of the block, a required integer `>= 0`
+- `count` - number of Modbus registers to read, a required integer from `1` to `125` (one Modbus request), the registers must be at most `65535`;
+  the blocks of one type must not overlap
+- `scan_divider` - the block is read in every `scan_divider`-th scan of the unit, i.e. with the frequency
+  [scan_frequency](./evok_configuration.md#modbustcp-modbusrtu)÷`scan_divider` Hz, each
+  `scan_divider`÷`scan_frequency` seconds; `1` reads it in every scan. A required integer `>= 1`.
+  The old name `frequency` is a deprecated alias.
+- `type` - Modbus register type, set to `holding` (default) or `input`, another value is an error
 
 ```yaml title="Example"
-# This key defines which Modbus registers will be periodically read. Each block (also sometimes referred to as "group") is read once every ["frequency"] read cycles.
+# This key defines which Modbus registers will be periodically read. Each block (also sometimes referred to as "group") is read once every ["scan_divider"] read cycles.
 modbus_register_blocks:
     - start_reg   : 0
       count       : 10
-      frequency   : 1
+      scan_divider: 1
 
     - start_reg   : 500
       count       : 8
-      frequency   : 10
+      scan_divider: 10
 
     - start_reg   : 508
       count       : 8
-      frequency   : 50
+      scan_divider: 50
       type        : input
 ```
 
@@ -34,7 +38,9 @@ Contains a list that defines devices and their required parameters. Each element
 
 - `type` - device type, supported devices are listed below.
 - `count` - number of devices of the type, register addresses increment based on this number
-- `reg_type`- Modbus register type, set to `holding` (default) or `input`
+- `start_index` - an optional parameter of DI, DO, RO and LED, the number of the IOs of the previous features of the type,
+  e.g. `16` for the second feature of the relays 17-28 (Default value is `0`). The circuits of the devices must be unique,
+  a device with a duplicate circuit and the next devices of its feature are not created.
 
 Other parameters depend on the specific type of device.
 
@@ -46,10 +52,14 @@ Other parameters depend on the specific type of device.
 Allows you to add a digital output for the Modbus device.
 
 - `val_reg` - value register address, each bit will be treated as a separate device
-- `pwm_reg` - PWM duty register address
+- `val_coil` - coil address of the first output, optional. Without it, the value is written to the bit of `val_reg`,
+  which has to be a holding register, e.g. on a unit without coils.
+- `pwm_reg` - PWM duty register address, optional with the other PWM registers, a DO without them has no PWM
 - `pwm_ps_reg` - PWM prescale register address
 - `pwm_c_reg` - PWM cycle register address
-- `modes` - list of available DO modes
+- `pwm_preset_reg`, `pwm_cpres_reg` - the registers of the software PWM, used with `pwm_reg` instead of
+  `pwm_ps_reg` and `pwm_c_reg`
+- `modes` - list of available DO modes, optional (Default value is `[Simple]`), `PWM` requires the PWM registers
     - `Simple` - basic binary mode
     - `PWM` - output with PWM support
 
@@ -69,11 +79,14 @@ Allows you to add a digital output for the Modbus device.
     pwm_c_reg   : 1018
 ```
 
+Incomplete PWM registers, or the mode `PWM` without them, make the feature invalid, its outputs are not created.
+
 ### RO (relay output)
 
 Allows you to add a relay output for the Modbus device.
 
-- `val_coil` - coil register address
+- `val_coil` - coil address of the first relay, optional. Without it, the value is written to the bit of `val_reg`,
+  which has to be a holding register.
 - `val_reg` - value register address, each bit will be treated as a separate device
 
 ```yaml title="Example"
@@ -83,16 +96,45 @@ Allows you to add a relay output for the Modbus device.
     val_coil    : 0
 ```
 
+### LED (user LED)
+
+Allows you to add the user LEDs of the Modbus device (ULED), their [circuits](../circuit.md) are
+`<device_name>_<number>`. An LED is set as a relay output, by `value`; a pulse by its [sequencer](../apis/sequencer.md).
+
+- `val_coil` - coil address of the first LED, the next LEDs follow, optional. Without it, the value is written
+  to the bit of `val_reg`, which has to be a holding register.
+- `val_reg` - value register address, each bit will be treated as a separate device,
+  the LEDs 17-32 are in the next register
+
+```yaml title="Example"
+  - type        : LED
+    count       : 4
+    val_coil    : 8
+    val_reg     : 20
+```
+
+```yaml title="Example of outputs without coils, the bits of the holding registers 10 and 11"
+  - type        : RO
+    count       : 2
+    val_reg     : 10
+  - type        : DO
+    count       : 2
+    val_reg     : 11
+```
+
 ### DI (digital input)
 
 Allows you to add a digital input for the Modbus device.
 
-- `val_reg` - value register address, each bit will be treated as a different device
-- `counter_reg` - counter register address, two registers are used for each device
-- `deboun_reg` - debounce register address
-- `modes`- list of available DI modes
+- `val_reg` - value register address, each bit will be treated as a different device, required
+- `counter_reg` - counter register address, two registers are used for each device, required
+- `deboun_reg` - debounce register address, required
+- `modes`- list of available DI modes, required
     - Simple - regular mode
     - DirectSwitch - DI switches RO directly in firmware
+
+DirectSwitch is available only with all the following parameters, they are optional:
+
 - `ds_modes` - list of available direct switch modes
     - Simple
     - Inverted
@@ -124,9 +166,9 @@ Allows you to add a digital input for the Modbus device.
 Allows you to add an analog output for the Modbus device.
 
 - `val_reg` - value register address
-- `mode_reg` - mode register address
+- `mode_reg` - mode register address, one register shared by all AOs of the feature (an AI has one per input)
 - `modes` - list of available modes (names will be available in API), each has to have specified all parameters
-    - `value` - value for mode_reg
+    - `value` - value for mode_reg, a unique integer; without `mode_reg` define one mode, it is fixed and cannot be switched
     - `unit` - value unit
     - `range` - min and max values defined in an array
 
@@ -137,21 +179,36 @@ Allows you to add an analog output for the Modbus device.
       Voltage:
         unit: 'V'
         range: [0, 10]
-    min_v       : 0
-    max_v       : 10
     val_reg     : 2
 ```
+
+### BAO (Brain analog output)
+
+The analog output of a Brain unit, the value is a `float32` in two registers. It has the fixed modes
+`Voltage` (`0`), `Current` (`1`) and `Resistance` (`3`, only with `res_val_reg`); the value can be set
+only in `Voltage` and `Current`. `count` is at most `1`, the device is available in the API as `ao`.
+
+- `val_reg` - value register address
+- `mode_reg` - mode register address
+- `res_val_reg` - register address of the measured resistance (`float32`), optional
 
 ### AI (analog input)
 
 Allows you to add an analog input for the Modbus device.
 
-- `val_reg` - value register address
+- `val_reg` - value register address, the inputs follow each other by two registers
 - `mode_reg` - mode register address
 - `modes` - list of available modes (names will be available in API), each has to have specified all parameters
-    - `value` - value for mode_reg
+    - `value` - value for mode_reg, a unique integer; without `mode_reg` define one mode, it is fixed and cannot be switched
     - `unit` - value unit
     - `range` - min and max values defined in an array
+    - `transformation` - an optional conversion of the value in the mode:
+        - `datatype` - `float32` (default), `uint32`, `int32`, `uint16`, `int16`, `signed16`, the 32-bit ones low word first;
+          an unknown datatype is an error of the feature
+        - `ratio`, `offset` - the value is `raw * ratio + offset` (Default values are `1` and `0`)
+        - `decimals` - rounding of the value (Default value is `3` for `float32`, no rounding for the others)
+
+The API reports only `unit` and `range` of the modes.
 
 ```yaml title="Example"
 - type        : AI
@@ -185,32 +242,98 @@ Allows you to add an analog input for the Modbus device.
 
 ### WD (watchdog)
 
-Allows you to add a watchdog for the Modbus device.
+Allows you to add a watchdog for the Modbus device. A device has one watchdog, `count` is not used,
+its circuit is the name of the device.
 
 - `val_reg` - value register address
 - `timeout_reg` - timeout register address
-- `nv_save_coil` - NV save coil address
 - `reset_coil` - reset coil address
+- `nv_sav_coil` - not used, the settings are saved by the NV_SAVE feature
 
 ```yaml title="Example"
   - type        : WD
-    count       : 1
     val_reg     : 6
     timeout_reg : 1008
-    nv_sav_coil : 1003
     reset_coil  : 1002
+```
+
+### OWPOWER (1-Wire power)
+
+Switches the power of the 1-Wire bus of the device, the [OWFS bus](./evok_configuration.md#bus-configuration) restarts
+the bus by it with its parameter `owpower`. A device has one 1-Wire power, `count` is not used,
+its circuit is the name of the device.
+
+- `val_coil` - coil address, `1` disables the power of the bus, `0` powers it
+
+The state of the coil is not read from the device, the value is the last one written by Evok, `0` after the start.
+
+```yaml title="Example"
+  - type        : OWPOWER
+    val_coil    : 1001
+```
+
+### NV_SAVE (non-volatile memory)
+
+Saves the current settings of the device to its non-volatile memory, the device uses them after a restart.
+Writing `1` writes the coil, the value is held at `1` for 0.5 s and another write is refused until then.
+A device has one NV save, `count` is not used, its circuit is the name of the device.
+
+- `val_coil` - coil address
+
+```yaml title="Example"
+  - type        : NV_SAVE
+    val_coil    : 1003
+```
+
+### REGISTER (Modbus register)
+
+!!! warning "Deprecated"
+    REGISTER is deprecated, a warning is logged. Use [DATA_POINT](#data_point-data-point) with `datatype: uint16`
+    instead, with `writable: true` for a writable holding register. The data point has the circuit
+    `<device_name>_<register_address>` also for an input register (without `_inp`) and it is available
+    in the API as `data_point` instead of `register`, the clients have to be changed.
+
+Allows you to add raw 16-bit Modbus registers of the device, one device for each register.
+The [circuit](../circuit.md) is `<device_name>_<register_address>`, of an input register `<device_name>_<register_address>_inp`.
+A holding register is writable through the API, an input one is read-only.
+
+- `start_reg` - address of the first register, the next registers follow
+- `reg_type` - Modbus register type, `holding` (default) or `input`
+
+```yaml title="Example"
+  - type        : REGISTER
+    count       : 10
+    start_reg   : 0
+```
+
+The same registers as data points:
+
+```yaml title="Example"
+  - type        : DATA_POINT
+    count       : 10
+    value_reg   : 0
+    datatype    : uint16
+    writable    : true
 ```
 
 ### DATA_POINT (data point)
 
 If no other type is viable, data point may be used.
 
-- `name` - value name
-- `unit` - value unit
-- `value_reg` - value register address
+- `name` - value name, optional
+- `unit` - value unit, optional
+- `reg_type` - Modbus register type, `holding` (default) or `input`
+- `value_reg` - value register address, with `count` greater than 1 the data points follow each other,
+  a 32-bit one takes two registers
 - `datatype` - value data type
-    - null
-    - float32
+    - null (`signed16`)
+    - `uint16`, `int16`, `signed16`
+    - `uint32`, `int32`, `float32` (high word first)
+- `factor`, `offset` - the value is `raw * factor + offset` (Default values are `1` and `0`)
+- `writable` - the value can be written through the API, `false` (default) or `true`,
+  the register must be `holding`, a writable data point in an `input` register is not created
+- `valid_mask_reg` - an optional register with a validity bit of each data point, the bit `1 << i`
+  of the `i`-th data point of the feature, e.g. the 1-Wire thermometers of xG18; the API reports it as `valid`
 
 ```yaml title="Example"
 - type        : DATA_POINT

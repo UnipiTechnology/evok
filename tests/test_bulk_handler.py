@@ -1,0 +1,165 @@
+import json
+
+import pytest
+import tornado.httpclient
+import tornado.httpserver
+import tornado.testing
+import tornado.web
+
+from evok.bulk_handler import JSONBulkHandler
+from evok.devices import DO, MODBUS_SLAVE, SENSOR, Devices
+
+
+class FakeDevice:
+    def __init__(self, devtype, circuit, major_group=None):
+        self.devtype = devtype
+        self.circuit = circuit
+        self.alias = ''
+        if major_group is not None:
+            self.major_group = major_group
+        self.calls = []
+
+    def full(self):
+        return {'dev': self.devtype, 'circuit': self.circuit}
+
+    async def set(self, **kw):
+        if kw.get('value') == 9:
+            raise ValueError('Value out of range')
+        self.calls.append(kw)
+
+
+@pytest.fixture
+def devices():
+    Devices[DO]['1_01'] = FakeDevice(DO, '1_01', '1')
+    Devices[DO]['2_01'] = FakeDevice(DO, '2_01', '2')
+    Devices[SENSOR]['28AB'] = FakeDevice(SENSOR, '28AB', 1)          # 1-Wire, a number
+    Devices[MODBUS_SLAVE]['1'] = FakeDevice(MODBUS_SLAVE, '1')       # no major_group
+    return Devices
+
+
+@pytest.fixture
+async def bulk():
+    sock, port = tornado.testing.bind_unused_port()
+    server = tornado.httpserver.HTTPServer(tornado.web.Application([(r"/bulk", JSONBulkHandler)]))
+    server.add_sockets([sock])
+
+    async def request(body):
+        response = await tornado.httpclient.AsyncHTTPClient().fetch(
+            f"http://127.0.0.1:{port}/bulk", method='POST', body=json.dumps(body), raise_error=False)
+        return response.code, json.loads(response.body)
+    yield request
+    server.stop()
+
+
+@pytest.mark.parametrize('query, expected', [
+    ({'device_types': ['do'], 'group': 1}, ['1_01']),
+    ({'device_types': ['do'], 'group': '2'}, ['2_01']),
+    ({'device_types': ['sensor'], 'group': 1}, ['28AB']),             # was never found
+    ({'device_types': ['sensor'], 'group': '1'}, ['28AB']),
+    ({'device_types': ['modbus_slave'], 'group': 1}, []),             # was an internal error
+    ({'device_types': ['do'], 'device_circuits': ['2_01']}, ['2_01']),
+])
+async def test_group_queries(bulk, devices, query, expected):
+    code, reply = await bulk({'group_queries': [query]})
+    assert code == 200
+    assert [state['circuit'] for state in reply['group_queries'][0]] == expected
+
+
+async def test_group_assignment_by_group(bulk, devices):
+    code, _reply = await bulk({'group_assignments': [
+        {'device_type': 'do', 'group': 2, 'assigned_values': {'value': 1}}]})
+    assert code == 200
+    assert (devices[DO]['1_01'].calls, devices[DO]['2_01'].calls) == ([], [{'value': 1}])
+
+
+@pytest.mark.parametrize('invalid, code', [
+    ({'device_type': 'do', 'device_circuit': '9_99', 'assigned_values': {'value': 1}}, 404),
+    ({'device_type': 'do', 'device_circuit': '2_01', 'assigned_values': {'bogus': 1}}, 400),
+])
+async def test_nothing_is_set_before_an_invalid_command(bulk, devices, invalid, code):
+    status, reply = await bulk({
+        'group_assignments': [{'device_type': 'do', 'assigned_values': {'value': 1}}],
+        'individual_assignments': [{'device_type': 'do', 'device_circuit': '1_01', 'assigned_values': {'value': 0}},
+                                   invalid],
+    })
+    assert status == code
+    assert (devices[DO]['1_01'].calls, devices[DO]['2_01'].calls) == ([], [])
+    assert 'individual_assignments' not in reply
+
+
+async def test_results_before_an_error_are_returned(bulk, devices):
+    """ The assignments are done by the units, a device out of a Modbus unit is a unit of its own """
+    status, reply = await bulk({
+        'individual_assignments': [
+            {'device_type': 'do', 'device_circuit': '1_01', 'assigned_values': {'value': 1}},
+            {'device_type': 'do', 'device_circuit': '2_01', 'assigned_values': {'value': 9}},     # fails in set()
+            {'device_type': 'do', 'device_circuit': '1_01', 'assigned_values': {'value': 0}},
+        ],
+    })
+    assert status == 400
+    assert reply['errors'] == {'ValueError': 'Value out of range'}
+    assert reply['individual_assignments'] == [{'dev': 'do', 'circuit': '1_01'}] * 2
+    assert devices[DO]['1_01'].calls == [{'value': 1}, {'value': 0}]
+
+
+async def test_altnames_are_merged(bulk, devices):
+    code, reply = await bulk({'group_queries': [{'device_types': ['do', 'output', 'digitaloutput']}]})
+    assert code == 200
+    assert [state['circuit'] for state in reply['group_queries'][0]] == ['1_01', '2_01']
+
+
+async def test_unknown_type_in_query(bulk, devices):
+    code, _reply = await bulk({'group_queries': [{'device_types': ['do', 'foo']}]})
+    assert code == 404
+
+
+async def test_device_circuits_with_alias(bulk, devices):
+    Devices.set_alias('pump', devices[DO]['2_01'])
+    code, reply = await bulk({
+        'group_queries': [{'device_types': ['do'], 'device_circuits': ['pump']}],
+        'group_assignments': [
+            {'device_type': 'do', 'device_circuits': ['pump', '1_01'], 'assigned_values': {'value': 1}}],
+    })
+    assert code == 200
+    assert [state['circuit'] for state in reply['group_queries'][0]] == ['2_01']
+    assert (devices[DO]['1_01'].calls, devices[DO]['2_01'].calls) == ([{'value': 1}], [{'value': 1}])
+
+
+async def test_success_is_reported(bulk, devices):
+    """ The reply of a success had no success, the error and the other APIs have it """
+    code, reply = await bulk({'individual_assignments': [
+        {'device_type': 'do', 'device_circuit': '1_01', 'assigned_values': {'value': 1}}]})
+    assert code == 200 and reply['success'] is True
+    assert reply['individual_assignments'] == [{'dev': 'do', 'circuit': '1_01'}]
+
+
+async def test_large_body_is_refused():
+    """ A body up to 100 MB was read into the memory before its check """
+    from evok.evok import MAX_BODY_SIZE
+    sock, port = tornado.testing.bind_unused_port()
+    server = tornado.httpserver.HTTPServer(tornado.web.Application([(r"/bulk", JSONBulkHandler)]),
+                                           max_body_size=MAX_BODY_SIZE)
+    server.add_sockets([sock])
+    try:
+        body = json.dumps({'group_queries': [{'device_types': ['do']}] * 100000})
+        assert len(body) > MAX_BODY_SIZE
+        response = await tornado.httpclient.AsyncHTTPClient().fetch(
+            f"http://127.0.0.1:{port}/bulk", method='POST', body=body, raise_error=False)
+        assert response.code == 400                             # refused by the server before the handler
+    finally:
+        server.stop()
+
+
+async def test_group_query_of_the_buses(bulk, l0306):
+    """ #238: the buses had no full(), the bulk failed """
+    from types import SimpleNamespace
+
+    from evok import config
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU': {'type': 'MODBUSRTU', 'port': '/dev/null', 'devices': {'u1': {'slave-id': 1, 'model': 'L0306'}}},
+        'TCP': {'type': 'MODBUSTCP'},
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    code, reply = await bulk({'group_queries': [{'device_types': ['serial_bus', 'tcp_bus']}]})
+    assert code == 200
+    assert [(state['dev'], state['circuit'], state['devices']) for state in reply['group_queries'][0]] == \
+        [('serial_bus', 'RTU', ['u1']), ('tcp_bus', 'TCP', [])]

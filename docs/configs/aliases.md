@@ -5,26 +5,28 @@ It is possible to set aliases to devices, so they have more describing permanent
 There are several restrictions to aliases:
 
 - Every alias needs to be globally unique, not just within its own class.
-- Aliases can only contain alphanumeric characters, underscores and dashes. This is to allow devices to address via the alias using the APIs (i.e. setting an alias for a `relay 1_01` to `bedroom_light` will allow it to be addressed both as `/rest/relay/al_bedroom_light` as well as `/rest/relay/1_01`)
+- Aliases can only contain alphanumeric characters, dots, underscores and dashes. This is to allow devices to address via the alias using the APIs (i.e. setting an alias for a `relay 1_01` to `bedroom_light` will allow it to be addressed both as `/rest/relay/bedroom_light` as well as `/rest/relay/1_01`)
+- An alias can have at most 64 characters.
+- An alias cannot be `all`, which addresses all devices of the type, or a circuit of a device of the same type.
 - Invalid aliases will be rejected by the API, with the previous alias remaining.
 
 !!! warning
 
-    The set aliases are initially stored only in the RAM, after 5 minutes they will be permanently saved to flash. Saving of all set aliases can be done by calling `/run/alias`.
+    The set aliases are initially stored only in the RAM, after 5 minutes they will be permanently saved to flash. Saving of all set aliases can be done by `POST /rest/run/alias` with `save=1`, see the example below.
 
 Aliases can be set in a total of 3 ways:
 
 - Using the API
-- Using the [evok-web](https://github.com/UniPiTechnology/evok-web-jq)
+- Using the [evok-web](https://github.com/UnipiTechnology/evok-web-jq)
 - Manually writing to the configuration file
 
 ## Examples
 
 For python examples you need to have installed `requests` package. You can install it with command `pip3 install requests`.
 
-### Setting alias for DO
+### Setting alias for RO
 
-DO 1_01 will be called my_relay.
+RO 1_01 will be called my_relay.
 
 === "Python"
 
@@ -48,12 +50,12 @@ DO 1_01 will be called my_relay.
     ```
 
 ```rs title="Output"
-{'success': True, 'result': {'dev': 'relay', 'relay_type': 'digital', 'circuit': '1_01', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'glob_dev_id': 2, 'pwm_freq': 4800.0, 'pwm_duty': 0, 'alias': 'my_relay'}}
+{'success': True, 'result': {'dev': 'ro', 'circuit': '1_01', 'value': 1, 'comm': 'ok', 'last_comm': 0.041, 'alias': 'my_relay'}}
 ```
 
-### Removing alias for DO
+### Removing alias for RO
 
-Alias of DO 1_01 will be removed.
+Alias of RO 1_01 will be removed.
 
 === "Python"
 
@@ -77,8 +79,35 @@ Alias of DO 1_01 will be removed.
     ```
 
 ```rs title="Output"
-{'success': True, 'result': {'dev': 'relay', 'relay_type': 'digital', 'circuit': '1_01', 'value': 1, 'pending': False, 'mode': 'Simple', 'modes': ['Simple', 'PWM'], 'glob_dev_id': 2, 'pwm_freq': 4800.0, 'pwm_duty': 0}}
+{'success': True, 'result': {'dev': 'ro', 'circuit': '1_01', 'value': 1, 'comm': 'ok', 'last_comm': 0.041}}
 ```
+
+### Deleting an alias
+
+An alias loaded from the configuration file belongs to its device even when the device is not available
+(e.g. an offline Modbus device), so it cannot be assigned to another device. Such alias can be deleted by its name.
+Any other alias can be deleted this way too.
+
+=== "Python"
+
+    ```python
+    import requests
+
+    def delete_alias(host: str, port: str, alias: str):
+        url = f"http://{host}:{port}/rest/run/alias"
+        data = {'delete': alias}
+        return requests.post(url=url, data=data)
+
+    if __name__ == '__main__':
+        ret = delete_alias(host='127.0.0.1', port='8080', alias='my_relay')
+        print(ret.json())
+    ```
+
+=== "curl"
+
+    ```bash
+    curl --request POST --url 'http://127.0.0.1:8080/rest/run/alias/' --data 'delete=my_relay'
+    ```
 
 ### Force saving alias to flash
 
@@ -104,24 +133,26 @@ Alias of DO 1_01 will be removed.
     ```
 
 ```rs title="Output"
-{'success': True, 'result': {'dev': 'run', 'circuit': 'alias', 'save': False, 'aliases': {'my_relay': 'relay_1_01'}}}
+{'success': True, 'result': {'dev': 'run', 'circuit': 'alias', 'save': False, 'aliases': {'my_relay': {'circuit': 'ro_1_01', 'devtype': 'ro'}}}}
 ```
 
 ## Setting aliases manually
 
 You can set aliases manually in the alias config file. This option is especially suitable for transferring an alias from another device.
 
-The configuration file is located in `/var/lib/evok/aliases.yaml`. First required parameter is `version`, it affects the configuration file structure. Second parameter is list of aliases names `aliases`, each element in this list must contain 'circuit' and 'devtype' specifying the aliased device. Both of these parameters are available using the API.
+The configuration file is located in `/var/lib/evok/alias.yaml` (it can be changed by `--alias-file` or `EVOK_ALIAS_FILE`). The parameter `version` affects the structure of the file, it is optional, the version is detected from the structure. The parameter `aliases` is a mapping of the names of the aliases, each element must contain `circuit` and `devtype` (the name of the device type) of the aliased device. Both of these parameters are available using the API.
+
+Evok reads the file only at its start and overwrites it by each save, stop Evok before editing the file.
 
 ```yaml title="Example"
 version: 2.0
 aliases:
   my_input:
     circuit: '1_01'
-    devtype: 2
+    devtype: di
   my_relay:
     circuit: '1_01'
-    devtype: 0
+    devtype: ro
 ```
 
 

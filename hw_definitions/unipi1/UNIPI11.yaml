@@ -1,0 +1,37 @@
+---
+type: UNIPI11
+modbus_register_blocks:
+  - start_reg   : 0
+    count       : 31
+    scan_divider: 1
+  - start_reg   : 1010
+    count       : 15
+    scan_divider: 10
+modbus_features:
+  - type        : AO
+    count       : 1
+    modes       :
+      Voltage:
+        unit: 'V'
+        range: [0, 10]
+    val_reg     : 2
+  - type        : AI
+    count       : 2
+    modes       :
+      Voltage:
+        unit: 'V'
+        range: [0, 10]
+    val_reg     : 3
+  - type        : RO
+    count       : 8
+    modes       :
+      - Simple
+    val_reg     : 1
+    val_coil    : 0
+  - type        : DI
+    count       : 12
+    modes       :
+      - Simple
+    val_reg     : 0
+    counter_reg : 7
+    deboun_reg  : 1010
