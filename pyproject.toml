@@ -49,6 +49,17 @@ evok = "evok.evok:run"
 [project.optional-dependencies]
 test = ['pytest', 'pytest-asyncio']
 
+# dependencies for docs build, build with `uv run --group docs mkdocs serve`
+[dependency-groups]
+docs = [
+    'mkdocs == 1.6.1',
+    'markdown-include == 0.8.1',
+    'mkdocs-material == 9.5.50',
+    'pymdown-extensions == 10.3.1',
+    'pygments == 2.17.2',
+    'neoteroi-mkdocs == 1.2.0',
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # the integration harness has its own project and environment, see tests/integration/README.md
