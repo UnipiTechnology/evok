@@ -439,7 +439,7 @@ class AccessorBit(Accessor):
     async def write_raw(self, client: Client, raw: int):
         """Read-modify-write, the register is read from the unit, not from the cache"""
         curr = (await client.cache.get_register_async(self.index))[0]
-        await client.write_registers(self.index, [curr | self.mask if raw else curr & ~self.mask])
+        await client.write_registers(self.index, [curr | self.mask if raw else curr & ~self.mask], pin=self.pin)
 
 
 class Accessor32(Accessor):

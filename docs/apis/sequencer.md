@@ -9,7 +9,9 @@ At most one pulse or sequence runs for an output, a new one replaces it. While i
 itself (except its alias) is refused: REST, JSON and bulk with the status `409` (`SequenceRunning`), the WebSocket
 with the same error, RPC with the code `-32002`; cancel the sequence by its sequencer first. When Evok stops,
 it writes the final state of the running pulses and sequences which have one (`final`), an output is not left
-in the state of a pulse; a sequence without `final` leaves the output in its state. After a crash of Evok
+in the state of a pulse; a sequence without `final` leaves the output in its state. A step which fails, e.g.
+by a noise on the bus or an unavailable unit, is written again every 1 s and the sequence stays running until
+it succeeds or the sequence is cancelled. After a crash of Evok
 the output stays in its state.
 
 ## State

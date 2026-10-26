@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from ..devices import NV_SAVE, OWPOWER, WATCHDOG, to_bool
+from ..devices import NV_SAVE, OWPOWER, WATCHDOG, to_bool, to_float
 from .base import IODevice
 from .client import AccessorU16, Client
 
@@ -124,12 +124,12 @@ class Watchdog(IODevice):
 
     async def check_new_data(self):
         """Bit 0 of the register enables the watchdog, bit 1 is a restart by the watchdog"""
-        old_state = (self.value, self.was_wd_boot_value)
+        old_state = (self.value, self.was_wd_boot_value, self.timeout)
         register = self.accessor.read(self.client)
         self.value = register & 0b01
         self.was_wd_boot_value = 1 if register & 0b10 else 0
         self.timeout = self.accessor_timeout.read(self.client)
-        return old_state != (self.value, self.was_wd_boot_value)
+        return old_state != (self.value, self.was_wd_boot_value, self.timeout)
 
     async def set(self, value=None, timeout=None, reset=None, nv_save=None, alias=None):
         """Sets new on/off status. Disable pending timeouts
@@ -141,6 +141,12 @@ class Watchdog(IODevice):
             raise ValueError(
                 f"WD {self.circuit}: nv_save is deprecated and not supported, use the device nv_save {self.major_group}"
             )
+        # checked before any change, e.g. the watchdog enabled with an invalid timeout
+        if timeout is not None:
+            number = to_float(timeout)
+            if number != int(number) or number < 0:
+                raise ValueError(f"WD {self.circuit}: timeout must be a whole number of ms >= 0, not {timeout}")
+            timeout = min(int(number), 65535)
         self.set_alias(alias)
 
         if value is not None:
@@ -148,7 +154,6 @@ class Watchdog(IODevice):
             await self.accessor.write(self.client, 1 if to_bool(value) else 0)
 
         if timeout is not None:
-            timeout = min(int(timeout), 65535)
             await self.accessor_timeout.write(self.client, timeout)
 
         if self.reset_coil >= 0 and reset is not None:

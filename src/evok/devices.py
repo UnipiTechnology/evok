@@ -228,6 +228,14 @@ class DeviceList(dict):
         devents.config(device)
         logger.debug(f"Registered new device '{devtype_name}' with circuit {device.circuit} \t ({device})")
 
+    def check_alias(self, alias: str | None, device: Device) -> None:
+        """Raise ValueError if set_alias() would refuse the alias, before any change of the device"""
+        if alias in (None, "") or alias == device.alias:
+            return
+        if alias in self[device.devtype]:
+            raise ValueError(f"Alias {alias} is a circuit of {device.devtype}")
+        self.aliases.validate(alias, device)
+
     def set_alias(self, alias: str | None, device: Device, file_update: bool = False) -> None:
         """Set or reset ('' or None) the alias, an invalid alias raises ValueError logged by the caller"""
         if alias == device.alias:

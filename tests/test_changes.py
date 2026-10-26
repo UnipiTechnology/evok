@@ -215,6 +215,26 @@ async def test_unit_without_the_periodic_scan_shows_the_read(monkeypatch):
     assert client.cache.groups[2].pins == {}
 
 
+@pytest.mark.parametrize('alias, error', [('1_02', 'is a circuit of do'), ('all', 'reserved'), ('a b', 'Invalid alias'),
+                                          ('taken', 'Duplicate alias')])
+async def test_invalid_alias_is_refused_before_the_write(units, alias, error):
+    """ The output was switched and then the request failed on its alias """
+    client, = await units('1')
+    Devices.set_alias('taken', Devices.by_name(DO, '1_02'))
+    do = Devices.by_name(DO, '1_01')
+    with pytest.raises(ValueError, match=error):
+        await set_devices([(do, {'value': 1, 'alias': alias})])
+    assert client.mb_client.writes == []
+    assert do.alias == ''
+
+
+async def test_bit_without_a_pin_is_not_pinned():
+    client = make_client(SLOW_BLOCKS, holding={20: 0})
+    await client.cache.do_scan(initial=True)
+    await client.change(lambda: AccessorBit(20, 0b01, pin=False).write_raw(client, 1), devices=[])
+    assert client.cache.groups[2].pins == {}
+
+
 async def test_restart_drops_the_pins(monkeypatch):
     """ A write and a reset of the unit in one change: the unit has its saved settings, the read shows them """
     client = make_client(SLOW_BLOCKS, holding={20: 1})

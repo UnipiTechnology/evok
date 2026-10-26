@@ -1,6 +1,7 @@
 import asyncio
 import json
 import math
+import sys
 
 import pytest
 from conftest import make_client, scan
@@ -407,16 +408,23 @@ async def test_finish_all_times_out(unit, caplog):
     assert 'timed out' in caplog.text
 
 
-async def test_do_pulse_end_error_is_logged(unit, caplog):
+async def test_do_pulse_end_error_is_logged_and_written_again(unit, caplog, monkeypatch):
+    """ The output stayed on after a failed end of the pulse """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
     client = await unit()
     do = dev(DO, '1_01')
     await pulse(do, value=1, pulse_duration=0.01)
+    write = client.mb_client.write_single_coil
 
     async def fail(address, value):
         raise ConnectionError('lost')
     client.mb_client.write_single_coil = fail
     await asyncio.sleep(0.05)
     assert 'DO 1_01: step 1 of the pulse failed' in caplog.text
+    assert running(do) is True
+    client.mb_client.write_single_coil = write
+    await asyncio.sleep(0.05)
+    assert client.mb_client.coils[0] == 0
     assert running(do) is False
 
 
@@ -605,6 +613,32 @@ async def test_watchdog_restart_flag_is_a_change(unit):
     assert await wd.check_new_data()
     assert (wd.value, wd.was_wd_boot_value) == (1, 1)
     assert not await wd.check_new_data()
+
+
+async def test_watchdog_timeout_is_a_change(unit):
+    """ A changed timeout was not an event, the clients kept the old one """
+    client = await unit({12: 0b01, 1008: 500})
+    wd = dev(WATCHDOG, '1')
+    client.cache.set_register(1008, [800])
+    assert await wd.check_new_data()
+    assert wd.timeout == 800
+    assert not await wd.check_new_data()
+
+
+@pytest.mark.parametrize('timeout', ['1.5', 2.9, -1, 'x'])
+async def test_watchdog_invalid_timeout_changes_nothing(unit, timeout):
+    """ The watchdog was enabled and the alias set before int() of the timeout failed """
+    client = await unit()
+    wd = dev(WATCHDOG, '1')
+    with pytest.raises(ValueError):
+        await wd.set(value=1, timeout=timeout, alias='wd')
+    assert client.mb_client.writes == [] and wd.alias == ''
+
+
+async def test_watchdog_whole_timeout(unit):
+    client = await unit()
+    await dev(WATCHDOG, '1').set(timeout='3000')
+    assert client.mb_client.holding[1008] == 3000
 
 
 @pytest.mark.parametrize('nv_save', [1, 0, 'true'])

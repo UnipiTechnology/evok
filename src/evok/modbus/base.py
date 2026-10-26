@@ -75,6 +75,10 @@ async def set_devices(
     """
     sequences = sequences or {}
     states = {} if states is None else states
+    # an invalid alias refused after the write of the value: the output was switched and the request failed
+    for device, kw in assignments:
+        if "alias" in kw:
+            Devices.check_alias(kw["alias"], device)
     units: dict = {}
     for index, (device, kw) in enumerate(assignments):
         unit = device.client if isinstance(device, IODevice) else device

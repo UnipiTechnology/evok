@@ -1,4 +1,5 @@
 import asyncio
+import sys
 
 import pytest
 
@@ -68,13 +69,37 @@ async def test_finish_all_writes_the_final_states():
     assert not seq.is_running(first) and not seq.is_running(second)
 
 
-async def test_failed_step_ends_the_sequence(caplog):
+async def test_failed_step_is_written_again(caplog, monkeypatch):
+    """ A failed step ended the sequence, the end of a pulse was lost and the output stayed in its state """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
     device = FakeDevice(DO, '2_01')
     seq = Sequencer()
     seq.start(device, Sequence([Step({'value': 'fail'}), Step({'value': 1}, 0.01)], name='test'))
+    await asyncio.sleep(0.05)
+    assert device.changes == [] and seq.is_running(device)
+    assert caplog.text.count('DO 2_01: step 1 of the test failed') == 1      # logged once
+    seq.cancel(device)
     await asyncio.sleep(0.03)
-    assert device.changes == [] and not seq.is_running(device)
-    assert 'DO 2_01: step 1 of the test failed' in caplog.text
+    assert not seq.is_running(device)
+
+
+async def test_last_step_ends_the_sequence_after_its_write(monkeypatch):
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+    failures = [ConnectionError('lost')] * 2
+    set_ = device.set
+
+    async def flaky(**kw):
+        if failures:
+            raise failures.pop()
+        await set_(**kw)
+    device.set = flaky
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 0}, 0.01)], final={'value': 0}, name='pulse'))
+    await asyncio.sleep(0.02)
+    assert seq.is_running(device)                       # the end failed, it is written again
+    await asyncio.sleep(0.05)
+    assert device.changes == [{'value': 0}] and not seq.is_running(device)
 
 
 def test_global_sequencer():

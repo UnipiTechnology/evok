@@ -20,6 +20,8 @@ from ..devices import devents, to_bool, to_float
 
 logger = logging.getLogger(__name__)
 
+STEP_RETRY_DELAY = 1.0  # s, a failed step is written again after it, the output does not stay in its state
+
 
 @dataclass
 class Step:
@@ -146,7 +148,7 @@ class Sequencer:
             for step_number, step in enumerate(sequence.steps, 1):
                 await asyncio.sleep(step.delay)
                 last = step_number == len(sequence.steps)
-                if not await self._apply(device, step.params, task, step_number, last):
+                if not await self._apply_step(device, sequence, step, task, step_number, last):
                     return
                 if not last:
                     if not self._current(device, task):
@@ -160,6 +162,33 @@ class Sequencer:
         finally:
             self._end(device, task)
 
+    async def _apply_step(self, device, sequence: Sequence, step: Step, task, step_number: int, last: bool) -> bool:
+        """Write the step until it succeeds, the sequence stays running meanwhile, e.g. a noise on the bus at
+        the end of a pulse; False if the sequence was cancelled or replaced meanwhile
+        """
+        failures = 0
+        while True:
+            try:
+                applied = await self._apply(device, step.params, task, step_number, last)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                if not self._current(device, task):
+                    return False
+                if not failures:
+                    logger.exception(
+                        f"{_name(device)}: step {step_number} of the {sequence.name} failed, "
+                        f"it is written again every {STEP_RETRY_DELAY} s"
+                    )
+                failures += 1
+                await asyncio.sleep(STEP_RETRY_DELAY)
+                continue
+            if failures and applied:
+                logger.info(
+                    f"{_name(device)}: step {step_number} of the {sequence.name} written after {failures} failures"
+                )
+            return applied
+
     async def _apply(self, device, params: dict, task: asyncio.Task | None = None, step_number=0, last=False) -> bool:
         """Set the params of a step, False if the sequence was cancelled or replaced meanwhile"""
         applied = False
@@ -171,14 +200,14 @@ class Sequencer:
                 if entry is None or entry.task is not task:
                     return
                 entry.step = step_number
-                if last:
-                    # the state read after the write is not running
-                    self._end(device, task)
                 self._writing.add(task)
             try:
                 await device.set(**params)
             finally:
                 self._writing.discard(task)
+            if task is not None and last:
+                # after the successful write, a failed one is written again; the state read after it is not running
+                self._end(device, task)
             applied = True
 
         change = getattr(getattr(device, "client", None), "change", None)
@@ -199,7 +228,13 @@ class Sequencer:
         for device, entry in entries:
             self._stop(entry)
             self._notify(device)
-        finals = [(device, entry.sequence) for device, entry in entries if entry.sequence.final is not None]
+        # a sequence writing its last step ends by it, its final state is not written again
+        finals = [
+            (device, entry.sequence)
+            for device, entry in entries
+            if entry.sequence.final is not None
+            and not (entry.task in self._writing and entry.step == len(entry.sequence.steps))
+        ]
         writing = list(self._writing)
         if not finals and not writing:
             return
