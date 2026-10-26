@@ -15,7 +15,7 @@ from evok.modbus.analog import AnalogInput, AnalogOutput, AnalogOutputBrain, Dat
 from evok.modbus.builder import IOParser
 from evok.modbus.client import FLOAT32_BE, FLOAT32_LE, to_registers
 from evok.modbus.digital import ULED, BinaryOutput, DigitalInput, DigitalOutput, Relay
-from evok.modbus.special import NvSave, OwPower
+from evok.modbus.special import NvSave, OwPower, Watchdog
 
 
 @pytest.fixture
@@ -643,6 +643,15 @@ async def test_watchdog_invalid_value_or_reset_changes_nothing(unit, kw):
     with pytest.raises(ValueError, match='Invalid boolean'):
         await wd.set(alias='wd', **kw)
     assert client.mb_client.writes == [] and wd.alias == ''
+
+
+async def test_watchdog_without_a_reset_coil_ignores_reset():
+    """ reset of a unit without the reset coil was ignored, the check of all params refused an invalid one """
+    client = make_client([{'start_reg': 0, 'count': 2, 'scan_divider': 1}])
+    await client.cache.do_scan(initial=True)
+    wd = Watchdog('x', client, 0, 1, -1)
+    await wd.set(reset='maybe')
+    assert client.mb_client.writes == []
 
 
 async def test_watchdog_whole_timeout(unit):

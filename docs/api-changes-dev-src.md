@@ -32,7 +32,7 @@ the HW definitions. Breaking changes come first. Every change names its commits
   - `nv_save` returns an error and is not in `full()`,
   - `value` is 0/1 instead of 0–3, a restart is reported only by `was_wd_reset`,
   - `timeout` must be a whole number of ms, at most 65535 (a larger one is cut to it as before); an invalid
-    `timeout`, `value` or `reset` is refused before any change; a changed timeout is an event.
+    `timeout`, `value` or `reset` is refused before any change; a changed timeout is an event (#280).
 - **AI and AO:** `modes` has only `unit` and `range`, without the code of the register and the `transformation`.
   — `e792e17`
 - **OwPower:** `value` is always 0/1, before `true`/`false` after a write. — `2042b3d`
@@ -120,10 +120,11 @@ the HW definitions. Breaking changes come first. Every change names its commits
   (`steps`, `final`) or `cancel`; its state has `running` and the progress, an event at the start, steps and end.
   A step failed by an error of the communication (e.g. a noise on the bus) is written again after 1 s up to
   30 s, the sequence stays running, the output does not stay in the state of a pulse; a step refused by the unit
-  ends the sequence after its final state (if it has one) is written. The RPC method `relay_set_for_time`. — `e16a3bf`, `7789635`, `a85fb14`
+  ends the sequence after its final state (if it has one) is written. The RPC method `relay_set_for_time`.
+  — `e16a3bf`, `7789635`, `a85fb14`, #280
 - An invalid alias in a change (a circuit, reserved, invalid or already used) is refused before the first write,
   the output was switched and then the request failed. The aliases of a bulk are checked in the order of the
-  changes, an alias released by an earlier change can be taken.
+  changes, an alias released by an earlier change can be taken. — #280
 - The reply to POST, bulk and the WebSocket `set` has the state after the writes and the event comes at once.
   — `a3f4679`
 - **New events:** — `60e2287`, `08d9f56`, `62b37ef`, `891bd4a`
@@ -197,7 +198,7 @@ An invalid value is an error: the unit or the feature is not created and the err
   a next write renews it; then the periodic scan reads its block, a value refused by the unit is seen then. A unit
   may set a written register with a delay, e.g. xS52 the mode of its AI in 0.3–0.8 s: the read returned the old
   mode and the switch seemed to fail, it was seen by the next scan of the slow block after several seconds.
-  A unit without the periodic scan (`scan_enabled: false`) shows the value read after the change.
+  A unit without the periodic scan (`scan_enabled: false`) shows the value read after the change. — #278, #279
 - **Modbus addresses:** a serial port can be used by one `MODBUSRTU` bus only, the `slave-id` must be unique on an RTU
   bus and on a TCP server (`hostname`, `port`) over all `MODBUSTCP` buses. The second bus or device is not created,
   before both read and wrote the same unit. — `dc7b1ee`

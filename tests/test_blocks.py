@@ -192,6 +192,22 @@ async def test_final_after_a_refused_step_is_written_while_the_sequence_runs(mon
     assert device.changes == [{'value': 0}] and not seq.is_running(device)
 
 
+async def test_refused_end_of_a_pulse_is_not_written_again(caplog):
+    """ The only step of a pulse is its final state, it was sent again after it was refused """
+    device = FakeDevice(DO, '2_01')
+    attempts = []
+
+    async def refuse(**kw):
+        attempts.append(kw)
+        raise unit_error(IllegalDataValueError(5))
+    device.set = refuse
+    seq = Sequencer()
+    seq.start(device, pulse(1, 0.01))
+    await asyncio.sleep(0.05)
+    assert attempts == [{'value': 0}] and not seq.is_running(device)
+    assert len([r for r in caplog.records if r.exc_info]) == 1
+
+
 async def test_finish_all_waits_for_the_final_after_a_refused_step():
     device = FakeDevice(DO, '2_01')
     release = asyncio.Event()

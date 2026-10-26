@@ -149,7 +149,8 @@ class Watchdog(IODevice):
             if number != int(number) or number < 0:
                 raise ValueError(f"WD {self.circuit}: timeout must be a whole number of ms >= 0, not {timeout}")
             timeout = min(int(number), 65535)
-        reset = reset is not None and to_bool(reset)
+        # ignored by a unit without the reset coil, as before
+        reset = self.reset_coil >= 0 and reset is not None and to_bool(reset)
         self.set_alias(alias)
 
         if value is not None:
@@ -159,8 +160,7 @@ class Watchdog(IODevice):
         if timeout is not None:
             await self.accessor_timeout.write(self.client, timeout)
 
-        if self.reset_coil >= 0:
-            if reset:
-                # the unit restarts at once, it does not respond and a retry would restart it again
-                await self.client.write_coil_without_response(self.reset_coil, 1)
-                logger.info(f"Performed reset of board {self.circuit}")
+        if reset:
+            # the unit restarts at once, it does not respond and a retry would restart it again
+            await self.client.write_coil_without_response(self.reset_coil, 1)
+            logger.info(f"Performed reset of board {self.circuit}")

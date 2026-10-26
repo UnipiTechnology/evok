@@ -268,6 +268,18 @@ async def test_alias_which_is_not_a_string_is_refused_before_the_write(units, al
     assert client.mb_client.writes == [] and do.alias == ''
 
 
+async def test_alias_null_keeps_the_alias(units):
+    """ null was checked as a reset of the alias, set_alias() keeps it: the alias passed as released to another
+        device, the duplicate failed after the write
+    """
+    client, = await units('1')
+    do1, do2 = Devices.by_name(DO, '1_01'), Devices.by_name(DO, '1_02')
+    Devices.set_alias('a', do1)
+    with pytest.raises(ValueError, match='Duplicate alias a'):
+        await set_devices([(do1, {'value': 1, 'alias': None}), (do2, {'value': 1, 'alias': 'a'})])
+    assert client.mb_client.writes == [] and (do1.alias, do2.alias) == ('a', '')
+
+
 async def test_bit_without_a_pin_is_not_pinned():
     client = make_client(SLOW_BLOCKS, holding={20: 0})
     await client.cache.do_scan(initial=True)

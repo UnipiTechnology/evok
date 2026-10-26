@@ -122,9 +122,10 @@ def _check_aliases(units: dict):
     taken: set[str] = set()
     for items in units.values():
         for _index, device, kw in items:
-            if "alias" not in kw:
+            # None is not given, set_alias() keeps the alias; "" resets it
+            if kw.get("alias") is None:
                 continue
-            alias = "" if kw["alias"] is None else kw["alias"]
+            alias = kw["alias"]
             current = planned.get(device, device.alias)
             if alias == current:
                 continue

@@ -179,7 +179,7 @@ class Sequencer:
 
     async def _run(self, device, sequence: Sequence):
         task = asyncio.current_task()
-        step_number = 0
+        step_number, step = 0, None
         try:
             for step_number, step in enumerate(sequence.steps, 1):
                 await asyncio.sleep(step.delay)
@@ -195,7 +195,9 @@ class Sequencer:
             raise
         except Exception:
             logger.exception(f"{_name(device)}: step {step_number} of the {sequence.name} failed, it is ended")
-            if sequence.final is not None and self._current(device, task):
+            # not the refused step again, e.g. the end of a pulse is its final state
+            refused = step.params if step is not None else None
+            if sequence.final is not None and sequence.final != refused and self._current(device, task):
                 # the output does not stay in the state of the sequence: the final state is written as its last
                 # step, the sequence runs until it is written (a change of the output meanwhile is refused,
                 # finish_all() waits for it), an error of the communication is written again
