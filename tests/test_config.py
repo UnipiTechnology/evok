@@ -137,6 +137,12 @@ def test_empty_sections(tmp_path):
     assert (conf.apis, conf.logging, conf.comm_channels) == ({}, {}, {})
 
 
+def test_empty_section_of_an_api(tmp_path):
+    """ websocket: with all its options commented out was None, evok.py failed on .get() at the start """
+    conf = write_config(tmp_path, 'apis:\n  port: 8080\n  websocket:\n  webhook:\n')
+    assert (conf.get_api('websocket'), conf.get_api('webhook')) == ({}, {})
+
+
 def test_config_not_a_mapping(tmp_path):
     with pytest.raises(config.EvokConfigError):
         write_config(tmp_path, '- a list\n')

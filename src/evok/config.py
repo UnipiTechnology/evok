@@ -185,7 +185,8 @@ class EvokConfig:
         if name not in self.apis:
             logger.warning(f"Api '{name}' not found")
             return {}
-        return self.apis[name]
+        # an empty section, e.g. with all its options commented out
+        return self.apis[name] or {}
 
 
 class BusClaims:

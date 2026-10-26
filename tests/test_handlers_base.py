@@ -82,8 +82,10 @@ async def test_rest_json_body_is_validated(fetch, owbus):
     assert owbus == []
 
 
-async def test_rest_empty_body_sets_nothing(fetch, owbus):
-    code, reply = await fetch('/rest/owbus/OWFS', 'POST', '')
+@pytest.mark.parametrize('headers', [None, {'Content-Type': 'application/json'}])
+async def test_rest_empty_body_sets_nothing(fetch, owbus, headers):
+    """ Also with the header of JSON, json.loads of the empty body was a 400 """
+    code, reply = await fetch('/rest/owbus/OWFS', 'POST', '', headers)
     assert (code, reply['success']) == (200, True)
     assert owbus == []
 

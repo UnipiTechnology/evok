@@ -39,9 +39,9 @@ async def start_pulse(output, value, pulse_duration) -> dict:
     from ..modbus import set_devices
 
     kw, pulse = pulse_params(output, {"value": value, "pulse_duration": pulse_duration})
-    # the value is written under the lock of the unit, after a step being written by the cancelled sequence
-    sequencer.cancel(output)
-    (state,) = await set_devices([(output, kw)])
+    # the running sequence is cancelled after the value is written, a failed write leaves it running and it
+    # writes its final state, the output does not stay in the state of the pulse
+    (state,) = await set_devices([(output, kw)], replace_sequences=True)
     sequencer.start(output, pulse)
     return state
 

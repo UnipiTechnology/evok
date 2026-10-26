@@ -39,7 +39,8 @@ class FakeClient:
 
     async def __aenter__(self):
         if self.broker.failures:
-            raise aiomqtt.MqttError(self.broker.failures.pop(0))
+            failure = self.broker.failures.pop(0)
+            raise failure if isinstance(failure, Exception) else aiomqtt.MqttError(failure)
         self.broker.clients.append(self)
         return self
 
@@ -47,6 +48,9 @@ class FakeClient:
         return False
 
     async def publish(self, topic, payload=None, qos=0, retain=False):
+        if topic in self.broker.publish_failures:
+            self.broker.publish_failures.remove(topic)
+            raise aiomqtt.MqttCodeError(4, 'the queue is full')
         self.published.append((topic, payload, retain))
 
     async def subscribe(self, topic, qos=0):
@@ -64,6 +68,7 @@ class FakeClient:
 class FakeBroker:
     def __init__(self, failures=()):
         self.failures = list(failures)
+        self.publish_failures: list[str] = []         # the topics whose next publish fails
         self.clients: list[FakeClient] = []
 
     def factory(self, **kwargs):
@@ -230,6 +235,30 @@ async def test_failed_connection_is_logged_once(mqtt, caplog):
     errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1 and 'cannot connect to the broker 127.0.0.1:1883' in errors[0]
     assert broker.client.published[0] == ('evok/status', 'online', True)
+
+
+async def test_other_error_of_the_connection_is_logged_once(mqtt, caplog):
+    """ E.g. a missing file of TLS: the error is not an MqttError, the handler connects again """
+    _handler, broker = await mqtt(failures=[FileNotFoundError('ca.pem')] * 3)
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1 and 'error of the connection to the broker 127.0.0.1:1883' in errors[0].getMessage()
+    assert errors[0].exc_info is not None
+    assert broker.client.published[0] == ('evok/status', 'online', True)
+
+
+async def test_failed_publish_is_published_again(mqtt, devices, caplog):
+    """ The publishing does not stop after an error of a publish, the state is published again """
+    handler, broker = await mqtt()
+    broker.publish_failures.append('evok/ro/1_01')
+    devices[RO]['1_01'].value = 1
+    handler.on_event(devices[RO]['1_01'])
+    await settle()
+    assert broker.states()['evok/ro/1_01']['value'] == 1
+    assert 'MQTT error in publishing evok/ro/1_01' in caplog.text
+    devices[DI]['1_01'].value = 0
+    handler.on_event(devices[DI]['1_01'])
+    await settle()
+    assert broker.states()['evok/di/1_01']['value'] == 0
 
 
 async def test_lost_connection_publishes_all_states_again(mqtt, caplog):

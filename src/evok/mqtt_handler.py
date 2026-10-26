@@ -207,6 +207,14 @@ class MqttHandler:
                         f"MQTT: cannot connect to the broker {address}: {E}; connecting again every "
                         f"{RECONNECT_DELAY} s, the next errors are not logged"
                     )
+            except Exception as E:
+                # e.g. a missing file of TLS, the loop of the connection does not stop
+                if repr(E) != self.logged_error:
+                    self.logged_error = repr(E)
+                    logger.exception(
+                        f"MQTT: error of the connection to the broker {address}; connecting again every "
+                        f"{RECONNECT_DELAY} s, the same errors are not logged"
+                    )
             finally:
                 self.client = None
             await asyncio.sleep(RECONNECT_DELAY)
@@ -240,8 +248,14 @@ class MqttHandler:
                     if self.settings.ha_discovery:
                         await self._announce(client, key, state)
                     await client.publish(self.topic(*key), json.dumps(state), qos=self.settings.qos, retain=True)
-                except aiomqtt.MqttError:
-                    raise
+                except aiomqtt.MqttError as E:
+                    # e.g. a full queue of the client, the state is published again later; a lost connection
+                    # ends the loop of the commands, which cancels the publishing
+                    self.pending.setdefault(key, state)
+                    logger.error(
+                        f"MQTT error in publishing {self.topic(*key)}: {E}; publishing again in {RECONNECT_DELAY} s"
+                    )
+                    await asyncio.sleep(RECONNECT_DELAY)
                 except Exception as E:  # noqa: BLE001
                     logger.error(f"MQTT error in publishing {self.topic(*key)}: {E}")
 

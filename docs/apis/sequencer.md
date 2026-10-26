@@ -37,7 +37,9 @@ in one request are refused with `400`. The whole request is checked before any c
 - `final` requires `steps`, `steps` is a list of 1 to 100 steps,
 - the `delay` of a step must not be negative, a step and `final` must change the output, not contain `alias`.
 
-A new pulse or sequence replaces the running one without writing its `final`. The RPC methods
+A new pulse or sequence replaces the running one without writing its `final`. A new pulse replaces it after
+its value is written: if the write fails, e.g. the unit is unavailable, the running one goes on and writes its end,
+the output does not stay in the state of the old pulse. The RPC methods
 `relay_set_for_time` and `output_set_for_time` start a pulse by the sequencer too.
 
 ## Pulse
