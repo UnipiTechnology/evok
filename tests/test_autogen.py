@@ -36,3 +36,52 @@ def test_serial_ports_of_the_boards(product_id, ports):
 
 def test_model_is_a_string():
     assert devices(0x0407)[1]['model'] == '00'
+
+
+@pytest.fixture
+def product(monkeypatch, tmp_path):
+    """ The environment of unipi-os-configurator without UNIPI_PRODUCT_ID, no config of the Modbus TCP server """
+    monkeypatch.setattr(autogen, 'UNIPITCP_CONFIG_PATH', str(tmp_path / 'unipitcp'))
+    monkeypatch.setattr(autogen, 'card_models', [])
+    for name in ('UNIPI_PRODUCT_ID', 'UNIPI_PRODUCT_NAME', 'UNIPI_PRODUCT_SERIAL', 'HAS_DS2482', 'CARDS'):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv('UNIPI_PRODUCT_NAME', 'M527')
+
+
+def written(config_dir):
+    return yaml.safe_load((config_dir / 'autogen.yaml').read_text())['comm_channels']['LOCAL_TCP']
+
+
+@pytest.mark.parametrize('product_id', ['0407', '0x0407'])
+def test_product_id_and_config_dir_by_the_arguments(product, tmp_path, product_id):
+    autogen.run(['--config-dir', str(tmp_path), '--product-id', product_id])
+    local = written(tmp_path)
+    assert local['device_info']['family'] == 'Patron'
+    assert [device['model'] for device in local['devices'].values()] == ['00', '13']
+    assert local['port'] == 50200
+
+
+def test_argument_goes_before_the_environment(product, tmp_path, monkeypatch):
+    monkeypatch.setenv('UNIPI_PRODUCT_ID', '0103')                     # S103, one board
+    autogen.run(['-d', str(tmp_path), '-p', '0407'])
+    assert len(written(tmp_path)['devices']) == 2
+
+
+def test_product_id_by_the_environment(product, tmp_path, monkeypatch):
+    monkeypatch.setenv('UNIPI_PRODUCT_ID', '0103')
+    autogen.run(['-d', str(tmp_path)])
+    local = written(tmp_path)
+    assert (local['device_info']['family'], len(local['devices'])) == ('Neuron', 1)
+
+
+def test_port_of_the_modbus_tcp_server(product, tmp_path):
+    (tmp_path / 'unipitcp').write_text('LISTEN_PORT=502\n')
+    autogen.run(['-d', str(tmp_path), '-p', '0407'])
+    assert written(tmp_path)['port'] == 502
+
+
+def test_without_product_id(product, tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        autogen.run(['-d', str(tmp_path)])
+    assert 'Device not recognized' in capsys.readouterr().out
+    assert not (tmp_path / 'autogen.yaml').exists()

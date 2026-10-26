@@ -1,8 +1,17 @@
 #!/usr/bin/python3
+"""Generate autogen.yaml of Evok, the configuration of the local units of the Unipi controller
+
+The product is given by the environment of unipi-os-configurator (UNIPI_PRODUCT_ID, UNIPI_PRODUCT_NAME,
+UNIPI_PRODUCT_SERIAL, HAS_DS2482, CARDS), the product id also by --product-id.
+"""
+
+import argparse
 import os
 import subprocess
 
 UNIPITCP_CONFIG_PATH = "/etc/default/unipitcp"
+CONFIG_DIR = "/etc/evok"  # the directory of autogen.yaml and hw_definitions, --config-dir
+MODBUS_PORT = 50200  # the Modbus TCP server of the Unipi OS, LISTEN_PORT of UNIPITCP_CONFIG_PATH
 
 BRAIN = "00"
 E14DI14RO = "09"
@@ -44,9 +53,10 @@ def read_envs(path: str) -> dict[str, str]:
     return ret
 
 
-def get_iris_card_data(card_info: str) -> (str | None, dict | None):
+def get_iris_card_data(card_info: str, config_dir: str = CONFIG_DIR) -> (str | None, dict | None):
     """
     :param card_info: Info about card from os configurator.
+    :param config_dir: the directory with hw_definitions, the card is used if its model has a definition
     """
     global card_models
     _card_id, slot_id = card_info.split("__")
@@ -60,7 +70,7 @@ def get_iris_card_data(card_info: str) -> (str | None, dict | None):
 
     # check device model
     model_name = cd["Model"]
-    available_models = [m[:-5] for m in os.listdir("/etc/evok/hw_definitions") if m.endswith(".yaml")]
+    available_models = [m[:-5] for m in os.listdir(os.path.join(config_dir, "hw_definitions")) if m.endswith(".yaml")]
     if model_name not in available_models:
         return None, None
 
@@ -137,9 +147,10 @@ def generate_config(
     product_model: str,
     product_serial: int,
     cards: list[str],
+    config_dir: str = CONFIG_DIR,
 ):
     defaults = defaults if defaults is not None else {}
-    port = defaults.get("port", 502)
+    port = defaults.get("port", MODBUS_PORT)
     hostname = defaults.get("hostname", "127.0.0.1")
     names = defaults.get("names", list(range(1, len(boards) + 1)))
     slave_ids = defaults.get("slave-ids", list(range(1, len(boards) + 1)))
@@ -181,7 +192,7 @@ def generate_config(
                 ret["comm_channels"]["LOCAL_TCP"]["devices"][int(slot) + 1] = {"slave-id": slot, "model": "EMO-R8"}
     elif family == "Iris":
         for card in cards:
-            card_slot, card_data = get_iris_card_data(card)
+            card_slot, card_data = get_iris_card_data(card, config_dir)
             if card_slot is not None and card_data is not None:
                 ret["comm_channels"]["LOCAL_TCP"]["devices"][card_slot] = card_data
 
@@ -209,11 +220,30 @@ def yaml_dump(data: dict, stream, depth: int):
             stream.write(f"{pre}{key}: {value}\n")
 
 
-def run():
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "-d",
+        "--config-dir",
+        default=CONFIG_DIR,
+        help=f"the directory of autogen.yaml and hw_definitions, e.g. of Evok in a virtual environment "
+        f"(default {CONFIG_DIR})",
+    )
+    parser.add_argument(
+        "-p",
+        "--product-id",
+        help="the product id in hex, e.g. 0407 or 0x0407 of the Patron M527, instead of UNIPI_PRODUCT_ID",
+    )
+    return parser.parse_args(argv)
+
+
+def run(argv=None):
+    args = parse_args(argv)
     try:
         envs = os.environ
-        platform_id = int(envs["UNIPI_PRODUCT_ID"], 16)
-        family = code2family.get(int(str(envs["UNIPI_PRODUCT_ID"])[2:], 16), "UNKNOWN")
+        platform_id = int(args.product_id if args.product_id is not None else envs["UNIPI_PRODUCT_ID"], 16)
+        # the low byte is the family, e.g. 0x07 of the Patron
+        family = code2family.get(platform_id & 0xFF, "UNKNOWN")
         product_model = envs.get("UNIPI_PRODUCT_NAME", "UNKNOWN")
         product_serial = envs.get("UNIPI_PRODUCT_SERIAL", "UNKNOWN")
         has_ow = bool(int(envs.get("HAS_DS2482", "0")))
@@ -228,7 +258,6 @@ def run():
     defaults = {}
 
     if is_unipi_one:
-        defaults["port"] = 50200
         defaults["slave-ids"] = [0]
 
     elif family == "Edge":
@@ -249,6 +278,7 @@ def run():
         product_model=product_model,
         product_serial=product_serial,
         cards=cards,
+        config_dir=args.config_dir,
     )
 
     msg = f"Detect device {family} {product_model} (id={hex(platform_id)}, sn={product_serial})"
@@ -258,7 +288,7 @@ def run():
         msg += f" with cards {card_models}"
     print(msg)
 
-    with open("/etc/evok/autogen.yaml", "w") as f:
+    with open(os.path.join(args.config_dir, "autogen.yaml"), "w") as f:
         yaml_dump(data=autogen_conf, stream=f, depth=0)
 
 
