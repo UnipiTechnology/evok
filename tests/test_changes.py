@@ -258,7 +258,7 @@ async def test_alias_released_by_a_later_unit_is_refused(units):
     assert client1.mb_client.writes == client2.mb_client.writes == [] and do2.alias == 'pump'
 
 
-@pytest.mark.parametrize('alias', [0, False, 1])
+@pytest.mark.parametrize('alias', [0, False, 1, ['x'], {'x': 1}])
 async def test_alias_which_is_not_a_string_is_refused_before_the_write(units, alias):
     """ 0 passed the check as a reset of the alias, set_alias(0) failed by TypeError after the write """
     client, = await units('1')

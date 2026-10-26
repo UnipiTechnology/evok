@@ -129,9 +129,10 @@ def _check_aliases(units: dict):
             if alias == current:
                 continue
             if alias != "":
+                # first, an alias which is not a string is invalid, e.g. a list is not hashable for taken
+                Devices.check_alias(alias, device, free)
                 if alias in taken:
                     raise ValueError(f"Duplicate alias {alias}")
-                Devices.check_alias(alias, device, free)
                 taken.add(alias)
                 free.discard(alias)
             if current:

@@ -18,10 +18,12 @@ import time
 from dataclasses import dataclass
 
 from tmodbus.exceptions import (
-    IllegalDataAddressError,
-    IllegalDataValueError,
-    IllegalFunctionError,
+    AcknowledgeError,
+    GatewayPathUnavailableError,
+    GatewayTargetDeviceFailedToRespondError,
     InvalidRequestError,
+    ModbusResponseError,
+    ServerDeviceBusyError,
     TModbusError,
 )
 
@@ -36,13 +38,24 @@ STEP_FAILURE_LOG = 300.0  # s, a step still failing is logged again after it, al
 # the errors of the communication, they pass; another error of a step ends its sequence and writes its final
 # state, e.g. a value refused by the device, it would be written again forever and the output refused the changes
 STEP_RETRIED = (UnitCommunicationError, TModbusError, TimeoutError, OSError)
-# the request refused by the unit or invalid, it would be refused again
-STEP_REFUSED = (IllegalFunctionError, IllegalDataAddressError, IllegalDataValueError, InvalidRequestError)
+# the request refused by the unit (an exception response, e.g. Illegal Data Value or Server Device Failure)
+# or invalid, it would be refused again
+STEP_REFUSED = (ModbusResponseError, InvalidRequestError)
+# the exception responses which pass, e.g. a busy unit or a gateway without its target
+STEP_TRANSIENT = (
+    ServerDeviceBusyError,
+    AcknowledgeError,
+    GatewayPathUnavailableError,
+    GatewayTargetDeviceFailedToRespondError,
+)
 
 
 def _retried(error: Exception) -> bool:
     """An error of the communication, not a request refused by the unit"""
-    return isinstance(error, STEP_RETRIED) and not isinstance(root_cause(error), STEP_REFUSED)
+    cause = root_cause(error)
+    return isinstance(error, STEP_RETRIED) and (
+        not isinstance(cause, STEP_REFUSED) or isinstance(cause, STEP_TRANSIENT)
+    )
 
 
 @dataclass
@@ -182,18 +195,28 @@ class Sequencer:
             raise
         except Exception:
             logger.exception(f"{_name(device)}: step {step_number} of the {sequence.name} failed, it is ended")
-            # the output does not stay in the state of the sequence
-            current = self._current(device, task)
-            self._end(device, task)
-            if current and sequence.final is not None:
-                await self._finish(device, sequence)
+            if sequence.final is not None and self._current(device, task):
+                # the output does not stay in the state of the sequence: the final state is written as its last
+                # step, the sequence runs until it is written (a change of the output meanwhile is refused,
+                # finish_all() waits for it), an error of the communication is written again
+                try:
+                    await self._apply_step(
+                        device, sequence, Step(sequence.final), task, step_number - 1, True, what="final state"
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception(f"{_name(device)}: final state of the {sequence.name} failed")
         finally:
             self._end(device, task)
 
-    async def _apply_step(self, device, sequence: Sequence, step: Step, task, step_number: int, last: bool) -> bool:
+    async def _apply_step(
+        self, device, sequence: Sequence, step: Step, task, step_number: int, last: bool, what: str | None = None
+    ) -> bool:
         """Write the step until it succeeds, the sequence stays running meanwhile, e.g. a noise on the bus at
         the end of a pulse; False if the sequence was cancelled or replaced meanwhile
         """
+        what = what or f"step {step_number}"
         failures, delay = 0, STEP_RETRY_DELAY
         logged, logged_at = None, 0.0
         while True:
@@ -205,26 +228,25 @@ class Sequencer:
                 if not self._current(device, task):
                     return False
                 failures += 1
-                now, error = time.monotonic(), describe_error(E)
+                # the kind of the error, its text may differ by each attempt
+                now, kind = time.monotonic(), type(root_cause(E))
                 if logged is None:
                     logger.exception(
-                        f"{_name(device)}: step {step_number} of the {sequence.name} failed, it is written again "
+                        f"{_name(device)}: {what} of the {sequence.name} failed, it is written again "
                         f"after {STEP_RETRY_DELAY}..{STEP_RETRY_MAX_DELAY} s"
                     )
-                    logged, logged_at = error, now
-                elif error != logged or now - logged_at >= STEP_FAILURE_LOG:
+                    logged, logged_at = kind, now
+                elif kind != logged or now - logged_at >= STEP_FAILURE_LOG:
                     # a changed error, or a reminder that the output is still in the state of the sequence
                     logger.error(
-                        f"{_name(device)}: step {step_number} of the {sequence.name} failed {failures}x: {error}"
+                        f"{_name(device)}: {what} of the {sequence.name} failed {failures}x: {describe_error(E)}"
                     )
-                    logged, logged_at = error, now
+                    logged, logged_at = kind, now
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, STEP_RETRY_MAX_DELAY)
                 continue
             if failures and applied:
-                logger.info(
-                    f"{_name(device)}: step {step_number} of the {sequence.name} written after {failures} failures"
-                )
+                logger.info(f"{_name(device)}: {what} of the {sequence.name} written after {failures} failures")
             return applied
 
     async def _apply(self, device, params: dict, task: asyncio.Task | None = None, step_number=0, last=False) -> bool:

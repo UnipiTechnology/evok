@@ -2,7 +2,7 @@ import asyncio
 import sys
 
 import pytest
-from tmodbus.exceptions import IllegalDataValueError
+from tmodbus.exceptions import IllegalDataValueError, ServerDeviceBusyError, ServerDeviceFailureError
 
 from evok import devents
 from evok.blocks import Sequence, Sequencer, Step, pulse, pulse_params, sequencer
@@ -162,6 +162,92 @@ async def test_changed_error_of_a_step_is_logged(monkeypatch, caplog):
     await asyncio.sleep(0.3)
     logged = [r.getMessage() for r in caplog.records if 'step 1 of the test failed' in r.getMessage()]
     assert len(logged) == 2 and 'port closed' in logged[1]
+
+
+async def test_final_after_a_refused_step_is_written_while_the_sequence_runs(monkeypatch):
+    """ The sequence ended before its final state was written: a new pulse in the gap was overwritten by it and
+        finish_all() did not wait for it; a noise on the bus lost the final state
+    """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+    release = asyncio.Event()
+    noise = [unit_error(TimeoutError('noise'))]
+    set_ = device.set
+
+    async def slow(**kw):
+        if kw.get('value') == 2:
+            raise unit_error(IllegalDataValueError(6))
+        if kw.get('value') == 0:
+            await release.wait()
+            if noise:
+                raise noise.pop()
+        await set_(**kw)
+    device.set = slow
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 2})], final={'value': 0}, name='test'))
+    await asyncio.sleep(0.02)
+    assert seq.is_running(device)                       # the final state is being written
+    release.set()
+    await asyncio.sleep(0.05)
+    assert device.changes == [{'value': 0}] and not seq.is_running(device)
+
+
+async def test_finish_all_waits_for_the_final_after_a_refused_step():
+    device = FakeDevice(DO, '2_01')
+    release = asyncio.Event()
+    set_ = device.set
+
+    async def slow(**kw):
+        if kw.get('value') == 2:
+            raise unit_error(IllegalDataValueError(6))
+        await release.wait()
+        await set_(**kw)
+    device.set = slow
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 2})], final={'value': 0}, name='test'))
+    await asyncio.sleep(0.01)
+    finish = asyncio.create_task(seq.finish_all())
+    await asyncio.sleep(0.01)
+    assert not finish.done()
+    release.set()
+    await finish
+    assert device.changes == [{'value': 0}]                    # once
+
+
+@pytest.mark.parametrize('cause, retried', [(ServerDeviceFailureError(6), False), (ServerDeviceBusyError(6), True)])
+async def test_exception_responses_of_the_unit(monkeypatch, cause, retried):
+    """ Server Device Failure is refused again, it was retried forever; a busy unit passes """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+    attempts = []
+
+    async def refuse(**kw):
+        attempts.append(kw)
+        raise unit_error(cause)
+    device.set = refuse
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 1})], name='test'))
+    await asyncio.sleep(0.05)
+    assert seq.is_running(device) is retried and (len(attempts) > 1) is retried
+    seq.cancel(device)
+
+
+async def test_error_with_a_changing_text_is_logged_once(monkeypatch, caplog):
+    """ The text of a timeout may differ by each attempt, it is the same error """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+    attempt = []
+
+    async def lost(**kw):
+        attempt.append(1)
+        raise unit_error(TimeoutError(f'no response to the request {len(attempt)}'))
+    device.set = lost
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 1})], name='test'))
+    await asyncio.sleep(0.2)
+    seq.cancel(device)
+    assert len(attempt) > 2
+    assert len([r for r in caplog.records if 'step 1 of the test failed' in r.getMessage()]) == 1
 
 
 async def test_step_is_done_after_its_write(monkeypatch):

@@ -13,7 +13,9 @@ in the state of a pulse; a sequence without `final` leaves the output in its sta
 the communication, e.g. a noise on the bus or an unavailable unit, is written again after 1 s, the delay doubles
 up to 30 s, and the sequence stays running until it succeeds or the sequence is cancelled; the failure is logged,
 again when the error changes and every 5 minutes. Another error, e.g. a value refused by the unit (an exception
-response Illegal Data Value), ends the sequence, it is logged and the final state of the sequence is written. When Evok stops while the last step is written and it fails, the final state
+response other than Server Device Busy, Acknowledge or of a gateway), ends the sequence and it is logged; the final
+state of the sequence, if it has one (`final`, the end of a pulse), is written before the sequence ends, written
+again as a step on an error of the communication. When Evok stops while the last step is written and it fails, the final state
 is written. After a crash of Evok
 the output stays in its state.
 
