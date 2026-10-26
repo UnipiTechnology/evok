@@ -21,8 +21,8 @@ RESTART_WAIT = 0.1  # s, the wait after a write after which the unit restarts, b
 # s, the serial buses of the unit are held after its restart or the save of its settings, a request
 # on the serial port served by the unit corrupts the write of its flash (a bug of the firmware)
 SERIAL_HOLD_TIME = 0.5
-# s, the blocks of the registers written by a change are read again by the periodic scan after it; a unit may
-# set a written register with a delay, e.g. the mode of an AI of xS52 in 0.3..0.8 s
+# s, a register written by a change is kept in the cache by the reads during it, then its block is read by
+# the periodic scan; a unit may set a written register with a delay, e.g. the mode of an AI of xS52 in 0.3..0.8 s
 REREAD_DELAY = 1.0
 
 UINT16 = struct.Struct(">H")
@@ -81,8 +81,7 @@ class Client:
         # set() of a device must not change the unit again
         self.lock = asyncio.Lock()
         # the registers (address, is_input) written by the running change, None reads all blocks after it
-        # and their written values
-        self._written: dict[tuple[int, bool], int] | None = None
+        self._written: set[tuple[int, bool]] | None = None
         # a change runs, the scan does not check the devices between its writes, the change checks them
         self._changing = False
         # comm by the last event of the devices, a change sends all of them; the devices are created after
@@ -142,6 +141,10 @@ class Client:
     async def write_registers(self, index: int, values: list[int], cache: bool = True):
         """Write holding registers and update the cache, so the next check does not see a stale value;
         without cache the caller updates it, e.g. after all writes of a setting
+
+        The written values are kept in the cache for REREAD_DELAY (ModbusCacheMap.pin()): a unit may set
+        them with a delay and a read before it returns the old ones, e.g. the mode of an AI of xS52; then
+        the periodic scan reads them, a value refused by the unit is seen then.
         """
         if len(values) == 1:
             await self.mb_client.write_single_register(index, values[0])
@@ -149,8 +152,12 @@ class Client:
             await self.mb_client.write_multiple_registers(index, values)
         if cache:
             self.cache.set_register(index, values)
+        if self.periodic_scan:
+            # the reads before the unit sets them do not overwrite them, the periodic scan reads them after it;
+            # a unit without the periodic scan shows them by the read after the change
+            self.cache.pin(index, values, time.monotonic() + REREAD_DELAY)
         if self._written is not None:
-            self._written.update(((index + i, False), value) for i, value in enumerate(values))
+            self._written.update((index + i, False) for i in range(len(values)))
 
     async def do_scan(self) -> bool:
         """The periodic scan of the unit, it waits for a change of the unit by the session of its bus"""
@@ -192,7 +199,7 @@ class Client:
         if check_available and self.cache.scan_error is not None:
             if self.periodic_scan or not await self.cache.do_scan(all_groups=True):
                 raise UnitUnavailable(f"Unit {self.name} is not available: {describe_error(self.cache.scan_error)}")
-        self._written = None if devices is None else {}
+        self._written = None if devices is None else set()
         try:
             await operation()
         except (TModbusError, TimeoutError) as E:
@@ -204,8 +211,8 @@ class Client:
                 if written is None:
                     await self._scan(self.cache.do_scan(all_groups=True))
                 else:
-                    registers = set(written) | {register for device in devices for register in device_registers(device)}
-                    await self._scan(self.cache.read_changed(registers), written)
+                    registers = written | {register for device in devices for register in device_registers(device)}
+                    await self._scan(self.cache.read_changed(registers))
             else:
                 await self._check_devices()
 
@@ -217,22 +224,12 @@ class Client:
             if not self._changing:
                 await self._check_devices()
 
-    async def _scan(self, read=None, written: dict | None = None) -> bool:
+    async def _scan(self, read=None) -> bool:
         """Read the register blocks by read, the coroutine of the cache, by default the periodic scan, then
         send the changed devices as one event; the periodic scan during a change does not check them
-
-        written {(address, is_input): value}, the registers written by a change, are kept in the cache after
-        the read: a unit may set a written register with a delay and the read returns the old value, e.g.
-        the mode of an AI of xS52. Their blocks are read again by the periodic scan after REREAD_DELAY,
-        a value refused by the unit is seen then.
         """
         periodic = read is None
-        ok = await (self.cache.do_scan() if periodic else read)
-        if written:
-            for (address, is_input), value in written.items():
-                self.cache.set_register(address, [value], is_input)
-            self.cache.read_soon(written, REREAD_DELAY)
-        if not ok:
+        if not await (self.cache.do_scan() if periodic else read):
             # the values are stale, the devices are sent with the changed comm
             if not (periodic and self._changing):
                 self.send_comm_change()
