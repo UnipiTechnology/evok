@@ -21,12 +21,15 @@ theme:
 plugins:
   - search
   - privacy
+  - neoteroi.mkdocsoad:
+      use_pymdownx: true
 
 markdown_extensions:
   - markdown_include.include:
       base_path: docs
   - admonition
   - pymdownx.superfences
+  - pymdownx.details
   - pymdownx.tabbed:
       alternate_style: true
 
@@ -40,6 +43,18 @@ not_in_nav: |
   /api-changes-dev-src.md
   /zmeny-api-dev-src.md
 
+# mkdocs will ignore these
+exclude_docs: |
+  .venv
+  .venv/**
+  pyproject.toml
+  requirements.in
+  requirements.txt
+  uv.lock
+
+extra_css:
+  - css/mkdocsoad.css
+
 nav:
   - Introduction: index.md
   - Installation: installation.md
@@ -50,6 +65,7 @@ nav:
   - Security: security.md
   - Available APIs: apis.md
   - Device circuit: circuit.md
+  - OpenAPI spec: spec.md
   - API examples:
       - REST: apis/rest.md
       - JSON: apis/json.md

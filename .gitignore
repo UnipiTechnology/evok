@@ -7,10 +7,11 @@ tests/integration/mockbus/run/
 .idea/
 .venv
 venv/
+# local build cache of mkdocs (the privacy plugin downloads theme fonts and assets)
+.cache/
 *.egg-info/
 __pycache__/
 .lock
-uv.lock
 .spyproject/
 
 # the generated OpenAPI document, built as a release artifact by `python -m evok.openapi`
