@@ -328,19 +328,77 @@ async def test_pulse_ends_under_the_lock_also_on_unavailable_unit(units, events)
 
 
 async def test_pulse_end_does_not_overwrite_newer_pulse(units):
-    """ The end of the pulse waiting for the lock is cancelled by a new pulse, it did not overwrite its value """
+    """ The end of the pulse waiting for the lock before a new pulse is written first, the new pulse is not
+        overwritten by it; the old pulse is cancelled after the write of the new one
+    """
     client, = await units('1')
     do = Devices.by_name(DO, '1_01')
     await start_pulse(do, 1, 0.02)
-    await client.lock.acquire()                             # e.g. a scan
+    await client.lock.acquire()                             # e.g. a change of another output
     await asyncio.sleep(0.05)                               # the pulse ends and waits for the lock
     newer = asyncio.create_task(start_pulse(do, 1, 10))
     await asyncio.sleep(0.01)
     client.lock.release()
     await newer
     await asyncio.sleep(0.01)
+    assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0), ('coil', 0, 1)]
+    assert sequencer.sequence(do).steps[0].delay == 10
+
+
+async def test_new_pulse_waiting_for_the_lock_cancels_the_next_step(units):
+    """ The old pulse ends after the write of the new one, its end does not overwrite it """
+    client, = await units('1')
+    do = Devices.by_name(DO, '1_01')
+    await start_pulse(do, 1, 0.05)
+    await client.lock.acquire()
+    newer = asyncio.create_task(start_pulse(do, 1, 10))     # waits for the lock before the end of the old pulse
+    await asyncio.sleep(0.01)
+    client.lock.release()
+    await newer
+    await asyncio.sleep(0.08)                               # after the end of the old pulse
     assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 1)]
-    assert sequencer.is_running(do)
+    assert sequencer.sequence(do).steps[0].delay == 10
+
+
+async def test_pulse_cancelled_after_its_write_keeps_its_end(units):
+    """ The task of a new pulse cancelled while the unit is read after the write, e.g. at the shutdown:
+        the pulse runs, it was started after the read and the output stayed on without its end
+    """
+    client, = await units('1')
+    do = Devices.by_name(DO, '1_01')
+    await start_pulse(do, 1, 10)
+    release = asyncio.Event()
+    read = client.mb_client.read_holding_registers
+
+    async def slow_read(address, quantity=1):
+        await release.wait()
+        return await read(address, quantity)
+    client.mb_client.read_holding_registers = slow_read
+    newer = asyncio.create_task(start_pulse(do, 1, 0.05))
+    await asyncio.sleep(0.01)                               # written, the unit is read
+    assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 1)]
+    newer.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await newer
+    assert sequencer.sequence(do).steps[0].delay == 0.05
+    release.set()
+    await asyncio.sleep(0.1)
+    assert client.mb_client.writes[-1] == ('coil', 0, 0)
+    assert not sequencer.is_running(do)
+
+
+async def test_failed_pulse_leaves_the_running_one(units):
+    """ A new pulse refused by an unavailable unit: the running pulse writes its end, the output does not stay on """
+    client, = await units('1')
+    do = Devices.by_name(DO, '1_01')
+    await start_pulse(do, 1, 0.05)
+    client.cache.scan_error = TimeoutError('no response')
+    with pytest.raises(UnitUnavailable):
+        await start_pulse(do, 1, 10)
+    assert sequencer.sequence(do).steps[0].delay == 0.05
+    await asyncio.sleep(0.08)
+    assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0)]
+    assert not sequencer.is_running(do)
 
 
 async def slow_coil(client):

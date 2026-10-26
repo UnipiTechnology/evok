@@ -221,6 +221,7 @@ An invalid value is an error: the unit or the feature is not created and the err
 
 ---
 
-Compiled from the messages of the commits between `main` and `dev-3.1` and from the changes of
-the API documentation. The code of `main` was not compared line by line, details which the commit messages do not
+Compiled from the messages of the commits between Evok 3.0.6 and 3.1 and from the changes of the API
+documentation; after 3.0.6 the branch `main` had only the changes of the docs and the fix of the WebSocket blocking
+the requests (#191). The code of Evok 3.0.6 was not compared line by line, details which the commit messages do not
 describe may be missing.
