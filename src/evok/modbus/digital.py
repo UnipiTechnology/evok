@@ -191,7 +191,8 @@ class DigitalInput(WithDIMode, IODevice):
         self.counter_modes = counter_modes if counter_modes is not None else ["Enabled", "Disabled"]
         self.counter_mode = "Enabled"
         self.accessor = AccessorBit(reg, mask)
-        self.accessor_counter = AccessorU32(regcounter) if regcounter is not None else Accessor(None)
+        # the unit counts on, a written value (a reset) is not kept in the cache, the read shows the count
+        self.accessor_counter = AccessorU32(regcounter, pin=False) if regcounter is not None else Accessor(None)
         self.accessor_debounce = AccessorU16(regdebounce) if regdebounce is not None else Accessor(None)
         self.value = None
         self.counter = None

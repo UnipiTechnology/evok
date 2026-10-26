@@ -28,6 +28,8 @@ class RegisterGroup:
     f_divider: int = 1
     f_counter: int = 0
     values: list[int | None] = field(init=False)  # None before the first read
+    # the written registers kept by the reads: address -> (value, time.monotonic() until it is kept), see pin()
+    pins: dict[int, tuple[int, float]] = field(init=False, default_factory=dict)
 
     def __post_init__(self):
         self.values = [None] * self.count
@@ -35,12 +37,35 @@ class RegisterGroup:
     def is_member(self, address: int, count: int = 1) -> bool:
         return self.address <= address and self.address + self.count >= address + count
 
-    def update(self, values, address=None):
-        """Set the values of the registers from address, the registers out of the group are skipped"""
+    def update(self, values, address=None, read=False):
+        """Set the values of the registers from address, the registers out of the group are skipped;
+        a read keeps the pinned values, an expired pin is dropped and the read value is used
+        """
         start = self.address if address is None else address
         for i, value in enumerate(values):
             if self.is_member(start + i):
                 self.values[start + i - self.address] = value
+        if read and self.pins:
+            now = time.monotonic()
+            for pinned, (value, until) in list(self.pins.items()):
+                if until > now:
+                    self.values[pinned - self.address] = value
+                elif start <= pinned < start + len(values):
+                    del self.pins[pinned]
+
+    def pin(self, address: int, value: int, until: float):
+        """Keep the written value of the register until the time, a read before it does not overwrite it;
+        the value in the cache is set by the write or by its caller, e.g. after all writes of a setting
+        """
+        if self.is_member(address):
+            self.pins[address] = (value, until)
+
+    def pin_expired(self) -> bool:
+        """A pin has expired, the group is read by the next scan"""
+        if not self.pins:
+            return False
+        now = time.monotonic()
+        return any(until <= now for _value, until in self.pins.values())
 
     def clear_counter(self):
         self.f_counter = 0
@@ -108,7 +133,10 @@ class ModbusCacheMap:
         if initial:
             for group in self.groups + self.igroups:
                 group.clear_counter()
-        if not await self._read_groups(lambda group, is_input: all_groups or group.f_counter == 0):
+        # a group with an expired pin is read also out of its scan_divider, its counter is not changed by it
+        if not await self._read_groups(
+            lambda group, is_input: all_groups or group.f_counter == 0 or group.pin_expired()
+        ):
             return False
         # the counters are ticked after the whole scan, a failed scan is repeated with the same groups,
         # the slow groups keep their phase
@@ -136,6 +164,35 @@ class ModbusCacheMap:
             return await self._read_groups(lambda group, is_input: group is first)
         return await self._read_groups(wanted)
 
+    def pin(self, index: int, values, until: float, is_input: bool = False):
+        """Keep the written values of the registers from index until the time, e.g. of a unit which sets them
+        with a delay: the reads before it do not overwrite them, the first scan after it reads their group
+        """
+        for i, value in enumerate(values):
+            for group in self.igroups if is_input else self.groups:
+                group.pin(index + i, value, until)
+
+    def unpin(self, index: int, count: int, is_input: bool = False):
+        """Drop the pins of the registers, e.g. written again without a pin, an older pin would overwrite it"""
+        for group in self.igroups if is_input else self.groups:
+            for address in range(index, index + count):
+                group.pins.pop(address, None)
+
+    def renew_pins(self, registers, until: float):
+        """Keep the pinned registers (address, is_input) until the time, e.g. the writes of a change from its end,
+        a long change does not lose the pins of its first writes before its read
+        """
+        for groups, is_input in ((self.groups, False), (self.igroups, True)):
+            for group in groups:
+                for address, (value, _until) in list(group.pins.items()):
+                    if (address, is_input) in registers:
+                        group.pins[address] = (value, until)
+
+    def clear_pins(self):
+        """Drop all pins, e.g. after a restart of the unit, it has the saved settings"""
+        for group in self.groups + self.igroups:
+            group.pins.clear()
+
     async def _read_groups(self, wanted) -> bool:
         """Read the groups wanted(group, is_input), False after a communication error"""
         read = 0
@@ -146,7 +203,7 @@ class ModbusCacheMap:
             ):
                 for group in groups:
                     if wanted(group, is_input):
-                        group.update(await func(group.address, quantity=group.count))
+                        group.update(await func(group.address, quantity=group.count), read=True)
                         read += 1
 
         except (TModbusError, TimeoutError) as E:
@@ -178,16 +235,24 @@ class ModbusCacheMap:
                 raise ENoCacheRegister(f"No cached value of register {index + i}")
         return values
 
-    def set_register(self, index, values, is_input=False):
-        """Update cached registers after a successful write or read, the registers out of the blocks are skipped"""
+    def set_register(self, index, values, is_input=False, read=False):
+        """Update cached registers after a successful write or read, the registers out of the blocks are skipped;
+        a read keeps the pinned values
+        """
         for group in self.igroups if is_input else self.groups:
-            group.update(values, index)
+            group.update(values, index, read)
 
     async def get_register_async(self, index, count=1, is_input=False):
-        """Read the registers from the unit, also the ones out of the register blocks"""
+        """Read the registers from the unit, also the ones out of the register blocks; the pinned values
+        are returned, e.g. a read-modify-write of a bit after a write the unit has not set yet
+        """
         if is_input:
             vals = await self.modbus_client.read_input_registers(index, quantity=count)
         else:
             vals = await self.modbus_client.read_holding_registers(index, quantity=count)
-        self.set_register(index, vals, is_input)
-        return vals
+        self.set_register(index, vals, is_input, read=True)
+        try:
+            return self.get_register(index, count, is_input)
+        except (EUnknownRegister, ENoCacheRegister):
+            # out of the register blocks, nothing is pinned
+            return vals
