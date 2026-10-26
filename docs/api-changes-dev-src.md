@@ -11,6 +11,9 @@ the HW definitions. Breaking changes come first. Every change names its commits
 - **nginx configuration of the package:** it has to pass the original host for the WebSocket
   (`proxy_set_header Host $host`, `$host:$server_port` of evok-web works since `b1415ef`), otherwise the web
   interface behind nginx gets no WebSocket. Checked with evok-web 3.18 on a Patron.
+- **Outputs written by a coil:** if a unit shows the state of an output written by its coil with a delay, the reply
+  to the change has the old state, the next scan corrects it; the written holding registers are kept in the cache,
+  the coils are not.
 
 ## Breaking changes
 
@@ -182,11 +185,12 @@ An invalid value is an error: the unit or the feature is not created and the err
   all blocks, e.g. a LED of an xS51 a write and 6 reads, now a write and 2 reads (the fast block, the block of the LED).
   A reset of the unit or NV save reads all blocks, a change without such a block reads the first block of the unit,
   it finds whether the unit responds. — #267
-- **Written registers after a change:** the values written by a change stay in the reply and the event, the read
-  after the write does not overwrite them; their blocks are read again by the periodic scan after 1 s, a value
-  refused by the unit is seen then. A unit may set a written register with a delay, e.g. xS52 the mode of its AI
-  in 0.3–0.8 s: the read returned the old mode and the switch seemed to fail, it was seen by the next scan of the
-  slow block after several seconds.
+- **Written registers after a change:** a written holding register keeps its value in the cache for 1 s, the reads
+  during it (after the change, by the periodic scan, also of a block read by every scan) do not overwrite it and
+  a next write renews it; then the periodic scan reads its block, a value refused by the unit is seen then. A unit
+  may set a written register with a delay, e.g. xS52 the mode of its AI in 0.3–0.8 s: the read returned the old
+  mode and the switch seemed to fail, it was seen by the next scan of the slow block after several seconds.
+  A unit without the periodic scan (`scan_enabled: false`) shows the value read after the change.
 - **Modbus addresses:** a serial port can be used by one `MODBUSRTU` bus only, the `slave-id` must be unique on an RTU
   bus and on a TCP server (`hostname`, `port`) over all `MODBUSTCP` buses. The second bus or device is not created,
   before both read and wrote the same unit. — `dc7b1ee`

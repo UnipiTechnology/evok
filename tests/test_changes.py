@@ -17,7 +17,7 @@ from evok.modbus import set_devices
 from evok.modbus.analog import AnalogOutputBrain
 from evok.modbus.builder import IOParser
 from evok.modbus.cache import ModbusCacheMap
-from evok.modbus.client import AccessorU16, Client, device_registers
+from evok.modbus.client import AccessorBit, AccessorU16, AccessorU32, Client, device_registers
 from evok.modbus.scanner import ModbusScanner
 from evok.modbus.transport import BusTransport
 from evok.rpc_handler import Handler, UnitUnavailableError, create_response
@@ -148,11 +148,11 @@ async def test_written_value_is_kept_after_the_read(monkeypatch):
 
 
 @pytest.mark.parametrize('accept, value', [(True, 2), (False, 1)])
-async def test_written_block_is_read_again(monkeypatch, accept, value):
+async def test_written_block_is_read_after_the_pin(monkeypatch, accept, value):
     """ The periodic scan reads the block of the written register after REREAD_DELAY, out of its scan_divider
         and without a shift of its phase: the value set by the unit later, or the old one of a refused write
     """
-    monkeypatch.setattr('evok.modbus.client.REREAD_DELAY', 0.01)
+    monkeypatch.setattr('evok.modbus.client.REREAD_DELAY', 0.05)
     client = make_client(SLOW_BLOCKS, holding={20: 1})
     await client.cache.do_scan(initial=True)
     apply = delayed_unit(client)
@@ -161,16 +161,141 @@ async def test_written_block_is_read_again(monkeypatch, accept, value):
     counters = [group.f_counter for group in client.cache.groups]
     reads = recorded_reads(client)
     await client.do_scan()                                  # before REREAD_DELAY, the slow group is not due
-    await asyncio.sleep(0.02)
+    await asyncio.sleep(0.06)
     await client.do_scan()
     assert reads == [0, 0, 20]
     assert client.read_registers(20) == [value]
-    assert client.cache.due == []
+    assert client.cache.groups[2].pins == {}
     expected = counters
     for _ in range(2):
         expected = [divider - 1 if counter == 0 else counter - 1
                     for counter, divider in zip(expected, [g.f_divider for g in client.cache.groups], strict=True)]
     assert [group.f_counter for group in client.cache.groups] == expected
+
+
+async def test_scan_keeps_the_written_value_until_the_unit_sets_it(monkeypatch):
+    """ A block read by every scan: the scan before the unit set the value sent the old one, 2 -> 1 -> 2 """
+    monkeypatch.setattr('evok.modbus.client.REREAD_DELAY', 0.05)
+    client = make_client(SLOW_BLOCKS, holding={0: 1})
+    await client.cache.do_scan(initial=True)
+    apply = delayed_unit(client)
+    await client.change(lambda: client.write_registers(0, [2]), devices=[])
+    await client.do_scan()
+    assert client.read_registers(0) == [2]
+    await apply()
+    await asyncio.sleep(0.06)
+    await client.do_scan()
+    assert client.read_registers(0) == [2]
+    assert client.cache.groups[0].pins == {}
+
+
+async def test_next_write_renews_the_pin(monkeypatch):
+    """ The read due to an earlier write does not overwrite the value of the next one, the unit has not set it """
+    monkeypatch.setattr('evok.modbus.client.REREAD_DELAY', 0.05)
+    client = make_client(SLOW_BLOCKS, holding={20: 1})
+    await client.cache.do_scan(initial=True)
+    apply = delayed_unit(client)
+    await client.change(lambda: client.write_registers(20, [2]), devices=[])
+    await apply()                                           # the unit has 2
+    await asyncio.sleep(0.03)
+    await client.change(lambda: client.write_registers(20, [3]), devices=[])
+    await asyncio.sleep(0.03)                               # the pin of 2 would have expired
+    await client.do_scan()
+    assert client.read_registers(20) == [3]
+
+
+async def test_unit_without_the_periodic_scan_shows_the_read(monkeypatch):
+    """ Nothing would read the block again, the value read after the change is shown """
+    client = make_client(SLOW_BLOCKS, holding={20: 1})
+    client.periodic_scan = False
+    await client.cache.do_scan(initial=True)
+    delayed_unit(client)
+    await client.change(lambda: client.write_registers(20, [2]), devices=[])
+    assert client.read_registers(20) == [1]
+    assert client.cache.groups[2].pins == {}
+
+
+async def test_restart_drops_the_pins(monkeypatch):
+    """ A write and a reset of the unit in one change: the unit has its saved settings, the read shows them """
+    client = make_client(SLOW_BLOCKS, holding={20: 1})
+    await client.cache.do_scan(initial=True)
+    delayed_unit(client)
+
+    async def operation():
+        await client.write_registers(20, [2])
+        await client.write_coil_without_response(1, 1, wait=0)
+    await client.change(operation, devices=[])
+    assert client.read_registers(20) == [1]
+    assert all(not group.pins for group in client.cache.groups)
+
+
+async def test_counter_is_not_pinned():
+    """ The unit counts on after a reset of the counter, the read shows the count, not the written 0 """
+    client = make_client(SLOW_BLOCKS, holding={20: 7})
+    await client.cache.do_scan(initial=True)
+    counter = AccessorU32(20, pin=False)
+    assert AccessorU16(20).pin
+
+    async def operation():
+        await counter.write_raw(client, 0)
+        client.mb_client.holding[20] = 3                    # counted meanwhile
+    await client.change(operation, devices=[])
+    assert client.read_registers(20) == [3]
+    assert client.cache.groups[2].pins == {}
+
+
+async def test_write_without_a_pin_drops_the_older_pin():
+    """ The scan disabled after a pinned write: the older pin would overwrite the next written value """
+    client = make_client(SLOW_BLOCKS, holding={20: 1})
+    await client.cache.do_scan(initial=True)
+    await client.change(lambda: client.write_registers(20, [2]), devices=[])
+    client.periodic_scan = False
+    await client.change(lambda: client.write_registers(20, [3]), devices=[])
+    assert client.read_registers(20) == [3]
+    assert client.cache.groups[2].pins == {}
+
+
+async def test_pin_does_not_set_the_cache_without_cache():
+    """ PWM updates the cache after all its writes, a check never sees a partial setting """
+    client = make_client(SLOW_BLOCKS, holding={20: 1})
+    await client.cache.do_scan(initial=True)
+    seen = []
+
+    async def operation():
+        await client.write_registers(20, [2], cache=False)
+        seen.append(client.read_registers(20))
+        client.cache.set_register(20, [2])
+    await client.change(operation, devices=[])
+    assert seen == [[1]]
+    assert client.read_registers(20) == [2]
+
+
+async def test_long_change_keeps_its_first_writes(monkeypatch):
+    """ A change longer than REREAD_DELAY, e.g. retries on a slow bus: the pin of its first write is kept
+        until its read
+    """
+    monkeypatch.setattr('evok.modbus.client.REREAD_DELAY', 0.05)
+    client = make_client(SLOW_BLOCKS, holding={20: 1})
+    await client.cache.do_scan(initial=True)
+    delayed_unit(client)
+
+    async def operation():
+        await client.write_registers(20, [2])
+        await asyncio.sleep(0.08)
+    await client.change(operation, devices=[])
+    assert client.read_registers(20) == [2]
+
+
+async def test_bit_is_written_to_the_pinned_value():
+    """ A read-modify-write of a bit after a write the unit has not set yet: the other bit is not lost """
+    client = make_client(SLOW_BLOCKS, holding={20: 0})
+    await client.cache.do_scan(initial=True)
+    delayed_unit(client)
+    bit0, bit1 = AccessorBit(20, 0b01), AccessorBit(20, 0b10)
+    await client.change(lambda: bit0.write_raw(client, 1), devices=[])
+    await client.change(lambda: bit1.write_raw(client, 1), devices=[])
+    assert client.mb_client.writes[-1] == ('reg', 20, 0b11)
+    assert client.read_registers(20) == [0b11]
 
 
 async def test_change_with_restart_reads_all_groups():
@@ -330,9 +455,9 @@ async def test_scan_waits_for_the_change(units):
     await asyncio.sleep(0)
     do_scan = client._scan
 
-    async def periodic(read=None, written=None):
+    async def periodic(read=None):
         order.append('scan' if read is None else 'scan of the change')
-        return await do_scan(read, written)
+        return await do_scan(read)
     client._scan = periodic
     periodic_scan = asyncio.create_task(client.do_scan())
     await asyncio.sleep(0.01)
