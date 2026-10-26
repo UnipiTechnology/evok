@@ -141,23 +141,26 @@ class Watchdog(IODevice):
             raise ValueError(
                 f"WD {self.circuit}: nv_save is deprecated and not supported, use the device nv_save {self.major_group}"
             )
-        # checked before any change, e.g. the watchdog enabled with an invalid timeout
+        # all params are checked before any change, e.g. the watchdog enabled with an invalid timeout
+        if value is not None:
+            value = 1 if to_bool(value) else 0
         if timeout is not None:
             number = to_float(timeout)
             if number != int(number) or number < 0:
                 raise ValueError(f"WD {self.circuit}: timeout must be a whole number of ms >= 0, not {timeout}")
             timeout = min(int(number), 65535)
+        reset = reset is not None and to_bool(reset)
         self.set_alias(alias)
 
         if value is not None:
             # the whole register is written, it clears the flag of a restart by the watchdog too
-            await self.accessor.write(self.client, 1 if to_bool(value) else 0)
+            await self.accessor.write(self.client, value)
 
         if timeout is not None:
             await self.accessor_timeout.write(self.client, timeout)
 
-        if self.reset_coil >= 0 and reset is not None:
-            if to_bool(reset):
+        if self.reset_coil >= 0:
+            if reset:
                 # the unit restarts at once, it does not respond and a retry would restart it again
                 await self.client.write_coil_without_response(self.reset_coil, 1)
                 logger.info(f"Performed reset of board {self.circuit}")

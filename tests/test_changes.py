@@ -258,6 +258,16 @@ async def test_alias_released_by_a_later_unit_is_refused(units):
     assert client1.mb_client.writes == client2.mb_client.writes == [] and do2.alias == 'pump'
 
 
+@pytest.mark.parametrize('alias', [0, False, 1])
+async def test_alias_which_is_not_a_string_is_refused_before_the_write(units, alias):
+    """ 0 passed the check as a reset of the alias, set_alias(0) failed by TypeError after the write """
+    client, = await units('1')
+    do = Devices.by_name(DO, '1_01')
+    with pytest.raises(ValueError, match='Invalid alias'):
+        await set_devices([(do, {'value': 1, 'alias': alias})])
+    assert client.mb_client.writes == [] and do.alias == ''
+
+
 async def test_bit_without_a_pin_is_not_pinned():
     client = make_client(SLOW_BLOCKS, holding={20: 0})
     await client.cache.do_scan(initial=True)

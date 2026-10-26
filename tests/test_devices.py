@@ -635,6 +635,16 @@ async def test_watchdog_invalid_timeout_changes_nothing(unit, timeout):
     assert client.mb_client.writes == [] and wd.alias == ''
 
 
+@pytest.mark.parametrize('kw', [{'value': 'maybe'}, {'value': 1, 'timeout': 1000, 'reset': 'x'}])
+async def test_watchdog_invalid_value_or_reset_changes_nothing(unit, kw):
+    """ The alias was set, the watchdog enabled and the timeout written before to_bool() failed """
+    client = await unit()
+    wd = dev(WATCHDOG, '1')
+    with pytest.raises(ValueError, match='Invalid boolean'):
+        await wd.set(alias='wd', **kw)
+    assert client.mb_client.writes == [] and wd.alias == ''
+
+
 async def test_watchdog_whole_timeout(unit):
     client = await unit()
     await dev(WATCHDOG, '1').set(timeout='3000')

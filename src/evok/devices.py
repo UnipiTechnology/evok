@@ -235,6 +235,9 @@ class DeviceList(dict):
         """
         if alias in (None, "") or alias == device.alias:
             return
+        if not isinstance(alias, str):
+            # e.g. 0 or false of a request without the schema, it is not a reset of the alias
+            raise ValueError(f"Invalid alias {alias!r}")
         # by_name() finds the circuit first, such alias would never be used
         if alias in self[device.devtype]:
             raise ValueError(f"Alias {alias} is a circuit of {device.devtype}")

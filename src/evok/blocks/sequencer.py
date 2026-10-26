@@ -14,19 +14,35 @@ the newer value of the change.
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 
-from tmodbus.exceptions import TModbusError
+from tmodbus.exceptions import (
+    IllegalDataAddressError,
+    IllegalDataValueError,
+    IllegalFunctionError,
+    InvalidRequestError,
+    TModbusError,
+)
 
 from ..devices import devents, to_bool, to_float
-from ..errors import UnitCommunicationError
+from ..errors import UnitCommunicationError, describe_error, root_cause
 
 logger = logging.getLogger(__name__)
 
 STEP_RETRY_DELAY = 1.0  # s, a failed step is written again after it, the output does not stay in its state
-# the errors of the communication, they pass; another error of a step ends its sequence, e.g. a value refused
-# by the device, it would be written again forever and the output refused the changes
+STEP_RETRY_MAX_DELAY = 30.0  # s, the delay doubles up to it, a missing unit does not load its bus
+STEP_FAILURE_LOG = 300.0  # s, a step still failing is logged again after it, also a changed error at once
+# the errors of the communication, they pass; another error of a step ends its sequence and writes its final
+# state, e.g. a value refused by the device, it would be written again forever and the output refused the changes
 STEP_RETRIED = (UnitCommunicationError, TModbusError, TimeoutError, OSError)
+# the request refused by the unit or invalid, it would be refused again
+STEP_REFUSED = (IllegalFunctionError, IllegalDataAddressError, IllegalDataValueError, InvalidRequestError)
+
+
+def _retried(error: Exception) -> bool:
+    """An error of the communication, not a request refused by the unit"""
+    return isinstance(error, STEP_RETRIED) and not isinstance(root_cause(error), STEP_REFUSED)
 
 
 @dataclass
@@ -165,7 +181,12 @@ class Sequencer:
         except asyncio.CancelledError:
             raise
         except Exception:
-            logger.exception(f"{_name(device)}: step {step_number} of the {sequence.name} failed")
+            logger.exception(f"{_name(device)}: step {step_number} of the {sequence.name} failed, it is ended")
+            # the output does not stay in the state of the sequence
+            current = self._current(device, task)
+            self._end(device, task)
+            if current and sequence.final is not None:
+                await self._finish(device, sequence)
         finally:
             self._end(device, task)
 
@@ -173,20 +194,32 @@ class Sequencer:
         """Write the step until it succeeds, the sequence stays running meanwhile, e.g. a noise on the bus at
         the end of a pulse; False if the sequence was cancelled or replaced meanwhile
         """
-        failures = 0
+        failures, delay = 0, STEP_RETRY_DELAY
+        logged, logged_at = None, 0.0
         while True:
             try:
                 applied = await self._apply(device, step.params, task, step_number, last)
-            except STEP_RETRIED:
+            except Exception as E:
+                if not _retried(E):
+                    raise
                 if not self._current(device, task):
                     return False
-                if not failures:
-                    logger.exception(
-                        f"{_name(device)}: step {step_number} of the {sequence.name} failed, "
-                        f"it is written again every {STEP_RETRY_DELAY} s"
-                    )
                 failures += 1
-                await asyncio.sleep(STEP_RETRY_DELAY)
+                now, error = time.monotonic(), describe_error(E)
+                if logged is None:
+                    logger.exception(
+                        f"{_name(device)}: step {step_number} of the {sequence.name} failed, it is written again "
+                        f"after {STEP_RETRY_DELAY}..{STEP_RETRY_MAX_DELAY} s"
+                    )
+                    logged, logged_at = error, now
+                elif error != logged or now - logged_at >= STEP_FAILURE_LOG:
+                    # a changed error, or a reminder that the output is still in the state of the sequence
+                    logger.error(
+                        f"{_name(device)}: step {step_number} of the {sequence.name} failed {failures}x: {error}"
+                    )
+                    logged, logged_at = error, now
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, STEP_RETRY_MAX_DELAY)
                 continue
             if failures and applied:
                 logger.info(

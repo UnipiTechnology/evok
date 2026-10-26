@@ -124,11 +124,11 @@ def _check_aliases(units: dict):
         for _index, device, kw in items:
             if "alias" not in kw:
                 continue
-            alias = kw["alias"] or ""
+            alias = "" if kw["alias"] is None else kw["alias"]
             current = planned.get(device, device.alias)
             if alias == current:
                 continue
-            if alias:
+            if alias != "":
                 if alias in taken:
                     raise ValueError(f"Duplicate alias {alias}")
                 Devices.check_alias(alias, device, free)
