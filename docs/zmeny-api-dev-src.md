@@ -140,8 +140,7 @@ Nekompatibilní změny jsou uvedené jako první. U každé změny je commit
   E4AI4AO6DI5RO a E8AI4DI5RO, `ttyNS0`, `ttyNS1`... podle jejich pořadí.
 - **evok-autogen.py:** `--config-dir` (`-d`) je adresář `autogen.yaml` a `hw_definitions` (výchozí `/etc/evok`),
   `--product-id` (`-p`) id produktu místo `UNIPI_PRODUCT_ID`, např. pro `autogen.yaml` Evoku ve virtuálním prostředí.
-  Výchozí port `LOCAL_TCP` je `50200` (Modbus TCP server Unipi OS), dřív `502`; `LISTEN_PORT` z `/etc/default/unipitcp`
-  má jako dřív přednost.
+  Neplatné id nebo chybějící adresář je chyba parametrů.
 
 ## Zastaralé
 

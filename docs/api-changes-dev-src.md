@@ -144,8 +144,7 @@ the HW definitions. Breaking changes come first. Every change names its commits
   `evok-autogen.py` sets it for the boards BRAIN, E4AI4AO4DI5RO, E4AI4AO6DI5RO and E8AI4DI5RO, `ttyNS0`, `ttyNS1`... by their order.
 - **evok-autogen.py:** `--config-dir` (`-d`) is the directory of `autogen.yaml` and `hw_definitions` (`/etc/evok`
   by default), `--product-id` (`-p`) the product id instead of `UNIPI_PRODUCT_ID`, e.g. to generate `autogen.yaml`
-  of Evok in a virtual environment. The default port of `LOCAL_TCP` is `50200` (the Modbus TCP server of
-  the Unipi OS), before `502`; `LISTEN_PORT` of `/etc/default/unipitcp` goes first as before.
+  of Evok in a virtual environment. An invalid id or a missing directory is an error of the arguments.
 
 ## Deprecated
 

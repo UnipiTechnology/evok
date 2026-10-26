@@ -11,7 +11,6 @@ import subprocess
 
 UNIPITCP_CONFIG_PATH = "/etc/default/unipitcp"
 CONFIG_DIR = "/etc/evok"  # the directory of autogen.yaml and hw_definitions, --config-dir
-MODBUS_PORT = 50200  # the Modbus TCP server of the Unipi OS, LISTEN_PORT of UNIPITCP_CONFIG_PATH
 
 BRAIN = "00"
 E14DI14RO = "09"
@@ -150,7 +149,7 @@ def generate_config(
     config_dir: str = CONFIG_DIR,
 ):
     defaults = defaults if defaults is not None else {}
-    port = defaults.get("port", MODBUS_PORT)
+    port = defaults.get("port", 502)
     hostname = defaults.get("hostname", "127.0.0.1")
     names = defaults.get("names", list(range(1, len(boards) + 1)))
     slave_ids = defaults.get("slave-ids", list(range(1, len(boards) + 1)))
@@ -232,16 +231,28 @@ def parse_args(argv=None):
     parser.add_argument(
         "-p",
         "--product-id",
+        type=product_id,
         help="the product id in hex, e.g. 0407 or 0x0407 of the Patron M527, instead of UNIPI_PRODUCT_ID",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if not os.path.isdir(args.config_dir):
+        parser.error(f"the config directory {args.config_dir} does not exist")
+    return args
+
+
+def product_id(value: str) -> int:
+    """The product id in hex, an invalid one is an error of the arguments"""
+    try:
+        return int(value, 16)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid product id '{value}', e.g. 0407") from None
 
 
 def run(argv=None):
     args = parse_args(argv)
     try:
         envs = os.environ
-        platform_id = int(args.product_id if args.product_id is not None else envs["UNIPI_PRODUCT_ID"], 16)
+        platform_id = args.product_id if args.product_id is not None else int(envs["UNIPI_PRODUCT_ID"], 16)
         # the low byte is the family, e.g. 0x07 of the Patron
         family = code2family.get(platform_id & 0xFF, "UNKNOWN")
         product_model = envs.get("UNIPI_PRODUCT_NAME", "UNKNOWN")
@@ -258,6 +269,7 @@ def run(argv=None):
     defaults = {}
 
     if is_unipi_one:
+        defaults["port"] = 50200
         defaults["slave-ids"] = [0]
 
     elif family == "Edge":

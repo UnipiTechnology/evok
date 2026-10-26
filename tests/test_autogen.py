@@ -58,7 +58,6 @@ def test_product_id_and_config_dir_by_the_arguments(product, tmp_path, product_i
     local = written(tmp_path)
     assert local['device_info']['family'] == 'Patron'
     assert [device['model'] for device in local['devices'].values()] == ['00', '13']
-    assert local['port'] == 50200
 
 
 def test_argument_goes_before_the_environment(product, tmp_path, monkeypatch):
@@ -74,14 +73,33 @@ def test_product_id_by_the_environment(product, tmp_path, monkeypatch):
     assert (local['device_info']['family'], len(local['devices'])) == ('Neuron', 1)
 
 
-def test_port_of_the_modbus_tcp_server(product, tmp_path):
-    (tmp_path / 'unipitcp').write_text('LISTEN_PORT=502\n')
-    autogen.run(['-d', str(tmp_path), '-p', '0407'])
-    assert written(tmp_path)['port'] == 502
+@pytest.mark.parametrize('product_id, unipitcp, port', [
+    ('0407', 'LISTEN_PORT=50200\n', '50200'),         # the port of the Modbus TCP server of the Unipi OS
+    ('0407', None, 502),                               # without its config
+    ('0101', None, 50200),                             # UniPi 1.1
+])
+def test_port_of_the_modbus_tcp_server(product, tmp_path, product_id, unipitcp, port):
+    if unipitcp is not None:
+        (tmp_path / 'unipitcp').write_text(unipitcp)
+    autogen.run(['-d', str(tmp_path), '-p', product_id])
+    assert str(written(tmp_path)['port']) == str(port)
 
 
 def test_without_product_id(product, tmp_path, capsys):
     with pytest.raises(SystemExit):
         autogen.run(['-d', str(tmp_path)])
     assert 'Device not recognized' in capsys.readouterr().out
+    assert not (tmp_path / 'autogen.yaml').exists()
+
+
+@pytest.mark.parametrize('args, error', [
+    (['-p', '04O7'], "invalid product id '04O7'"),
+    (['-d', '/nonexistent/evok', '-p', '0407'], 'the config directory /nonexistent/evok does not exist'),
+])
+def test_invalid_arguments(product, tmp_path, capsys, args, error):
+    """ An error of the arguments with a non-zero status, nothing is written """
+    with pytest.raises(SystemExit) as exit_:
+        autogen.run(['-d', str(tmp_path), *args])           # the last -d is used
+    assert exit_.value.code == 2
+    assert error in capsys.readouterr().err
     assert not (tmp_path / 'autogen.yaml').exists()
