@@ -72,7 +72,7 @@ the port `LISTEN_PORT` of `/etc/default/unipitcp`, e.g. `50200`).
 `EVOK_VER` is the branch, the tag or the commit of Evok, the same for Evok and its configuration below.
 
 ```bash title="Installing Evok into ~/evok"
-EVOK_VER=main
+EVOK_VER=3.1.0
 sudo apt install -y python3-venv git
 python3 -m venv ~/evok/venv
 ~/evok/venv/bin/pip install "git+https://github.com/UnipiTechnology/evok@$EVOK_VER"
@@ -135,7 +135,7 @@ sudo systemctl enable --now evok-venv
 
 Evok 3.1 reads the 1-Wire sensors by the kernel, owserver is not needed. The 1-Wire master (e.g. the DS2482)
 and the modules of the sensors (`w1_therm` and others) have to be loaded by the kernel. The udev rule
-[`60-evok-w1.rules`](https://github.com/UnipiTechnology/evok/blob/main/etc/udev/rules.d/60-evok-w1.rules)
+[`60-evok-w1.rules`](https://github.com/UnipiTechnology/evok/blob/3.1.0/etc/udev/rules.d/60-evok-w1.rules)
 gives Evok the access to the forced search and to the conversion of all thermometers at once:
 
 ```bash title="Installing the udev rule"
