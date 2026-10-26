@@ -276,7 +276,10 @@ async def main():
             f"evok: config file '{os.path.join(config_path, 'config.yaml')}' not found "
             "(use --config-dir or EVOK_CONFIG_DIR)"
         )
-    evok_config = config.EvokConfig(config_path)
+    try:
+        evok_config = config.EvokConfig(config_path)
+    except config.EvokConfigError as E:
+        sys.exit(f"evok: {E}")
 
     log_level = evok_config.logging.get("level", "INFO").upper()
     if args.debug:
@@ -323,7 +326,7 @@ async def main():
         )
     else:
         logger.info("The API is not authenticated, set 'token' in 'apis' for an access from the network")
-    mqtt_config = evok_config.apis.get("mqtt") or {}
+    mqtt_config = evok_config.apis.get("mqtt", {})
     mqtt = None
     if mqtt_config.get("enabled", False):
         try:
@@ -344,7 +347,7 @@ async def main():
     ]
 
     # enabled if the section is missing, it was always enabled before the option was added
-    if (evok_config.apis.get("rpc") or {}).get("enabled", True):
+    if evok_config.apis.get("rpc", {}).get("enabled", True):
         api_routes.append((r"/rpc/?", rpc_handler.Handler))
     else:
         logger.info("RPC API is disabled")

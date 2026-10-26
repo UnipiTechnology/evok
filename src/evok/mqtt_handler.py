@@ -32,6 +32,8 @@ from .ws_handler import registered_ws
 logger = logging.getLogger(__name__)
 
 RECONNECT_DELAY = 5  # s, the next connection to the broker after a failure
+PUBLISH_ATTEMPTS = 3  # the publishes of a state refused by the client, e.g. a full queue, then it is dropped
+PUBLISH_RETRY_DELAY = 1  # s, the next publish after a refused one
 
 # all device types with devices, the aliases (run) are not a device
 DEFAULT_DEVICE_MASK = [devtype for devtype in num_to_devtype_name.values() if devtype not in (RUN, "board")]
@@ -138,6 +140,9 @@ class MqttHandler:
         self.client = None  # the connected client
         self.task: asyncio.Task | None = None
         self.logged_error = None  # the logged failure of the connection, not logged again
+        # the logged error other than of MQTT, e.g. a missing file of TLS; not logged again after a connection
+        self.logged_exception = None
+        self.publish_failures: dict[tuple, int] = {}  # the refused publishes of the pending states
 
     def topic(self, devtype, circuit=None) -> str:
         return f"{self.settings.prefix}/{devtype}" + ("" if circuit is None else f"/{circuit}")
@@ -208,11 +213,13 @@ class MqttHandler:
                         f"{RECONNECT_DELAY} s, the next errors are not logged"
                     )
             except Exception as E:
-                # e.g. a missing file of TLS, the loop of the connection does not stop
-                if repr(E) != self.logged_error:
-                    self.logged_error = repr(E)
+                # e.g. a missing file of TLS, or an error after the connection; the loop of the connection
+                # does not stop
+                if repr(E) != self.logged_exception:
+                    self.logged_exception = repr(E)
+                    where = "after the connection to" if connected else "of the connection to"
                     logger.exception(
-                        f"MQTT: error of the connection to the broker {address}; connecting again every "
+                        f"MQTT: error {where} the broker {address}; connecting again every "
                         f"{RECONNECT_DELAY} s, the same errors are not logged"
                     )
             finally:
@@ -225,6 +232,7 @@ class MqttHandler:
         if not self.settings.read_only:
             await client.subscribe(f"{self.settings.prefix}/+/+/set", qos=self.settings.qos)
         self.pending.clear()
+        self.publish_failures.clear()
         # the configs are published again after the connection, before the states
         self.announced.clear()
         self._queue_all()
@@ -248,14 +256,24 @@ class MqttHandler:
                     if self.settings.ha_discovery:
                         await self._announce(client, key, state)
                     await client.publish(self.topic(*key), json.dumps(state), qos=self.settings.qos, retain=True)
+                    self.publish_failures.pop(key, None)
                 except aiomqtt.MqttError as E:
-                    # e.g. a full queue of the client, the state is published again later; a lost connection
-                    # ends the loop of the commands, which cancels the publishing
-                    self.pending.setdefault(key, state)
-                    logger.error(
-                        f"MQTT error in publishing {self.topic(*key)}: {E}; publishing again in {RECONNECT_DELAY} s"
-                    )
-                    await asyncio.sleep(RECONNECT_DELAY)
+                    # e.g. a full queue of the client: the state is published again after the other pending
+                    # ones, at most PUBLISH_ATTEMPTS times (e.g. refused by the size or the ACL of the broker);
+                    # a lost connection ends the loop of the commands, which cancels the publishing
+                    failures = self.publish_failures.get(key, 0) + 1
+                    if failures < PUBLISH_ATTEMPTS:
+                        self.publish_failures[key] = failures
+                        self.pending.setdefault(key, state)
+                        if failures == 1:
+                            logger.error(f"MQTT error in publishing {self.topic(*key)}: {E}; publishing it again")
+                        await asyncio.sleep(PUBLISH_RETRY_DELAY)
+                    else:
+                        self.publish_failures.pop(key, None)
+                        logger.error(
+                            f"MQTT error in publishing {self.topic(*key)}: {E}; the state is dropped after "
+                            f"{PUBLISH_ATTEMPTS} attempts, its next change is published"
+                        )
                 except Exception as E:  # noqa: BLE001
                     logger.error(f"MQTT error in publishing {self.topic(*key)}: {E}")
 

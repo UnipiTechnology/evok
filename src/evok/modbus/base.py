@@ -52,7 +52,7 @@ class IODevice:
 
 
 async def set_devices(
-    assignments: list[tuple], states: dict | None = None, replace_sequences: bool = False
+    assignments: list[tuple], states: dict | None = None, sequences: dict | None = None
 ) -> list[dict]:
     """Set the devices by the params of assignments [(device, kw)], return their states in the same order
 
@@ -68,11 +68,12 @@ async def set_devices(
     or Client.change() of the same unit: the lock is not reentrant, it would wait for itself forever.
 
     A change of a device other than its alias is refused by SequenceRunning while a sequence of the sequencer
-    of blocks runs for it, e.g. a pulse; it is cancelled by the sequencer device. With replace_sequences
-    the change replaces it, e.g. a new pulse: the sequence is cancelled after the successful set() under
-    the lock of the unit, its waiting step writes nothing; a failed change leaves it running, it writes
-    its final state.
+    of blocks runs for it, e.g. a pulse; it is cancelled by the sequencer device. sequences {device: Sequence}
+    replace it, e.g. a new pulse: the sequence of the device is started after its successful set() under
+    the lock of the unit, the replaced one is cancelled and its waiting step writes nothing; a failed change
+    leaves it running, it writes its final state.
     """
+    sequences = sequences or {}
     states = {} if states is None else states
     units: dict = {}
     for index, (device, kw) in enumerate(assignments):
@@ -85,14 +86,14 @@ async def set_devices(
         async def operation():
             for index, device, kw in items:
                 # under the lock of the unit, as the steps of the sequence
-                if set(kw) - {"alias"} and sequencer.is_running(device) and not replace_sequences:
+                if set(kw) - {"alias"} and sequencer.is_running(device) and device not in sequences:
                     raise SequenceRunning(
                         f"{str(device.devtype).upper()} {device.circuit}: a sequence of "
                         f"its sequencer {device.devtype}_{device.circuit} runs, cancel it there"
                     )
                 await device.set(**kw)
-                if replace_sequences:
-                    sequencer.cancel(device)
+                if device in sequences:
+                    sequencer.start(device, sequences[device])
                 done.append((index, device))
 
         try:

@@ -106,6 +106,7 @@ def devices():
 async def mqtt(devices, monkeypatch):
     """ A connected handler, call it with the options of the configuration """
     monkeypatch.setattr(mqtt_handler, 'RECONNECT_DELAY', 0)
+    monkeypatch.setattr(mqtt_handler, 'PUBLISH_RETRY_DELAY', 0)
     handlers = []
 
     async def factory(conf=None, failures=()):
@@ -259,6 +260,43 @@ async def test_failed_publish_is_published_again(mqtt, devices, caplog):
     handler.on_event(devices[DI]['1_01'])
     await settle()
     assert broker.states()['evok/di/1_01']['value'] == 0
+
+
+async def test_refused_publish_is_dropped(mqtt, devices, caplog):
+    """ A state refused by every publish, e.g. by the size or the ACL of the broker, does not block the others """
+    handler, broker = await mqtt()
+    broker.publish_failures.extend(['evok/ro/1_01'] * 3)
+    devices[RO]['1_01'].value = 1
+    handler.on_event(devices[RO]['1_01'])
+    devices[DI]['1_01'].value = 0
+    handler.on_event(devices[DI]['1_01'])
+    await settle()
+    assert broker.states()['evok/di/1_01']['value'] == 0
+    assert broker.states()['evok/ro/1_01']['value'] == 0                   # the state of the connection
+    assert broker.publish_failures == []
+    errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 2 and 'dropped after 3 attempts' in errors[1]
+    handler.on_event(devices[RO]['1_01'])                                  # the next change is published
+    await settle()
+    assert broker.states()['evok/ro/1_01']['value'] == 1
+
+
+async def test_error_after_the_connection_is_logged_once(mqtt, devices, caplog, monkeypatch):
+    """ E.g. full() of a device failing after each connection: one traceback, not one after each connection """
+    calls = []
+
+    def failing_full():
+        calls.append(1)
+        raise RuntimeError('full() failed')
+    monkeypatch.setattr(devices[DI]['1_01'], 'full', failing_full)
+    _handler, _broker = await mqtt()
+    for _ in range(200):
+        if len(calls) >= 3:
+            break
+        await asyncio.sleep(0)
+    assert len(calls) >= 3
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1 and 'error after the connection to the broker' in errors[0].getMessage()
 
 
 async def test_lost_connection_publishes_all_states_again(mqtt, caplog):

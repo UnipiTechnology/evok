@@ -1,4 +1,5 @@
 import asyncio
+import re
 import struct
 import time
 from types import SimpleNamespace
@@ -139,8 +140,20 @@ def test_empty_sections(tmp_path):
 
 def test_empty_section_of_an_api(tmp_path):
     """ websocket: with all its options commented out was None, evok.py failed on .get() at the start """
-    conf = write_config(tmp_path, 'apis:\n  port: 8080\n  websocket:\n  webhook:\n')
+    conf = write_config(tmp_path, 'apis:\n  port: 8080\n  websocket:\n  webhook:\n  rpc:\n  mqtt:\n')
+    assert conf.apis == {'port': 8080, 'websocket': {}, 'webhook': {}, 'rpc': {}, 'mqtt': {}}
     assert (conf.get_api('websocket'), conf.get_api('webhook')) == ({}, {})
+
+
+@pytest.mark.parametrize('text, error', [
+    ('apis:\n  websocket: true\n', "apis: websocket must be a mapping of its options, not 'True'"),
+    ('apis:\n  mqtt: [broker]\n', "apis: mqtt must be a mapping of its options"),
+    ('apis: 8080\n', "apis must be a mapping of the options of the APIs, not '8080'"),
+])
+def test_section_of_an_api_is_a_mapping(tmp_path, text, error):
+    """ evok.py failed on .get() of the value at the start, Evok exits with the error of the config """
+    with pytest.raises(config.EvokConfigError, match=re.escape(error)):
+        write_config(tmp_path, text)
 
 
 def test_config_not_a_mapping(tmp_path):

@@ -21,6 +21,9 @@ class EvokConfigError(Exception):
     pass
 
 
+API_SECTIONS = ("rpc", "websocket", "webhook", "mqtt")  # the sections of apis with the options of an API
+
+
 class HWDict:
     def __init__(self, dir_paths: list[str] | None = None, paths: list[str] | None = None):
         """
@@ -160,11 +163,21 @@ class EvokConfig:
 
     @staticmethod
     def __get_apis_conf(data: dict) -> dict:
+        """The options of the APIs; an empty section of an API is {}, e.g. with all its options commented out,
+        a section which is not a mapping is an error
+        """
         ret = {}
         if "apis" not in data:
             logger.warning("Section 'apis' not in configuration!")
             return ret
-        for name, value in (data["apis"] or {}).items():
+        apis = data["apis"] or {}
+        if not isinstance(apis, dict):
+            raise EvokConfigError(f"apis must be a mapping of the options of the APIs, not '{apis}'")
+        for name, value in apis.items():
+            if name in API_SECTIONS:
+                value = value or {}
+                if not isinstance(value, dict):
+                    raise EvokConfigError(f"apis: {name} must be a mapping of its options, not '{value}'")
             ret[name] = value
         return ret
 
@@ -185,8 +198,7 @@ class EvokConfig:
         if name not in self.apis:
             logger.warning(f"Api '{name}' not found")
             return {}
-        # an empty section, e.g. with all its options commented out
-        return self.apis[name] or {}
+        return self.apis[name]
 
 
 class BusClaims:

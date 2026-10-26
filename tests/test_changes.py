@@ -360,6 +360,33 @@ async def test_new_pulse_waiting_for_the_lock_cancels_the_next_step(units):
     assert sequencer.sequence(do).steps[0].delay == 10
 
 
+async def test_pulse_cancelled_after_its_write_keeps_its_end(units):
+    """ The task of a new pulse cancelled while the unit is read after the write, e.g. at the shutdown:
+        the pulse runs, it was started after the read and the output stayed on without its end
+    """
+    client, = await units('1')
+    do = Devices.by_name(DO, '1_01')
+    await start_pulse(do, 1, 10)
+    release = asyncio.Event()
+    read = client.mb_client.read_holding_registers
+
+    async def slow_read(address, quantity=1):
+        await release.wait()
+        return await read(address, quantity)
+    client.mb_client.read_holding_registers = slow_read
+    newer = asyncio.create_task(start_pulse(do, 1, 0.05))
+    await asyncio.sleep(0.01)                               # written, the unit is read
+    assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 1)]
+    newer.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await newer
+    assert sequencer.sequence(do).steps[0].delay == 0.05
+    release.set()
+    await asyncio.sleep(0.1)
+    assert client.mb_client.writes[-1] == ('coil', 0, 0)
+    assert not sequencer.is_running(do)
+
+
 async def test_failed_pulse_leaves_the_running_one(units):
     """ A new pulse refused by an unavailable unit: the running pulse writes its end, the output does not stay on """
     client, = await units('1')
