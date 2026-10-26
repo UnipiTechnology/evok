@@ -115,6 +115,64 @@ async def test_change_of_devices_reads_the_fast_and_their_groups():
     assert [group.f_counter for group in client.cache.groups + client.cache.igroups] == counters
 
 
+def delayed_unit(client):
+    """ The unit sets a written holding register later, by apply(), e.g. the mode of an AI of xS52 """
+    pending = {}
+    write = client.mb_client.write_single_register
+
+    async def delayed(address, value):
+        client.mb_client.writes.append(('reg', address, value))
+        pending[address] = value
+    client.mb_client.write_single_register = delayed
+
+    async def apply(accept=True):
+        for address, value in pending.items():
+            if accept:
+                await write(address, value)
+        pending.clear()
+    return apply
+
+
+async def test_written_value_is_kept_after_the_read(monkeypatch):
+    """ The read after the write returned the old value of a unit setting it with a delay, the state and the event
+        showed the old mode, the change seemed to fail
+    """
+    monkeypatch.setattr('evok.modbus.client.REREAD_DELAY', 0.01)
+    client = make_client(SLOW_BLOCKS, holding={20: 1})
+    await client.cache.do_scan(initial=True)
+    delayed_unit(client)
+    reads = recorded_reads(client)
+    await client.change(lambda: client.write_registers(20, [2]), devices=[])
+    assert reads == [0, 20]                                 # read, the unit returned 1
+    assert client.read_registers(20) == [2]
+
+
+@pytest.mark.parametrize('accept, value', [(True, 2), (False, 1)])
+async def test_written_block_is_read_again(monkeypatch, accept, value):
+    """ The periodic scan reads the block of the written register after REREAD_DELAY, out of its scan_divider
+        and without a shift of its phase: the value set by the unit later, or the old one of a refused write
+    """
+    monkeypatch.setattr('evok.modbus.client.REREAD_DELAY', 0.01)
+    client = make_client(SLOW_BLOCKS, holding={20: 1})
+    await client.cache.do_scan(initial=True)
+    apply = delayed_unit(client)
+    await client.change(lambda: client.write_registers(20, [2]), devices=[])
+    await apply(accept)
+    counters = [group.f_counter for group in client.cache.groups]
+    reads = recorded_reads(client)
+    await client.do_scan()                                  # before REREAD_DELAY, the slow group is not due
+    await asyncio.sleep(0.02)
+    await client.do_scan()
+    assert reads == [0, 0, 20]
+    assert client.read_registers(20) == [value]
+    assert client.cache.due == []
+    expected = counters
+    for _ in range(2):
+        expected = [divider - 1 if counter == 0 else counter - 1
+                    for counter, divider in zip(expected, [g.f_divider for g in client.cache.groups], strict=True)]
+    assert [group.f_counter for group in client.cache.groups] == expected
+
+
 async def test_change_with_restart_reads_all_groups():
     client = make_client(SLOW_BLOCKS)
     await client.cache.do_scan(initial=True)
@@ -272,9 +330,9 @@ async def test_scan_waits_for_the_change(units):
     await asyncio.sleep(0)
     do_scan = client._scan
 
-    async def periodic(read=None):
+    async def periodic(read=None, written=None):
         order.append('scan' if read is None else 'scan of the change')
-        return await do_scan(read)
+        return await do_scan(read, written)
     client._scan = periodic
     periodic_scan = asyncio.create_task(client.do_scan())
     await asyncio.sleep(0.01)
