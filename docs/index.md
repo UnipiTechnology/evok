@@ -27,10 +27,12 @@ Quickly start using Evok:
 - Install Evok:
     - Connect to the unit via [ssh](https://kb.unipi.technology/en:automation:unipi-ssh-connect-hidden#selecting_a_suitable_communication_software)
     - Run apt to install evok package. For a detailed walkthrough see the [detailed article](./installation.md).
-      ```
-      apt update
-      apt install -y evok
-      ```
+
+        ```
+        sudo apt update
+        sudo apt install -y evok
+        ```
+
 - You can try to use the API ([more information about API](./apis/json.md#examples)):
 
 ### Curl
@@ -38,19 +40,22 @@ Quickly start using Evok:
 Following commands will work only via SSH, executed on the unit itself. If you wish to open the API from elsewhere, edit [configuration of Evok](./configs/evok_configuration.md#api-settings).
 
 - Returning the state of digital input DI 1_01
-  ```
-  curl --request GET --url http://127.0.0.1:8080/json/di/1_01 --header 'Accept: text/html, application/json'
-  ```
+
+    ```
+    curl --request GET --url http://127.0.0.1:8080/json/di/1_01 --header 'Accept: text/html, application/json'
+    ```
 
 - Switch on the DO 1_01:
-  ```
-  curl --request POST --url http://127.0.0.1:8080/json/do/1_01 --header 'Accept: application/json' --header 'Content-Type: application/json' --data '{"value": 1}'
-  ```
+
+    ```
+    curl --request POST --url http://127.0.0.1:8080/json/do/1_01 --header 'Accept: application/json' --header 'Content-Type: application/json' --data '{"value": 1}'
+    ```
 
 - Switch off the DO 1_01:
-  ```
-  curl --request POST --url http://127.0.0.1:8080/json/do/1_01 --header 'Accept: application/json' --header 'Content-Type: application/json' --data '{"value": 0}'
-  ```
+
+    ```
+    curl --request POST --url http://127.0.0.1:8080/json/do/1_01 --header 'Accept: application/json' --header 'Content-Type: application/json' --data '{"value": 0}'
+    ```
 
 ### Evok web
 
@@ -59,10 +64,13 @@ Following commands will work only via SSH, executed on the unit itself. If you w
 - Install Evok web:
     - Connect to the unit via [ssh](https://kb.unipi.technology/en:automation:unipi-ssh-connect-hidden#selecting_a_suitable_communication_software)
     - Run apt to install evok-web package.
-      ```
-      apt install -y evok-web
-      ```
-- Open in browser `http://<unit-IP-adrress>/` and toggle some outputs:
+
+        ```
+        sudo apt install -y evok-web
+        ```
+
+- Open in browser `http://<unit-IP-address>/` and toggle some outputs:
+
     ![Evok-web interface](./img/evok-web.png)
 
 ### Node-RED
