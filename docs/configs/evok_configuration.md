@@ -332,7 +332,7 @@ comm_channels:
   LOCAL_TCP:
     type: MODBUSTCP
     hostname: 127.0.0.1
-    port: 502
+    port: 50200
     device_info:
       family: Patron
       model: S167
@@ -394,13 +394,42 @@ You can force the creation of this file using this command:
    An OWFS section with `hostname` or `port` of owserver (an `autogen.yaml` of an older Evok) is an error,
    the bus is not created; generate the file again.
    - The `owpower` parameter is defined only if Unipi controller supports this feature.
+ - The port of `LOCAL_TCP` is `LISTEN_PORT` of `/etc/default/unipitcp`, the Modbus TCP server of the Unipi OS;
+   without it `502`, `50200` on Unipi 1.
+ - The boards BRAIN, E4AI4AO4DI5RO, E4AI4AO6DI5RO and E8AI4DI5RO get `serial_ports`, `/dev/ttyNS0`,
+   `/dev/ttyNS1`... by their order.
+
+### evok-autogen.py
+
+`unipi-os-configurator` runs `evok-autogen.py` (in `hw_definitions` of the repository) with the product
+in the environment:
+
+- `UNIPI_PRODUCT_ID` - the product id in hex, e.g. `0407` of the Patron M527, the boards by the table `hw_data`
+  of the script; required.
+- `UNIPI_PRODUCT_NAME`, `UNIPI_PRODUCT_SERIAL` - the model and the serial number in `device_info`
+  (`UNKNOWN` without them).
+- `HAS_DS2482` - `1` if the controller has the 1-Wire master DS2482, the bus `OWBUS` is generated only with it.
+- `CARDS` - the cards of an Iris or the EMO-R8 of a Unipi 1, as `unipi-os-configurator` gives them.
+
+It can be run by hand too, the variables above are set by hand then:
+
+- `--config-dir` (`-d`) - the directory of `autogen.yaml` and `hw_definitions` (the definitions of the Iris cards),
+  e.g. of Evok in a [virtual environment](../installation.md#installing-into-a-virtual-environment); it must
+  exist (Default value is `/etc/evok`).
+- `--product-id` (`-p`) - the product id in hex instead of `UNIPI_PRODUCT_ID`, e.g. `0407` (or `0x0407`)
+  of the Patron M527. An invalid id or directory is an error of the arguments, nothing is written.
+
+```bash title="autogen.yaml of a Patron M527 with 1-Wire in ~/evok/etc"
+UNIPI_PRODUCT_NAME=M527 UNIPI_PRODUCT_SERIAL=1234 HAS_DS2482=1 \
+  python3 evok-autogen.py --config-dir ~/evok/etc --product-id 0407
+```
 
 ```yaml title="Autogen example"
 comm_channels:
   LOCAL_TCP:
     type: MODBUSTCP
     hostname: 127.0.0.1
-    port: 502
+    port: 50200
     device_info:
       family: Neuron
       model: L533
@@ -410,12 +439,15 @@ comm_channels:
       1:
         slave-id: 1
         model: '00'
+        serial_ports: [/dev/ttyNS0]
       2:
         slave-id: 2
         model: '13'
+        serial_ports: [/dev/ttyNS1]
       3:
         slave-id: 3
         model: '13'
+        serial_ports: [/dev/ttyNS2]
   OWBUS:
     type: OWFS
     interval: 10
