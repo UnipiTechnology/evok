@@ -189,7 +189,7 @@ comm_channels:
       With the write access to the master `do_scan` forces a search of the bus and the thermometers due
       at the same time (in the half of their interval) are converted at once, before each one took 750 ms.
       The attributes of the master are writable only by root, the udev rule
-      [`60-evok-w1.rules`](https://github.com/UnipiTechnology/evok/blob/dev-3.1/etc/udev/rules.d/60-evok-w1.rules)
+      [`60-evok-w1.rules`](https://github.com/UnipiTechnology/evok/blob/main/etc/udev/rules.d/60-evok-w1.rules)
       gives the access to the group `evok`; copy it to `/etc/udev/rules.d/` and apply it by
       `udevadm trigger --subsystem-match=w1 --action=add`. Without it `do_scan` takes the devices of the last
       search of the kernel and each thermometer converts alone, Evok logs it once.
@@ -312,7 +312,7 @@ TEMPM:
 
 A `config.yaml` without autogen, e.g. prepared for a controller in advance: the local I/Os of a Patron
 by its Modbus TCP server, two extensions on the RS485 bus and a thermometer on the 1-Wire bus.
-The commented template is [`examples/config.yaml`](https://github.com/UnipiTechnology/evok/blob/dev-3.1/examples/config.yaml).
+The commented template is [`examples/config.yaml`](https://github.com/UnipiTechnology/evok/blob/main/examples/config.yaml).
 
 ```yaml title="config.yaml"
 autogen: false
