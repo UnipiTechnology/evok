@@ -1,10 +1,13 @@
 import asyncio
+import sys
 
 import pytest
+from tmodbus.exceptions import IllegalDataValueError, ServerDeviceBusyError, ServerDeviceFailureError
 
 from evok import devents
 from evok.blocks import Sequence, Sequencer, Step, pulse, pulse_params, sequencer
 from evok.devices import DO, LED, RO
+from evok.errors import UnitCommunicationError
 
 
 class FakeDevice:
@@ -68,13 +71,229 @@ async def test_finish_all_writes_the_final_states():
     assert not seq.is_running(first) and not seq.is_running(second)
 
 
-async def test_failed_step_ends_the_sequence(caplog):
+async def test_failed_step_is_written_again(caplog, monkeypatch):
+    """ A failed step ended the sequence, the end of a pulse was lost and the output stayed in its state """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
     device = FakeDevice(DO, '2_01')
     seq = Sequencer()
     seq.start(device, Sequence([Step({'value': 'fail'}), Step({'value': 1}, 0.01)], name='test'))
+    await asyncio.sleep(0.05)
+    assert device.changes == [] and seq.is_running(device)
+    assert caplog.text.count('DO 2_01: step 1 of the test failed') == 1      # logged once
+    seq.cancel(device)
     await asyncio.sleep(0.03)
-    assert device.changes == [] and not seq.is_running(device)
-    assert 'DO 2_01: step 1 of the test failed' in caplog.text
+    assert not seq.is_running(device)
+
+
+async def test_refused_step_ends_the_sequence(caplog, monkeypatch):
+    """ A value refused by the device is not an error of the communication, it was written again forever and
+        the output refused every change
+    """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+
+    async def refuse(**kw):
+        raise ValueError('not in this mode')
+    device.set = refuse
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 1})], name='test'))
+    await asyncio.sleep(0.03)
+    assert not seq.is_running(device)
+    assert caplog.text.count('DO 2_01: step 1 of the test failed') == 1
+
+
+def unit_error(cause):
+    """ The error of a change of a Modbus unit, as Client.change() raises it """
+    try:
+        raise UnitCommunicationError('Unit 2') from cause
+    except UnitCommunicationError as E:
+        return E
+
+
+async def test_step_refused_by_the_unit_ends_the_sequence_with_its_final(monkeypatch):
+    """ An exception response (Illegal Data Value) was retried as an error of the communication forever;
+        the sequence ends and its final state is written, the output does not stay in its state
+    """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+    set_ = device.set
+
+    async def refuse(**kw):
+        if kw.get('value') == 2:
+            raise unit_error(IllegalDataValueError(6))
+        await set_(**kw)
+    device.set = refuse
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 1}), Step({'value': 2}, 0.01)], final={'value': 0}, name='test'))
+    await asyncio.sleep(0.05)
+    assert not seq.is_running(device)
+    assert device.changes == [{'value': 1}, {'value': 0}]
+
+
+async def test_failed_step_is_written_again_less_often(monkeypatch):
+    """ A missing unit: the delay doubles, its bus is not loaded every second """
+    module = sys.modules['evok.blocks.sequencer']
+    monkeypatch.setattr(module, 'STEP_RETRY_DELAY', 0.01)
+    monkeypatch.setattr(module, 'STEP_RETRY_MAX_DELAY', 0.04)
+    device = FakeDevice(DO, '2_01')
+    attempts = []
+
+    async def lost(**kw):
+        attempts.append(kw)
+        raise unit_error(TimeoutError('no response'))
+    device.set = lost
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 1})], name='test'))
+    await asyncio.sleep(0.2)
+    seq.cancel(device)
+    assert 4 <= len(attempts) <= 8                         # 0.01, 0.02, 0.04, 0.04... instead of 20
+
+
+async def test_changed_error_of_a_step_is_logged(monkeypatch, caplog):
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+    errors = [TimeoutError('no response')] * 3 + [ConnectionError('port closed')] * 3
+
+    async def failing(**kw):
+        raise unit_error(errors.pop(0)) if errors else None
+    device.set = failing
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 1})], name='test'))
+    await asyncio.sleep(0.3)
+    logged = [r.getMessage() for r in caplog.records if 'step 1 of the test failed' in r.getMessage()]
+    assert len(logged) == 2 and 'port closed' in logged[1]
+
+
+async def test_final_after_a_refused_step_is_written_while_the_sequence_runs(monkeypatch):
+    """ The sequence ended before its final state was written: a new pulse in the gap was overwritten by it and
+        finish_all() did not wait for it; a noise on the bus lost the final state
+    """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+    release = asyncio.Event()
+    noise = [unit_error(TimeoutError('noise'))]
+    set_ = device.set
+
+    async def slow(**kw):
+        if kw.get('value') == 2:
+            raise unit_error(IllegalDataValueError(6))
+        if kw.get('value') == 0:
+            await release.wait()
+            if noise:
+                raise noise.pop()
+        await set_(**kw)
+    device.set = slow
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 2})], final={'value': 0}, name='test'))
+    await asyncio.sleep(0.02)
+    assert seq.is_running(device)                       # the final state is being written
+    release.set()
+    await asyncio.sleep(0.05)
+    assert device.changes == [{'value': 0}] and not seq.is_running(device)
+
+
+async def test_refused_end_of_a_pulse_is_not_written_again(caplog):
+    """ The only step of a pulse is its final state, it was sent again after it was refused """
+    device = FakeDevice(DO, '2_01')
+    attempts = []
+
+    async def refuse(**kw):
+        attempts.append(kw)
+        raise unit_error(IllegalDataValueError(5))
+    device.set = refuse
+    seq = Sequencer()
+    seq.start(device, pulse(1, 0.01))
+    await asyncio.sleep(0.05)
+    assert attempts == [{'value': 0}] and not seq.is_running(device)
+    assert len([r for r in caplog.records if r.exc_info]) == 1
+
+
+async def test_finish_all_waits_for_the_final_after_a_refused_step():
+    device = FakeDevice(DO, '2_01')
+    release = asyncio.Event()
+    set_ = device.set
+
+    async def slow(**kw):
+        if kw.get('value') == 2:
+            raise unit_error(IllegalDataValueError(6))
+        await release.wait()
+        await set_(**kw)
+    device.set = slow
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 2})], final={'value': 0}, name='test'))
+    await asyncio.sleep(0.01)
+    finish = asyncio.create_task(seq.finish_all())
+    await asyncio.sleep(0.01)
+    assert not finish.done()
+    release.set()
+    await finish
+    assert device.changes == [{'value': 0}]                    # once
+
+
+@pytest.mark.parametrize('cause, retried', [(ServerDeviceFailureError(6), False), (ServerDeviceBusyError(6), True)])
+async def test_exception_responses_of_the_unit(monkeypatch, cause, retried):
+    """ Server Device Failure is refused again, it was retried forever; a busy unit passes """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+    attempts = []
+
+    async def refuse(**kw):
+        attempts.append(kw)
+        raise unit_error(cause)
+    device.set = refuse
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 1})], name='test'))
+    await asyncio.sleep(0.05)
+    assert seq.is_running(device) is retried and (len(attempts) > 1) is retried
+    seq.cancel(device)
+
+
+async def test_error_with_a_changing_text_is_logged_once(monkeypatch, caplog):
+    """ The text of a timeout may differ by each attempt, it is the same error """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+    attempt = []
+
+    async def lost(**kw):
+        attempt.append(1)
+        raise unit_error(TimeoutError(f'no response to the request {len(attempt)}'))
+    device.set = lost
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 1})], name='test'))
+    await asyncio.sleep(0.2)
+    seq.cancel(device)
+    assert len(attempt) > 2
+    assert len([r for r in caplog.records if 'step 1 of the test failed' in r.getMessage()]) == 1
+
+
+async def test_step_is_done_after_its_write(monkeypatch):
+    """ A step written again was reported as done, the end of a pulse seemed written while the relay was on """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 'fail'}), Step({'value': 1})], name='test'))
+    await asyncio.sleep(0.03)
+    assert seq.running(device).step == 0
+    seq.cancel(device)
+
+
+async def test_last_step_ends_the_sequence_after_its_write(monkeypatch):
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+    failures = [ConnectionError('lost')] * 2
+    set_ = device.set
+
+    async def flaky(**kw):
+        if failures:
+            raise failures.pop()
+        await set_(**kw)
+    device.set = flaky
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 0}, 0.01)], final={'value': 0}, name='pulse'))
+    await asyncio.sleep(0.02)
+    assert seq.is_running(device)                       # the end failed, it is written again
+    await asyncio.sleep(0.05)
+    assert device.changes == [{'value': 0}] and not seq.is_running(device)
 
 
 def test_global_sequencer():
