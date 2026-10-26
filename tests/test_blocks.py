@@ -83,6 +83,34 @@ async def test_failed_step_is_written_again(caplog, monkeypatch):
     assert not seq.is_running(device)
 
 
+async def test_refused_step_ends_the_sequence(caplog, monkeypatch):
+    """ A value refused by the device is not an error of the communication, it was written again forever and
+        the output refused every change
+    """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+
+    async def refuse(**kw):
+        raise ValueError('not in this mode')
+    device.set = refuse
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 1})], name='test'))
+    await asyncio.sleep(0.03)
+    assert not seq.is_running(device)
+    assert caplog.text.count('DO 2_01: step 1 of the test failed') == 1
+
+
+async def test_step_is_done_after_its_write(monkeypatch):
+    """ A step written again was reported as done, the end of a pulse seemed written while the relay was on """
+    monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
+    device = FakeDevice(DO, '2_01')
+    seq = Sequencer()
+    seq.start(device, Sequence([Step({'value': 'fail'}), Step({'value': 1})], name='test'))
+    await asyncio.sleep(0.03)
+    assert seq.running(device).step == 0
+    seq.cancel(device)
+
+
 async def test_last_step_ends_the_sequence_after_its_write(monkeypatch):
     monkeypatch.setattr(sys.modules['evok.blocks.sequencer'], 'STEP_RETRY_DELAY', 0.01)
     device = FakeDevice(DO, '2_01')

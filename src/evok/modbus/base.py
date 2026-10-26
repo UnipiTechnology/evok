@@ -75,14 +75,12 @@ async def set_devices(
     """
     sequences = sequences or {}
     states = {} if states is None else states
-    # an invalid alias refused after the write of the value: the output was switched and the request failed
-    for device, kw in assignments:
-        if "alias" in kw:
-            Devices.check_alias(kw["alias"], device)
     units: dict = {}
     for index, (device, kw) in enumerate(assignments):
         unit = device.client if isinstance(device, IODevice) else device
         units.setdefault(unit, []).append((index, device, kw))
+
+    _check_aliases(units)
 
     for unit, items in units.items():
         done = []
@@ -112,3 +110,31 @@ async def set_devices(
             for index, device in done:
                 states[index] = device.full()
     return [states[index] for index in range(len(assignments))]
+
+
+def _check_aliases(units: dict):
+    """Check the aliases of the assignments in the order of their changes, before the first write: an invalid
+    alias was refused after the write of the value, the output was switched and the request failed. An alias
+    released by an earlier assignment can be taken, an alias taken by an earlier one cannot.
+    """
+    planned: dict = {}  # the alias of a device after the earlier assignments
+    free: set[str] = set()
+    taken: set[str] = set()
+    for items in units.values():
+        for _index, device, kw in items:
+            if "alias" not in kw:
+                continue
+            alias = kw["alias"] or ""
+            current = planned.get(device, device.alias)
+            if alias == current:
+                continue
+            if alias:
+                if alias in taken:
+                    raise ValueError(f"Duplicate alias {alias}")
+                Devices.check_alias(alias, device, free)
+                taken.add(alias)
+                free.discard(alias)
+            if current:
+                free.add(current)
+                taken.discard(current)
+            planned[device] = alias

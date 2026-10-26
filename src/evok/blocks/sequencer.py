@@ -16,11 +16,17 @@ import asyncio
 import logging
 from dataclasses import dataclass
 
+from tmodbus.exceptions import TModbusError
+
 from ..devices import devents, to_bool, to_float
+from ..errors import UnitCommunicationError
 
 logger = logging.getLogger(__name__)
 
 STEP_RETRY_DELAY = 1.0  # s, a failed step is written again after it, the output does not stay in its state
+# the errors of the communication, they pass; another error of a step ends its sequence, e.g. a value refused
+# by the device, it would be written again forever and the output refused the changes
+STEP_RETRIED = (UnitCommunicationError, TModbusError, TimeoutError, OSError)
 
 
 @dataclass
@@ -68,6 +74,7 @@ class Running:
     task: asyncio.Task
     sequence: Sequence
     step: int = 0  # the number of the done steps
+    finished: bool = False  # the last step was written, the sequence ended by it
 
 
 class Sequencer:
@@ -170,9 +177,7 @@ class Sequencer:
         while True:
             try:
                 applied = await self._apply(device, step.params, task, step_number, last)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
+            except STEP_RETRIED:
                 if not self._current(device, task):
                     return False
                 if not failures:
@@ -199,15 +204,18 @@ class Sequencer:
                 entry = self._running.get(device)
                 if entry is None or entry.task is not task:
                     return
-                entry.step = step_number
                 self._writing.add(task)
             try:
                 await device.set(**params)
             finally:
                 self._writing.discard(task)
-            if task is not None and last:
-                # after the successful write, a failed one is written again; the state read after it is not running
-                self._end(device, task)
+            if task is not None:
+                # done after the successful write, a failed step is written again and it is not reported as done
+                entry.step = step_number
+                if last:
+                    # the state read after the write is not running; finish_all() does not write the final state
+                    entry.finished = True
+                    self._end(device, task)
             applied = True
 
         change = getattr(getattr(device, "client", None), "change", None)
@@ -228,21 +236,18 @@ class Sequencer:
         for device, entry in entries:
             self._stop(entry)
             self._notify(device)
-        # a sequence writing its last step ends by it, its final state is not written again
-        finals = [
-            (device, entry.sequence)
-            for device, entry in entries
-            if entry.sequence.final is not None
-            and not (entry.task in self._writing and entry.step == len(entry.sequence.steps))
-        ]
+        candidates = [(device, entry) for device, entry in entries if entry.sequence.final is not None]
         writing = list(self._writing)
-        if not finals and not writing:
+        if not candidates and not writing:
             return
-        logger.info(f"Finishing {len(finals)} running sequences")
+        logger.info(f"Finishing {len(candidates)} running sequences")
 
         async def finish():
             if writing:
                 await asyncio.wait(writing)
+            # a sequence whose last step was written ended by it; a failed write of the last step is written
+            # by the final state
+            finals = [(device, entry.sequence) for device, entry in candidates if not entry.finished]
             await asyncio.gather(*(self._finish(device, sequence) for device, sequence in finals))
 
         try:

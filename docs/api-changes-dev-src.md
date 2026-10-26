@@ -118,10 +118,11 @@ the HW definitions. Breaking changes come first. Every change names its commits
 - **Sequencer** of each output (RO, DO, LED), the device `sequencer` with the circuit `<type>_<circuit>`
   (`/rest/sequencer/do_1_01`): a pulse (`value`, `pulse_duration`), a sequence of the changes of the output
   (`steps`, `final`) or `cancel`; its state has `running` and the progress, an event at the start, steps and end.
-  A failed step (e.g. a noise on the bus) is written again every 1 s, the sequence stays running, the output
-  does not stay in the state of a pulse. The RPC method `relay_set_for_time`. — `e16a3bf`, `7789635`, `a85fb14`
+  A step failed by an error of the communication (e.g. a noise on the bus) is written again every 1 s, the
+  sequence stays running, the output does not stay in the state of a pulse. The RPC method `relay_set_for_time`. — `e16a3bf`, `7789635`, `a85fb14`
 - An invalid alias in a change (a circuit, reserved, invalid or already used) is refused before the first write,
-  the output was switched and then the request failed.
+  the output was switched and then the request failed. The aliases of a bulk are checked in the order of the
+  changes, an alias released by an earlier change can be taken.
 - The reply to POST, bulk and the WebSocket `set` has the state after the writes and the event comes at once.
   — `a3f4679`
 - **New events:** — `60e2287`, `08d9f56`, `62b37ef`, `891bd4a`

@@ -88,9 +88,10 @@ class Aliases:
         if self.save_callback:
             self.save_callback()
 
-    def validate(self, alias: str, device: Device) -> None:
+    def validate(self, alias: str, device: Device, free=()) -> None:
+        """Raise ValueError for an invalid alias; free are the aliases released by the change before it"""
         # check duplicity
-        if alias in self.alias_dict:
+        if alias in self.alias_dict and alias not in free:
             raise ValueError(f"Duplicate alias {alias}")
         # an alias loaded from the file belongs to its device, even when the device is not registered yet
         rec = self.initial_dict.get(alias)
@@ -228,13 +229,16 @@ class DeviceList(dict):
         devents.config(device)
         logger.debug(f"Registered new device '{devtype_name}' with circuit {device.circuit} \t ({device})")
 
-    def check_alias(self, alias: str | None, device: Device) -> None:
-        """Raise ValueError if set_alias() would refuse the alias, before any change of the device"""
+    def check_alias(self, alias: str | None, device: Device, free=()) -> None:
+        """Raise ValueError if set_alias() would refuse the alias, before any change of the device;
+        free are the aliases released by the changes before it, e.g. an alias moved to another device
+        """
         if alias in (None, "") or alias == device.alias:
             return
+        # by_name() finds the circuit first, such alias would never be used
         if alias in self[device.devtype]:
             raise ValueError(f"Alias {alias} is a circuit of {device.devtype}")
-        self.aliases.validate(alias, device)
+        self.aliases.validate(alias, device, free)
 
     def set_alias(self, alias: str | None, device: Device, file_update: bool = False) -> None:
         """Set or reset ('' or None) the alias, an invalid alias raises ValueError logged by the caller"""
@@ -247,9 +251,7 @@ class DeviceList(dict):
             device.alias = ""
             logger.debug(f"Reset alias of {device.devtype}[{device.circuit}]")
         else:
-            # by_name() finds the circuit first, such alias would never be used
-            if alias in self[device.devtype]:
-                raise ValueError(f"Alias {alias} is a circuit of {device.devtype}")
+            self.check_alias(alias, device)
             self.aliases.add(alias, device, file_update)
             device.alias = alias
             logger.debug(f"Set alias {alias} of {device.devtype}[{device.circuit}]")

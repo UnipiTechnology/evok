@@ -228,6 +228,36 @@ async def test_invalid_alias_is_refused_before_the_write(units, alias, error):
     assert do.alias == ''
 
 
+async def test_same_alias_twice_in_one_request(units):
+    """ Both passed the check against the aliases before the request, the second failed after the first write """
+    client1, client2 = await units('1', '2')
+    with pytest.raises(ValueError, match='Duplicate alias x'):
+        await set_devices([(Devices.by_name(DO, '1_01'), {'value': 1, 'alias': 'x'}),
+                           (Devices.by_name(DO, '2_01'), {'value': 1, 'alias': 'x'})])
+    assert client1.mb_client.writes == [] and client2.mb_client.writes == []
+
+
+async def test_alias_moved_in_one_request(units):
+    """ An alias released by an earlier assignment was refused as a duplicate """
+    await units('1')
+    do1, do2 = Devices.by_name(DO, '1_01'), Devices.by_name(DO, '1_02')
+    Devices.set_alias('pump', do1)
+    await set_devices([(do1, {'alias': 'old_pump'}), (do2, {'alias': 'pump'})])
+    assert (do1.alias, do2.alias) == ('old_pump', 'pump')
+
+
+async def test_alias_released_by_a_later_unit_is_refused(units):
+    """ The units are changed in the order of their first assignment: unit 1 takes the alias before unit 2
+        releases it, it is refused before any write
+    """
+    client1, client2 = await units('1', '2')
+    do1, do2, do12 = Devices.by_name(DO, '1_01'), Devices.by_name(DO, '2_01'), Devices.by_name(DO, '1_02')
+    Devices.set_alias('pump', do2)
+    with pytest.raises(ValueError, match='Duplicate alias pump'):
+        await set_devices([(do1, {'value': 1}), (do2, {'alias': ''}), (do12, {'alias': 'pump'})])
+    assert client1.mb_client.writes == client2.mb_client.writes == [] and do2.alias == 'pump'
+
+
 async def test_bit_without_a_pin_is_not_pinned():
     client = make_client(SLOW_BLOCKS, holding={20: 0})
     await client.cache.do_scan(initial=True)
@@ -642,6 +672,30 @@ async def test_finish_all_waits_for_the_write_of_a_step(units):
     finish = asyncio.create_task(sequencer.finish_all())
     await asyncio.sleep(0.01)
     assert not finish.done()                                # waits for the write
+    release.set()
+    await finish
+    assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0)]
+
+
+async def test_finish_all_writes_the_final_state_after_a_failed_last_step(units):
+    """ The end of a pulse being written when Evok stops fails: its final state is written, the relay stayed on """
+    client, = await units('1')
+    do = Devices.by_name(DO, '1_01')
+    await start_pulse(do, 1, 0.01)
+    release, started = asyncio.Event(), asyncio.Event()
+    write = client.mb_client.write_single_coil
+    failures = [ConnectionError('noise')]
+
+    async def flaky(address, value):
+        started.set()
+        await release.wait()
+        if failures:
+            raise failures.pop()
+        await write(address, value)
+    client.mb_client.write_single_coil = flaky
+    await asyncio.wait_for(started.wait(), 1)
+    finish = asyncio.create_task(sequencer.finish_all())
+    await asyncio.sleep(0.01)
     release.set()
     await finish
     assert client.mb_client.writes == [('coil', 0, 1), ('coil', 0, 0)]
