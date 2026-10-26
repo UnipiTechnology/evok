@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -89,6 +90,8 @@ class ModbusCacheMap:
         self.scan_error: Exception | None = None
         self.groups = []
         self.igroups = []
+        # the groups read by the next periodic scan also out of their scan_divider, see read_soon()
+        self.due: list[RegisterGroup] = []
         for block in modbus_reg_map:
             group = _make_group(block)
             groups = self.igroups if block.get("type") == "input" else self.groups
@@ -108,8 +111,13 @@ class ModbusCacheMap:
         if initial:
             for group in self.groups + self.igroups:
                 group.clear_counter()
-        if not await self._read_groups(lambda group, is_input: all_groups or group.f_counter == 0):
+        due = list(self.due)
+        if not await self._read_groups(
+            lambda group, is_input: all_groups or group.f_counter == 0 or any(group is d for d in due)
+        ):
             return False
+        # read, the counters are not changed by them
+        self.due = [group for group in self.due if not any(group is d for d in due)]
         # the counters are ticked after the whole scan, a failed scan is repeated with the same groups,
         # the slow groups keep their phase
         if not all_groups:
@@ -135,6 +143,24 @@ class ModbusCacheMap:
             first = next(iter(self.groups + self.igroups), None)
             return await self._read_groups(lambda group, is_input: group is first)
         return await self._read_groups(wanted)
+
+    def read_soon(self, registers, delay: float):
+        """After delay the next periodic scan reads the slow groups of the registers (address, is_input), also
+        out of their scan_divider, their phase is kept; e.g. a register written by a change, which the unit
+        sets with a delay
+        """
+        groups = [
+            group
+            for groups, is_input in ((self.groups, False), (self.igroups, True))
+            for group in groups
+            if group.f_divider > 1
+            and any(input_ == is_input and group.is_member(address) for address, input_ in registers)
+        ]
+        if groups:
+            asyncio.get_running_loop().call_later(delay, self._add_due, groups)
+
+    def _add_due(self, groups):
+        self.due.extend(group for group in groups if not any(group is d for d in self.due))
 
     async def _read_groups(self, wanted) -> bool:
         """Read the groups wanted(group, is_input), False after a communication error"""
