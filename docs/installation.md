@@ -22,21 +22,21 @@ In order to install Evok on Neuron/Unipi1.X with RaspberryPi OS, you will need a
 
 To add Evok repositories and install required modules, connect to your controller using SSH. The username and password for Raspberry Pi OS are set using the Raspberry Pi OS Imager. After you connect to your controller execute the following commands:
 
-#### Neuron
+=== "For Neuron"
 
-```bash
-sudo su
-wget -qO - https://repo.unipi.technology/debian/raspberry-neuron.sh | bash
-reboot
-```
+    ```bash
+    sudo su
+    wget -qO - https://repo.unipi.technology/debian/raspberry-neuron.sh | bash
+    reboot
+    ```
 
-#### Unipi 1.X
+=== "For Unipi1.X"
 
-```bash
-sudo su
-wget -qO - https://repo.unipi.technology/debian/raspberry-unipi1.sh | bash
-reboot
-```
+    ```bash
+    sudo su
+    wget -qO - https://repo.unipi.technology/debian/raspberry-unipi1.sh | bash
+    reboot
+    ```
 
 You can proceed to [Installing and updating Evok](#installing-and-updating-evok) section.
 
@@ -49,31 +49,35 @@ sudo apt update
 sudo apt install -y evok
 ```
 
-> **Tip**
-> 
-> If you wish, you can also install or update Evok-web.
+!!! tip
+    If you wish, you can also install or update Evok-web.
 
-```bash title="Installing & updating Evok-web"
-sudo apt install -y evok-web
-```
+    ```bash title="Installing & updating Evok-web"
+    sudo apt install -y evok-web
+    ```
 
 ## Installing into a virtual environment
 
 Evok can be installed by pip into a Python virtual environment without its Debian package, e.g. to try
 a development branch. It needs Python 3.12 or newer (Debian 13 Trixie).
 
-> **Note**
-> 
-> The Debian package `evok` must not run at the same time, both use the port 8080:
-> `sudo systemctl disable --now evok`.
+!!! note
+
+    The Debian package `evok` must not run at the same time, both use the port 8080:
+    `sudo systemctl disable --now evok`.
+
+On Unipi controllers the local I/Os are read from the Modbus TCP server of the Unipi OS (`127.0.0.1:502`).
+
+`EVOK_VER` is the branch, the tag or the commit of Evok, the same for Evok and its configuration below.
 
 ```bash title="Installing Evok into ~/evok"
+EVOK_VER=dev-3.1
 sudo apt install -y python3-venv git
 python3 -m venv ~/evok/venv
-~/evok/venv/bin/pip install "git+https://github.com/UnipiTechnology/evok@dev-3.1"
+~/evok/venv/bin/pip install "git+https://github.com/UnipiTechnology/evok@$EVOK_VER"
 ```
 
-The same command with `--upgrade` updates Evok, a branch, a tag or a commit can follow `@`.
+The same command with `--upgrade` updates Evok.
 
 The configuration directory contains `config.yaml` and `hw_definitions/`
 (see [configuration](./configs/evok_configuration.md)). With `autogen: true` it also needs `autogen.yaml`,
@@ -81,11 +85,9 @@ which the Unipi OS generates to `/etc/evok/autogen.yaml`; without it the buses a
 of `config.yaml`.
 
 ```bash title="Preparing the configuration"
-EVOK_VER=dev-3.1
-mkdir -p ~/evok/etc
-curl -o ~/evok/etc/config.yaml https://raw.githubusercontent.com/UnipiTechnology/evok/$EVOK_VER/examples/config.yaml
 mkdir -p ~/evok/etc/hw_definitions
-curl -sL https://github.com/UnipiTechnology/evok/archive/$EVOK_VER.tar.gz \
+curl -fsSL -o ~/evok/etc/config.yaml https://raw.githubusercontent.com/UnipiTechnology/evok/$EVOK_VER/examples/config.yaml
+curl -fsSL https://github.com/UnipiTechnology/evok/archive/$EVOK_VER.tar.gz \
   | tar xz -C ~/evok/etc/hw_definitions --strip-components=3 --wildcards '*/hw_definitions/*/*.yaml'
 ln -s /etc/evok/autogen.yaml ~/evok/etc/autogen.yaml
 ```
@@ -139,9 +141,9 @@ sudo apt remove evok evok-web
 reboot
 ```
 
-> **Note**
-> 
-> After uninstalling Evok, you have to reboot your device to ensure all the files and settings are gone.
+!!! note
+
+    After uninstalling Evok, you have to reboot your device to ensure all the files and settings are gone.
 
 ----
 
