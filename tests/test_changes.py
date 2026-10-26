@@ -17,7 +17,7 @@ from evok.modbus import set_devices
 from evok.modbus.analog import AnalogOutputBrain
 from evok.modbus.builder import IOParser
 from evok.modbus.cache import ModbusCacheMap
-from evok.modbus.client import AccessorBit, AccessorU16, Client, device_registers
+from evok.modbus.client import AccessorBit, AccessorU16, AccessorU32, Client, device_registers
 from evok.modbus.scanner import ModbusScanner
 from evok.modbus.transport import BusTransport
 from evok.rpc_handler import Handler, UnitUnavailableError, create_response
@@ -213,6 +213,77 @@ async def test_unit_without_the_periodic_scan_shows_the_read(monkeypatch):
     await client.change(lambda: client.write_registers(20, [2]), devices=[])
     assert client.read_registers(20) == [1]
     assert client.cache.groups[2].pins == {}
+
+
+async def test_restart_drops_the_pins(monkeypatch):
+    """ A write and a reset of the unit in one change: the unit has its saved settings, the read shows them """
+    client = make_client(SLOW_BLOCKS, holding={20: 1})
+    await client.cache.do_scan(initial=True)
+    delayed_unit(client)
+
+    async def operation():
+        await client.write_registers(20, [2])
+        await client.write_coil_without_response(1, 1, wait=0)
+    await client.change(operation, devices=[])
+    assert client.read_registers(20) == [1]
+    assert all(not group.pins for group in client.cache.groups)
+
+
+async def test_counter_is_not_pinned():
+    """ The unit counts on after a reset of the counter, the read shows the count, not the written 0 """
+    client = make_client(SLOW_BLOCKS, holding={20: 7})
+    await client.cache.do_scan(initial=True)
+    counter = AccessorU32(20, pin=False)
+    assert AccessorU16(20).pin
+
+    async def operation():
+        await counter.write_raw(client, 0)
+        client.mb_client.holding[20] = 3                    # counted meanwhile
+    await client.change(operation, devices=[])
+    assert client.read_registers(20) == [3]
+    assert client.cache.groups[2].pins == {}
+
+
+async def test_write_without_a_pin_drops_the_older_pin():
+    """ The scan disabled after a pinned write: the older pin would overwrite the next written value """
+    client = make_client(SLOW_BLOCKS, holding={20: 1})
+    await client.cache.do_scan(initial=True)
+    await client.change(lambda: client.write_registers(20, [2]), devices=[])
+    client.periodic_scan = False
+    await client.change(lambda: client.write_registers(20, [3]), devices=[])
+    assert client.read_registers(20) == [3]
+    assert client.cache.groups[2].pins == {}
+
+
+async def test_pin_does_not_set_the_cache_without_cache():
+    """ PWM updates the cache after all its writes, a check never sees a partial setting """
+    client = make_client(SLOW_BLOCKS, holding={20: 1})
+    await client.cache.do_scan(initial=True)
+    seen = []
+
+    async def operation():
+        await client.write_registers(20, [2], cache=False)
+        seen.append(client.read_registers(20))
+        client.cache.set_register(20, [2])
+    await client.change(operation, devices=[])
+    assert seen == [[1]]
+    assert client.read_registers(20) == [2]
+
+
+async def test_long_change_keeps_its_first_writes(monkeypatch):
+    """ A change longer than REREAD_DELAY, e.g. retries on a slow bus: the pin of its first write is kept
+        until its read
+    """
+    monkeypatch.setattr('evok.modbus.client.REREAD_DELAY', 0.05)
+    client = make_client(SLOW_BLOCKS, holding={20: 1})
+    await client.cache.do_scan(initial=True)
+    delayed_unit(client)
+
+    async def operation():
+        await client.write_registers(20, [2])
+        await asyncio.sleep(0.08)
+    await client.change(operation, devices=[])
+    assert client.read_registers(20) == [2]
 
 
 async def test_bit_is_written_to_the_pinned_value():

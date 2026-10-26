@@ -54,13 +54,16 @@ class RegisterGroup:
                     del self.pins[pinned]
 
     def pin(self, address: int, value: int, until: float):
-        """Keep the written value of the register until the time, a read before it does not overwrite it"""
+        """Keep the written value of the register until the time, a read before it does not overwrite it;
+        the value in the cache is set by the write or by its caller, e.g. after all writes of a setting
+        """
         if self.is_member(address):
             self.pins[address] = (value, until)
-            self.values[address - self.address] = value
 
     def pin_expired(self) -> bool:
         """A pin has expired, the group is read by the next scan"""
+        if not self.pins:
+            return False
         now = time.monotonic()
         return any(until <= now for _value, until in self.pins.values())
 
@@ -169,6 +172,27 @@ class ModbusCacheMap:
             for group in self.igroups if is_input else self.groups:
                 group.pin(index + i, value, until)
 
+    def unpin(self, index: int, count: int, is_input: bool = False):
+        """Drop the pins of the registers, e.g. written again without a pin, an older pin would overwrite it"""
+        for group in self.igroups if is_input else self.groups:
+            for address in range(index, index + count):
+                group.pins.pop(address, None)
+
+    def renew_pins(self, registers, until: float):
+        """Keep the pinned registers (address, is_input) until the time, e.g. the writes of a change from its end,
+        a long change does not lose the pins of its first writes before its read
+        """
+        for groups, is_input in ((self.groups, False), (self.igroups, True)):
+            for group in groups:
+                for address, (value, _until) in list(group.pins.items()):
+                    if (address, is_input) in registers:
+                        group.pins[address] = (value, until)
+
+    def clear_pins(self):
+        """Drop all pins, e.g. after a restart of the unit, it has the saved settings"""
+        for group in self.groups + self.igroups:
+            group.pins.clear()
+
     async def _read_groups(self, wanted) -> bool:
         """Read the groups wanted(group, is_input), False after a communication error"""
         read = 0
@@ -227,9 +251,8 @@ class ModbusCacheMap:
         else:
             vals = await self.modbus_client.read_holding_registers(index, quantity=count)
         self.set_register(index, vals, is_input, read=True)
-        pinned = {
-            address: value
-            for group in (self.igroups if is_input else self.groups)
-            for address, (value, _until) in group.pins.items()
-        }
-        return [pinned.get(index + i, value) for i, value in enumerate(vals)]
+        try:
+            return self.get_register(index, count, is_input)
+        except (EUnknownRegister, ENoCacheRegister):
+            # out of the register blocks, nothing is pinned
+            return vals
