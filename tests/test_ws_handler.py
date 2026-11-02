@@ -1,0 +1,269 @@
+import asyncio
+import json
+
+import pytest
+import tornado.httpserver
+import tornado.testing
+import tornado.web
+import tornado.websocket
+from conftest import wait_until
+
+from evok.devices import DI, DO, Devices
+from evok.ws_handler import WsHandler, registered_ws
+
+
+class FakeDevice:
+    def __init__(self, devtype, circuit):
+        self.devtype = devtype
+        self.circuit = circuit
+        self.alias = ''
+        self.calls = []
+
+    def full(self):
+        return {'dev': self.devtype, 'circuit': self.circuit}
+
+    async def set(self, **kw):
+        self.calls.append(kw)
+
+    def check_new_data(self):
+        self.calls.append('check_new_data')
+
+
+@pytest.fixture
+async def ws(handlers):
+    yield handlers[0]
+
+
+@pytest.fixture
+async def handlers():
+    """ A client and the server side handler of the connection """
+    Devices[DO]['1_01'] = FakeDevice(DO, '1_01')
+    Devices[DI]['1_01'] = FakeDevice(DI, '1_01')
+    sock, port = tornado.testing.bind_unused_port()
+    server = tornado.httpserver.HTTPServer(tornado.web.Application([(r"/ws", WsHandler)]))
+    server.add_sockets([sock])
+    client = await tornado.websocket.websocket_connect(f"ws://127.0.0.1:{port}/ws")
+    await send(client, {'cmd': 'filter', 'devices': ['default']})
+    yield client, next(iter(registered_ws['all']))
+    client.close()
+    server.stop()
+    registered_ws.clear()
+
+
+MARK = {'cmd': 'full', 'dev': 'do', 'circuit': '1_01'}
+
+
+async def send(client, message):
+    """ Send a message, return the replies to it """
+    await client.write_message(json.dumps(message))
+    # messages are processed in order, the reply to 'full' marks the end
+    await client.write_message(json.dumps(MARK))
+    replies = []
+    while (reply := json.loads(await asyncio.wait_for(client.read_message(), 1))) != Devices[DO]['1_01'].full():
+        replies.append(reply)
+    return replies
+
+
+@pytest.mark.parametrize('message, expected', [
+    ({'value': 1}, {'value': 1}),
+    ({'value': '0'}, {'value': '0'}),
+    ({'pwm_duty': 50}, {'pwm_duty': 50}),
+])
+async def test_set(ws, message, expected):
+    await send(ws, {'cmd': 'set', 'dev': 'do', 'circuit': '1_01', **message})
+    assert Devices[DO]['1_01'].calls == [expected]
+
+
+async def test_value_is_not_the_first_param(ws):
+    # the value of a DI does not set the debounce, it is rejected by the schema
+    await send(ws, {'cmd': 'set', 'dev': 'di', 'circuit': '1_01', 'value': 5})
+    await send(ws, {'cmd': 'set', 'dev': 'di', 'circuit': '1_01', 'debounce': 5})
+    assert Devices[DI]['1_01'].calls == [{'debounce': 5}]
+
+
+@pytest.mark.parametrize('message', [
+    {'cmd': 'set', 'dev': 'do', 'circuit': '1_01', 'bogus': 1},
+    {'cmd': 'set', 'dev': 'do', 'circuit': '1_01', 'value': [1]},
+    # the pulse is set by the sequencer device of the output
+    {'cmd': 'set', 'dev': 'do', 'circuit': '1_01', 'value': 1, 'pulse_duration': 2},
+    {'cmd': 'set', 'dev': 'do', 'circuit': '1_01', 'value': 1, 'timeout': 2},
+    {'cmd': 'check_new_data', 'dev': 'do', 'circuit': '1_01'},
+    {'cmd': 'set_alias', 'dev': 'do', 'circuit': '1_01', 'value': 'x'},
+    {'cmd': '__class__', 'dev': 'do', 'circuit': '1_01'},
+])
+async def test_rejected(ws, message):
+    replies = await send(ws, message)
+    assert Devices[DO]['1_01'].calls == []
+    assert [reply['success'] for reply in replies] == [False]
+
+
+async def test_full(ws):
+    await ws.write_message(json.dumps({'cmd': 'full', 'dev': 'di', 'circuit': '1_01'}))
+    assert json.loads(await asyncio.wait_for(ws.read_message(), 1)) == {'dev': 'di', 'circuit': '1_01'}
+
+
+@pytest.mark.parametrize('message, error', [
+    ('not json', 'JSONDecodeError'),
+    ([1], 'ValueError'),
+    ({}, 'ValueError'),                                              # no command
+    ({'cmd': 'set', 'dev': 'do'}, 'ValueError'),                     # no circuit
+    ({'cmd': 'set', 'dev': 'do', 'circuit': '9_99'}, 'DeviceNotFound'),
+    ({'cmd': 'set', 'dev': 'do', 'circuit': '1_01', 'bogus': 1}, 'ValidationError'),
+    ({'cmd': 'filter', 'devices': 'di'}, 'ValueError'),
+    ({'cmd': 'filter', 'devices': ['foo']}, 'ValueError'),
+])
+async def test_error_reply(ws, message, error):
+    await ws.write_message(message if isinstance(message, str) else json.dumps(message))
+    reply = json.loads(await asyncio.wait_for(ws.read_message(), 1))
+    assert reply['success'] is False
+    assert list(reply['errors']) == [error]
+
+
+@pytest.mark.parametrize('devices, expected', [
+    (['input'], ['di']),                     # altnames are converted
+    (['di', 'foo'], ['di']),                 # unknown types are skipped
+    ([], []),
+    (['default'], ['default']),
+])
+async def test_filter(handlers, devices, expected):
+    client, handler = handlers
+    await send(client, {'cmd': 'filter', 'devices': ['do']})
+    assert await send(client, {'cmd': 'filter', 'devices': devices}) == []
+    assert handler.filter == expected
+
+
+async def test_event_with_altname_filter(handlers):
+    client, handler = handlers
+    await send(client, {'cmd': 'filter', 'devices': ['input']})
+    handler.on_event(Devices[DI]['1_01'])
+    assert await send(client, {'cmd': 'filter', 'devices': ['input']}) == [[{'dev': 'di', 'circuit': '1_01'}]]
+
+
+@pytest.mark.parametrize('all_filtered, devices, expected', [
+    (True, ['di'], [{'dev': 'di', 'circuit': '1_01'}]),
+    (True, ['default'], [{'dev': 'di', 'circuit': '1_01'}]),        # DO is not in the default 'all'
+    (False, ['di'], [{'dev': 'do', 'circuit': '1_01'}, {'dev': 'di', 'circuit': '1_01'}]),
+])
+async def test_all(handlers, all_filtered, devices, expected):
+    client, handler = handlers
+    handler.all_filtered = all_filtered
+    await send(client, {'cmd': 'filter', 'devices': devices})
+    assert await send(client, {'cmd': 'all'}) == [expected]
+
+
+class FakeProxy:
+    """ A change of Modbus devices, full() returns a list """
+    def __init__(self, *devices):
+        self.devices = devices
+
+    def full(self):
+        return [device.full() for device in self.devices]
+
+
+@pytest.mark.parametrize('devices, event, expected', [
+    (['default'], lambda: Devices[DI]['1_01'], [{'dev': 'di', 'circuit': '1_01'}]),
+    (['default'], lambda: FakeProxy(Devices[DI]['1_01'], Devices[DO]['1_01']),
+     [{'dev': 'di', 'circuit': '1_01'}, {'dev': 'do', 'circuit': '1_01'}]),
+    (['do'], lambda: Devices[DI]['1_01'], None),
+    (['do'], lambda: FakeProxy(Devices[DI]['1_01'], Devices[DO]['1_01']), [{'dev': 'do', 'circuit': '1_01'}]),
+])
+async def test_event_is_a_list(handlers, devices, event, expected):
+    client, handler = handlers
+    await send(client, {'cmd': 'filter', 'devices': devices})
+    handler.on_event(event())
+    replies = await send(client, {'cmd': 'filter', 'devices': devices})
+    assert replies == ([expected] if expected else [])
+
+
+class FakeState:
+    """ A device whose 'dev' in full() is not its device type """
+    def __init__(self, dev):
+        self.dev = dev
+
+    def full(self):
+        return {'dev': self.dev, 'circuit': '1'}
+
+
+@pytest.mark.parametrize('devices, dev', [
+    (['wd'], 'wd'), (['watchdog'], 'wd'),
+    (['temp'], 'temp'), (['sensor'], 'temp'), (['sensor'], '1wdevice'),
+])
+async def test_event_filter_by_device_type(handlers, devices, dev):
+    client, handler = handlers
+    await send(client, {'cmd': 'filter', 'devices': devices})
+    handler.on_event(FakeState(dev))
+    assert await send(client, {'cmd': 'filter', 'devices': devices}) == [[{'dev': dev, 'circuit': '1'}]]
+
+
+class Changing:
+    """ A device whose state changes """
+    def __init__(self, value):
+        self.value = value
+
+    def full(self):
+        return {'dev': 'do', 'circuit': '1_01', 'value': self.value}
+
+
+async def test_events_of_slow_client_are_merged(handlers):
+    """ Every event was written at once, the messages of a slow client were buffered without a limit """
+    _client, handler = handlers
+    sent, release = [], asyncio.Event()
+
+    async def slow_write(message):
+        sent.append(json.loads(message))
+        await release.wait()
+    handler.write_message = slow_write
+    for value in (1, 2, 3):
+        handler.on_event(Changing(value))
+        await asyncio.sleep(0)
+    handler.on_event(Devices[DI]['1_01'])
+    release.set()
+    await wait_until(lambda: handler.send_task is None, 0)
+    # the first state is sent at once, the next ones while it is sent are merged, the last state of each device
+    assert sent == [[{'dev': 'do', 'circuit': '1_01', 'value': 1}],
+                    [{'dev': 'do', 'circuit': '1_01', 'value': 3}, {'dev': 'di', 'circuit': '1_01'}]]
+
+
+async def test_event_of_closed_client_is_dropped(handlers, caplog):
+    _client, handler = handlers
+
+    async def closed(message):
+        raise tornado.websocket.WebSocketClosedError()
+    handler.write_message = closed
+    handler.on_event(Devices[DI]['1_01'])
+    await asyncio.sleep(0.01)
+    assert handler.send_task is None and handler.pending == {}
+    assert 'error' not in caplog.text.lower()
+
+
+def test_client_removed_during_event_does_not_break_the_others():
+    """ The set of the clients was iterated directly, a removed client raised RuntimeError """
+    from evok.evok import status_cb
+    received = []
+
+    class Client:
+        def on_event(self, device):
+            registered_ws['all'].discard(self)
+            received.append(device)
+    registered_ws['all'] = {Client(), Client()}
+    try:
+        status_cb('event')
+    finally:
+        registered_ws.clear()
+    assert received == ['event', 'event']
+
+
+async def test_large_message_closes_connection():
+    """ A command is short, the default limit was 10 MB """
+    from evok.ws_handler import WEBSOCKET_SETTINGS
+    sock, port = tornado.testing.bind_unused_port()
+    server = tornado.httpserver.HTTPServer(tornado.web.Application([(r"/ws", WsHandler)], **WEBSOCKET_SETTINGS))
+    server.add_sockets([sock])
+    try:
+        client = await tornado.websocket.websocket_connect(f"ws://127.0.0.1:{port}/ws")
+        await client.write_message(json.dumps({'cmd': 'filter', 'devices': ['x' * 70000]}))
+        assert await client.read_message() is None              # closed by the server
+        assert WEBSOCKET_SETTINGS['websocket_ping_interval'] and WEBSOCKET_SETTINGS['websocket_ping_timeout']
+    finally:
+        server.stop()
+        registered_ws.clear()

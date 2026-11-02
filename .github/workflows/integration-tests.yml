@@ -1,0 +1,118 @@
+name: integration-tests
+
+# CI gate for the Evok black-box integration harness.
+# See tests/integration/README.md for the harness architecture.
+#
+# functional — starts the real evok against the mockbus (fake Modbus PLC) + a fake
+# 1-Wire sysfs tree (DS18B20) + an MQTT broker, with the tokens and the webhook to
+# the receiver of the tests, then runs the harness as a black-box client; every
+# reply is validated against the OpenAPI document generated from the sources.
+# Hardware-free.
+#
+# Lint lives in .github/workflows/lint.yml (split by harness vs evok ownership).
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'dev-*'
+  pull_request:
+    paths:
+      - 'tests/integration/**'
+      - 'src/evok/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/integration-tests.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  functional:
+    name: functional (mockbus-backed evok)
+    runs-on: ubuntu-latest
+    # Exercises the real evok server against the mockbus (fake Modbus PLC) and
+    # a fake 1-Wire sysfs tree — no hardware. The launcher starts both
+    # (mockbus:5020, evok:8090) and mounts the fake tree over /sys/bus/w1/devices
+    # in a private mount namespace; the harness then connects as a black-box
+    # client. See tests/integration/mockbus/README.md.
+    defaults:
+      run:
+        working-directory: tests/integration
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            uv.lock
+            tests/integration/uv.lock
+
+      - name: Sync main project (evok)
+        working-directory: .
+        run: uv sync --frozen
+
+      - name: Sync harness
+        run: uv sync --frozen
+
+      - name: Allow unprivileged user namespaces (Ubuntu 24.04)
+        # The launcher fakes /sys/bus/w1/devices in a private mount namespace via
+        # `unshare -rm`. Ubuntu 24.04 restricts unprivileged user namespaces with
+        # AppArmor by default; lift it for this job. No-op on older runners.
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
+      - name: Start mockbus + fake 1-Wire + MQTT broker + evok
+        # Background the launcher; it stays alive serving on :8090. The harness
+        # connects in the next step. Teardown is implicit (job runner reaps).
+        run: |
+          uv run python mockbus/start.py > /tmp/evok.log 2>&1 &
+          echo $! > /tmp/launcher.pid
+
+      - name: Wait for evok readiness
+        run: |
+          # Poll /rest/all until evok responds and the 1-Wire sensor is found
+          # (board scan + 1-Wire scan take a few seconds). Timeout after 60s.
+          for i in $(seq 1 60); do
+            if curl -sf -H "Authorization: Bearer integration-token-0123456789abcdef" \
+                http://127.0.0.1:8090/rest/all/ 2>/dev/null | grep -q '"dev": "temp"'; then
+              echo "evok ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "evok did not become ready; launcher log:"
+          cat /tmp/evok.log
+          exit 1
+
+      - name: Run harness (functional)
+        env:
+          EVOK_BASE_URL: http://127.0.0.1:8090
+          EVOK_MQTT: 127.0.0.1:1884
+          EVOK_WEBHOOK_CONFIGURED: '1'
+        run: uv run pytest -ra
+
+      - name: Upload launcher log on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: functional-launcher-log-${{ github.run_id }}
+          path: /tmp/evok.log
+          if-no-files-found: ignore
+
+      - name: Stop launcher
+        if: always()
+        run: |
+          if [ -f /tmp/launcher.pid ]; then
+            kill "$(cat /tmp/launcher.pid)" 2>/dev/null || true
+          fi

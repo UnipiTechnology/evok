@@ -1,0 +1,125 @@
+# Unipi IAQ - Indoor air quality sensor
+# RW-THC, RLW-THC
+# Temperature, Humidity, CO2, VOC, Bar. pressure, Ambient light
+# File version: 1.1
+# Min. EVOK version: 3.0
+# Min. firmware version: 3.00
+---
+
+# Modbus communication definition (read)
+modbus_register_blocks:
+
+    # First registers group
+    - start_reg   : 0
+      count       : 44
+      scan_divider: 50
+      type        : input
+
+    # Second registers group
+    - start_reg   : 76
+      count       : 10
+      scan_divider: 500
+      type        : input
+
+# Device features definition
+modbus_features:
+
+    # Temperature
+    - type        : DATA_POINT
+      name        : "temperature"
+      count       : 1
+      value_reg   : 0
+      unit        : "°C"
+      datatype    : float32
+      reg_type    : input
+
+    # Relative humidity
+    - type        : DATA_POINT
+      name        : "rel_humid"
+      count       : 1
+      value_reg   : 6
+      unit        : "%"
+      datatype    : float32
+      reg_type    : input
+
+    # Dew point
+    - type        : DATA_POINT
+      name        : "dew_point"
+      count       : 1
+      value_reg   : 8
+      unit        : "°C"
+      datatype    : float32
+      reg_type    : input
+
+    # Absolute humidity
+    - type        : DATA_POINT
+      name        : "abs_humid"
+      count       : 1
+      value_reg   : 10
+      unit        : "%"
+      datatype    : float32
+      reg_type    : input
+
+    # CO2
+    - type        : DATA_POINT
+      name        : "CO2"
+      count       : 1
+      value_reg   : 18
+      unit        : "ppm"
+      datatype    : float32
+      reg_type    : input
+
+    # VOC index
+    - type        : DATA_POINT
+      name        : "VOC_index"
+      count       : 1
+      value_reg   : 26
+      unit        : "N/A"
+      datatype    : float32
+      reg_type    : input
+
+    # VOC precision
+    - type        : DATA_POINT
+      name        : "VOC_precision"
+      count       : 1
+      value_reg   : 28
+      unit        : "N/A"
+      datatype    : float32
+      reg_type    : input
+
+    # VOC CO2
+    - type        : DATA_POINT
+      name        : "VOC_CO2_eq"
+      count       : 1
+      value_reg   : 34
+      unit        : "ppm"
+      datatype    : float32
+      reg_type    : input
+
+    # Ambient light
+    - type        : DATA_POINT
+      name        : "ambient_light"
+      count       : 1
+      value_reg   : 42
+      unit        : "lux"
+      datatype    : float32
+      reg_type    : input
+
+    # Atmospheric pressure
+    - type        : DATA_POINT
+      name        : "atm_pressure"
+      count       : 1
+      value_reg   : 76
+      unit        : "hPa"
+      datatype    : float32
+      reg_type    : input
+
+    # Uptime
+    - type        : DATA_POINT
+      name        : "uptime"
+      count       : 1
+      value_reg   : 84
+      unit        : "sec"
+      datatype    : float32
+      reg_type    : input
+

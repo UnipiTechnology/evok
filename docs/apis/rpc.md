@@ -2,6 +2,60 @@
 
 The RPC (Remote Procedure Call) API is used for invoking procedures, functions or methods across a network. It is suitable for automated request.
 
+The API uses [JSON-RPC](https://www.jsonrpc.org/specification) at `/rpc`. It is enabled by default and can be disabled
+by `enabled: false` in `apis: rpc` of the [configuration](../configs/evok_configuration.md#rpc). Params can be passed as an array in the order
+of the table below or as an object with their names. A batch request (a list of calls) returns a list of the results,
+each call is done and checked by the `read_token` on its own. With a `token` in the configuration it is required as
+`Authorization: Bearer <token>` or as the password of Basic authentication, see [Security](../security.md).
+
+## Methods
+
+| Method                | Params                               | Result                                                                |
+|-----------------------|--------------------------------------|-----------------------------------------------------------------------|
+| `input_get`           | `circuit`                            | `[value, debounce]` of a DI                                           |
+| `input_get_value`     | `circuit`                            | value of a DI                                                         |
+| `input_set`           | `circuit`, `debounce`                | state of the DI                                                       |
+| `relay_get`           | `circuit`                            | value of a relay output (RO)                                          |
+| `relay_set`           | `circuit`, `value`                   | the value set, `0` or `1`                                             |
+| `relay_set_for_time`  | `circuit`, `value`, `pulse_duration` | state of the RO, the value is inverted after `pulse_duration` seconds |
+| `output_get`          | `circuit`                            | `[value, pending]` of a DO, `pending` is true during a pulse          |
+| `output_set`          | `circuit`, `value`                   | the value set, `0` or `1`                                             |
+| `output_set_for_time` | `circuit`, `value`, `pulse_duration` | state of the DO, the value is inverted after `pulse_duration` seconds |
+| `ai_get`              | `circuit`                            | state of an AI                                                        |
+| `ao_set_value`        | `circuit`, `value`                   | the value written to an AO                                            |
+| `ao_set`              | `circuit`, `value`, `mode`           | state of the AO                                                       |
+| `owbus_get`           | `circuit`                            | scan interval of a 1-Wire bus                                         |
+| `owbus_set`           | `circuit`, `scan_interval`           | state of the 1-Wire bus                                               |
+| `owbus_scan`          | `circuit`                            | state of the 1-Wire bus, the scan is started                          |
+| `owbus_list`          | `circuit`                            | addresses of the sensors on the 1-Wire bus by their type              |
+| `sensor_get`          | `circuit`                            | `[value, lost, readtime, interval]` of a 1-Wire sensor                |
+| `sensor_get_value`    | `circuit`                            | value of a 1-Wire sensor                                              |
+| `sensor_set`          | `circuit`, `interval`                | state of the 1-Wire sensor                                            |
+
+A value of an output is a boolean, also `0`, `1` or a string `'true'`, `'on'`, `'1'`, `'false'`, `'off'`, `'0'`. The `circuit` can be also an alias.
+The param `timeout` of `output_set_for_time` is a deprecated alias of `pulse_duration`. The pulses of RPC are set
+by the [sequencer](./sequencer.md) of the output, its state is not in the state of the output; `pending` of
+`output_get` is true during a pulse, not during another sequence. `relay_set_for_time` and `output_set_for_time`
+start the pulse by the sequencer, it replaces a running pulse or sequence of the output.
+
+`readtime` of `sensor_get` is the time of the event loop (a monotonic clock) of the last read, not a wall clock time,
+`0` before the first read. The value of a DS2438 is the list `[VDD, VAD, temperature, IAD]`, `IAD` is always `null`.
+
+## Errors
+
+| Code     | Meaning                                                                                    |
+|----------|--------------------------------------------------------------------------------------------|
+| `-32601` | Unknown method                                                                             |
+| `-32602` | Invalid params: a missing or unknown param, an invalid value, an unknown circuit or alias |
+| `-32603` | Internal error, the details are in the log of Evok                                         |
+| `-32000` | Unit unavailable: the Modbus unit failed its last scan, or a request of the change failed |
+| `-32001` | Forbidden: the `read_token` allows only the methods which read                            |
+| `-32002` | Sequence running: the output cannot be changed while its sequencer runs a pulse or sequence |
+
+```rs title="Example"
+{'jsonrpc': '2.0', 'id': 0, 'error': {'code': -32602, 'message': "Invalid params: Circuit or alias '9_99' with devtype 'ro' not found"}}
+```
+
 ## Examples
 
 For python examples you need installed `requests` package. You can install it with this command: `pip3 install requests`.
@@ -14,7 +68,7 @@ Value of DI 1.01 will be returned.
 import requests
 
 payload = {
-    "method": "di_get",
+    "method": "input_get",
     "params": ["1_01"],
     "jsonrpc": "2.0",
     "id": 0,
@@ -37,7 +91,7 @@ DO 1.01 will be set to HIGH.
 import requests
 
 payload = {
-    "method": "do_set",
+    "method": "output_set",
     "params": ["1_01", '1'],
     "jsonrpc": "2.0",
     "id": 0,

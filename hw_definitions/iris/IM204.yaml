@@ -1,0 +1,31 @@
+---
+# IRIS Card ID-DiS16-1
+modbus_register_blocks:
+    - board_index : 1
+      start_reg   : 0
+      count       : 34
+      scan_divider: 1
+    - board_index : 1
+      start_reg   : 1000
+      count       : 26
+      scan_divider: 10
+modbus_features:
+    - type        : DI
+      count       : 16
+      modes       :
+        - Simple
+      min_v       : 5
+      max_v       : 24
+      val_reg     : 0
+      counter_reg : 2
+      deboun_reg  : 1010
+    - type        : WD
+      count       : 1
+      val_reg     : 1
+      timeout_reg : 1008
+      nv_sav_coil : 1003
+      reset_coil  : 1002
+
+  # Non-volatile memory saver
+    - type: NV_SAVE
+      val_coil: 1003

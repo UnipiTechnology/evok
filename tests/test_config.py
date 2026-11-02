@@ -1,0 +1,569 @@
+import asyncio
+import re
+import struct
+import time
+from types import SimpleNamespace
+
+import pytest
+import yaml
+from tmodbus import AsyncModbusClient, AsyncSmartTransport
+from tmodbus.exceptions import CRCError, ModbusConnectionError, RequestRetryFailedError, ServerDeviceBusyError
+
+from evok import config
+from evok.devices import DEVICE_INFO, MODBUS_SLAVE, OWBUS, SENSOR, SERIALBUS, TCPBUS, Devices
+from evok.w1 import DS18B20, OwBusDriver
+
+
+@pytest.mark.parametrize('text', [
+    'version: 2.0\naliases:\n  kitchen: {devtype: di, circuit: "1_01"}\n',       # a number without quotes
+    'version: "2.0"\naliases:\n  kitchen: {devtype: di, circuit: "1_01"}\n',
+    'aliases:\n  kitchen: {devtype: di, circuit: "1_01"}\n',                      # no version, a dict
+    'version: 1.0\naliases:\n  - {name: kitchen, dev_type: di, circuit: "1_01"}\n',
+    'aliases:\n  - {name: kitchen, dev_type: di, circuit: "1_01"}\n',             # no version, a list
+])
+def test_load_aliases(tmp_path, text):
+    path = tmp_path / 'alias.yaml'
+    path.write_text(text)
+    config.load_aliases(str(path))
+    assert Devices.aliases.initial_dict == {'kitchen': {'devtype': 'di', 'circuit': '1_01'}}
+
+
+def test_load_aliases_unknown_version(tmp_path, caplog):
+    path = tmp_path / 'alias.yaml'
+    path.write_text('version: 3.0\naliases:\n  kitchen: {devtype: di, circuit: "1_01"}\n')
+    config.load_aliases(str(path))
+    assert Devices.aliases.initial_dict == {}
+    assert "Unknown version '3.0'" in caplog.text
+
+
+def create(comm_channels):
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: comm_channels), SimpleNamespace(definitions={}))
+
+
+def test_owfs_bus_with_sensors(caplog):
+    create({'OWFS': {'type': 'OWFS', 'interval': 10, 'devices': {
+        'temp1': {'type': 'DS18B20', 'address': '28.0000AB', 'interval': '30'},
+        'foo': {'type': 'DS9999', 'address': '99.000001'},
+        'noaddr': {'type': 'DS18B20'},
+    }}})
+    bus = Devices[OWBUS]['OWFS']
+    assert isinstance(bus, OwBusDriver)
+    sensor = Devices[SENSOR]['temp1']
+    assert isinstance(sensor, DS18B20)
+    assert (sensor.address, sensor.interval) == ('28.0000AB', 30)
+    assert bus.mysensors == [sensor]
+    assert list(Devices[SENSOR]) == ['temp1']
+    assert "Unsupported type 'DS9999'" in caplog.text
+    assert "Missing 'address'" in caplog.text
+
+
+def test_owfs_bus_master():
+    create({'FIRST': {'type': 'OWFS'}, 'SECOND': {'type': 'OWFS', 'master': 'w1_bus_master2'}})
+    assert [b.master for b in Devices[OWBUS].values()] == [None, 'w1_bus_master2']
+
+
+def test_w1_master_used_by_two_owfs_buses(caplog):
+    """ Both buses found all sensors of the master and created them twice """
+    create({'OW1': {'type': 'OWFS'},
+            'OW2': {'type': 'OWFS', 'devices': {'t': {'type': 'DS18B20', 'address': '28.01'}}},
+            'OW3': {'type': 'OWFS', 'master': 'w1_bus_master2'},
+            'OW4': {'type': 'OWFS', 'master': 'w1_bus_master2'}})
+    assert list(Devices[OWBUS]) == ['OW1', 'OW3']
+    assert list(Devices[SENSOR]) == []
+    assert "1-Wire master (the first one) is already used by bus 'OW1'" in caplog.text
+    assert "1-Wire master w1_bus_master2 is already used by bus 'OW3'" in caplog.text
+
+
+@pytest.mark.parametrize('bus, error', [
+    ({'master': ''}, 'master must be the name of a 1-Wire master of the kernel'),
+    ({'master': 'i2c-2'}, 'master must be the name of a 1-Wire master of the kernel'),
+    ({'master': 1}, 'master must be the name of a 1-Wire master of the kernel'),
+    ({'hostname': '127.0.0.1'}, "'hostname' of an OWFS bus is not supported, use 'master'"),
+    ({'port': 4304}, "'port' of an OWFS bus is not supported, use 'master'"),
+])
+def test_owfs_bus_invalid_master(caplog, bus, error):
+    """ owserver is not used, hostname and port of 3.1 before the kernel were refused """
+    create({'OW': dict(bus, type='OWFS')})
+    assert list(Devices[OWBUS]) == []
+    assert error in caplog.text
+
+
+def test_owfs_sensor_name_collision_over_buses(caplog):
+    """ The second sensor replaced the first one in Devices, it was polled but not reachable by the API """
+    create({'OW1': {'type': 'OWFS', 'devices': {'temp': {'type': 'DS18B20', 'address': '28.01'}}},
+            'OW2': {'type': 'OWFS', 'master': 'w1_bus_master2',
+                    'devices': {'temp': {'type': 'DS18B20', 'address': '28.02'},
+                                'temp2': {'type': 'DS18B20', 'address': '28.03'}}}})
+    assert Devices[SENSOR]['temp'].address == '28.01'
+    assert [s.circuit for s in Devices[OWBUS]['OW2'].mysensors] == ['temp2']
+    assert ("1-Wire sensor 'temp' (28.02) of bus 'OW2' has the same name as the sensor 28.01 of bus 'OW1'"
+            in caplog.text)
+
+
+def test_unknown_bus_type(caplog):
+    create({'OW': {'type': 'OWBUS', 'devices': {'temp1': {'type': 'DS18B20', 'address': '28.0000AB'}}}})
+    assert list(Devices[OWBUS]) == []
+    assert list(Devices[SENSOR]) == []
+    assert "Unknown type 'OWBUS' of bus 'OW'" in caplog.text
+
+
+def write_config(tmp_path, config_text, autogen_text=None):
+    (tmp_path / 'config.yaml').write_text(config_text)
+    if autogen_text is not None:
+        (tmp_path / 'autogen.yaml').write_text(autogen_text)
+    return config.EvokConfig(str(tmp_path))
+
+
+def test_config_with_autogen(tmp_path):
+    conf = write_config(tmp_path, 'autogen: true\napis:\n  port: 8081\n',
+                        'apis:\n  port: 8080\n  address: ""\ncomm_channels:\n  LOCAL_TCP: {type: MODBUSTCP}\n')
+    assert conf.apis == {'port': 8081, 'address': ''}     # config.yaml overrides autogen.yaml
+    assert list(conf.comm_channels) == ['LOCAL_TCP']
+
+
+def test_config_python_tags_are_not_executed(tmp_path):
+    with pytest.raises(yaml.YAMLError):
+        write_config(tmp_path, 'apis: !!python/object/apply:os.getcwd []\n')
+
+
+@pytest.mark.parametrize('autogen_text', ['', '# only a comment\n'])
+def test_empty_autogen_is_skipped(tmp_path, caplog, autogen_text):
+    conf = write_config(tmp_path, 'autogen: true\napis:\n  port: 8081\n', autogen_text)
+    assert conf.apis == {'port': 8081}
+    assert 'is empty' in caplog.text
+
+
+def test_empty_sections(tmp_path):
+    conf = write_config(tmp_path, 'apis:\nlogging:\ncomm_channels:\n')
+    assert (conf.apis, conf.logging, conf.comm_channels) == ({}, {}, {})
+
+
+def test_empty_section_of_an_api(tmp_path):
+    """ websocket: with all its options commented out was None, evok.py failed on .get() at the start """
+    conf = write_config(tmp_path, 'apis:\n  port: 8080\n  websocket:\n  webhook:\n  rpc:\n  mqtt:\n')
+    assert conf.apis == {'port': 8080, 'websocket': {}, 'webhook': {}, 'rpc': {}, 'mqtt': {}}
+    assert (conf.get_api('websocket'), conf.get_api('webhook')) == ({}, {})
+
+
+@pytest.mark.parametrize('text, error', [
+    ('apis:\n  websocket: true\n', "apis: websocket must be a mapping of its options, not 'True'"),
+    ('apis:\n  mqtt: [broker]\n', "apis: mqtt must be a mapping of its options"),
+    ('apis: 8080\n', "apis must be a mapping of the options of the APIs, not '8080'"),
+])
+def test_section_of_an_api_is_a_mapping(tmp_path, text, error):
+    """ evok.py failed on .get() of the value at the start, Evok exits with the error of the config """
+    with pytest.raises(config.EvokConfigError, match=re.escape(error)):
+        write_config(tmp_path, text)
+
+
+def test_config_not_a_mapping(tmp_path):
+    with pytest.raises(config.EvokConfigError):
+        write_config(tmp_path, '- a list\n')
+
+
+def test_error_in_bus_does_not_stop_other_buses(caplog):
+    create({
+        'RTU': {'type': 'MODBUSRTU'},                   # missing port
+        'EMPTY': None,                                  # empty section
+        'NOTYPE': {'interval': 10},
+        'OWFS': {'type': 'OWFS', 'devices': {'empty': None, 'temp1': {'type': 'DS18B20', 'address': '28.0000AB'}}},
+    })
+    assert list(Devices[OWBUS]) == ['OWFS']
+    assert list(Devices[SENSOR]) == ['temp1']
+    assert "Error in config of bus 'RTU'" in caplog.text
+    assert "Unknown type 'None' of bus 'EMPTY'" in caplog.text
+    assert "Unknown type 'None' of bus 'NOTYPE'" in caplog.text
+
+
+@pytest.mark.parametrize('bus, expected', [
+    ({'type': 'MODBUSTCP'}, {'timeout': 0.5, 'connect_timeout': 1.0}),
+    ({'type': 'MODBUSTCP', 'timeout': 2, 'connect_timeout': '3.5'}, {'timeout': 2.0, 'connect_timeout': 3.5}),
+    ({'type': 'MODBUSRTU', 'port': '/dev/null'}, {'timeout': 0.5}),
+    ({'type': 'MODBUSRTU', 'port': '/dev/null', 'timeout': 1.5}, {'timeout': 1.5}),
+])
+def test_modbus_timeouts(bus, expected):
+    create({'BUS': bus})
+    devtype = TCPBUS if bus['type'] == 'MODBUSTCP' else SERIALBUS
+    transport = Devices[devtype]['BUS'].bus_driver.base_transport
+    assert {key: getattr(transport, key) for key in expected} == expected
+
+
+@pytest.mark.parametrize('bus, attempts', [
+    ({'type': 'MODBUSTCP'}, 2),
+    ({'type': 'MODBUSTCP', 'retries': 0}, 1),
+    ({'type': 'MODBUSRTU', 'port': '/dev/null', 'retries': 3}, 4),
+])
+def test_modbus_retries(bus, attempts):
+    create({'BUS': bus})
+    devtype = TCPBUS if bus['type'] == 'MODBUSTCP' else SERIALBUS
+    stop = Devices[devtype]['BUS'].bus_driver.response_retry_strategy.stop
+    assert [s.max_attempt_number for s in stop.stops if hasattr(s, 'max_attempt_number')] == [attempts]
+
+
+async def test_modbus_tcp_is_opened_by_the_first_request():
+    """ The bus was opened by a task of Evok, its failure was not reported, auto_reconnect opens it """
+    async def unit(reader, writer):
+        # a Modbus TCP unit, read holding registers returns 42
+        while True:
+            header = await reader.readexactly(7)
+            tid, _, length, unit_id = struct.unpack('>HHHB', header)
+            pdu = await reader.readexactly(length - 1)
+            response = bytes([pdu[0], 2]) + struct.pack('>H', 42)
+            writer.write(struct.pack('>HHHB', tid, 0, len(response) + 1, unit_id) + response)
+            await writer.drain()
+
+    server = await asyncio.start_server(unit, '127.0.0.1', 0)
+    try:
+        create({'BUS': {'type': 'MODBUSTCP', 'port': server.sockets[0].getsockname()[1]}})
+        client = AsyncModbusClient(Devices[TCPBUS]['BUS'].bus_driver, unit_id=1)
+        assert await client.read_holding_registers(0, quantity=1) == [42]
+    finally:
+        server.close()
+
+
+def modbus_bus(port, devices):
+    return {'type': 'MODBUSRTU', 'port': port, 'devices': devices}
+
+
+@pytest.mark.parametrize('name1, name2', [(1, 1), (1, '1'), ('xS51', 'xS51')])
+def test_modbus_device_name_collision_over_buses(l0306, caplog, name1, name2):
+    """ The second device replaced the first one in Devices and its IOs were not created """
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {name1: {'slave-id': 1, 'model': 'L0306'}}),
+        'RTU2': modbus_bus('/dev/zero', {name2: {'slave-id': 2, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    slave = Devices[MODBUS_SLAVE][str(name1)]
+    assert (slave.modbus_spec, slave.modbus_address) == ('/dev/null', 1)
+    assert list(Devices[MODBUS_SLAVE]) == [str(name1)]
+    assert len(Devices[DEVICE_INFO]) == 1
+    assert (f"Modbus device '{name2}' of bus 'RTU2' has the same name as the device of bus 'RTU1'"
+            in caplog.text)
+
+
+def test_modbus_device_name_collision_in_one_bus(l0306, caplog):
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {1: {'slave-id': 1, 'model': 'L0306'}, '1': {'slave-id': 2, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert Devices[MODBUS_SLAVE]['1'].modbus_address == 1
+    assert "Modbus device '1' of bus 'RTU1' has the same name as the device of bus 'RTU1'" in caplog.text
+
+
+def test_modbus_device_name_is_reserved_only_by_a_created_device(l0306, caplog):
+    """ A failed or disabled device does not block the name """
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {1: {'slave-id': 1, 'model': 'unknown'},
+                                         2: {'slave-id': 2, 'model': 'L0306', 'enabled': False}}),
+        'RTU2': modbus_bus('/dev/zero', {1: {'slave-id': 1, 'model': 'L0306'},
+                                         2: {'slave-id': 2, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert {name: slave.modbus_spec for name, slave in Devices[MODBUS_SLAVE].items()} == \
+        {'1': '/dev/zero', '2': '/dev/zero'}
+    assert 'has the same name' not in caplog.text
+
+
+def test_serial_port_used_by_two_buses(l0306, tmp_path, caplog):
+    """ A symlink is the same port, the second bus and its devices are not created """
+    link = tmp_path / 'ttyNS0'
+    link.symlink_to('/dev/null')
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {1: {'slave-id': 1, 'model': 'L0306'}}),
+        'RTU2': modbus_bus(str(link), {2: {'slave-id': 2, 'model': 'L0306'}}),
+        'RTU3': modbus_bus('/dev/zero', {3: {'slave-id': 1, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert list(Devices[SERIALBUS]) == ['RTU1', 'RTU3']
+    assert list(Devices[MODBUS_SLAVE]) == ['1', '3']
+    assert f"Serial port '{link}' is already used by bus 'RTU1'" in caplog.text
+
+
+def test_modbus_slave_id_collision_in_rtu_bus(l0306, caplog):
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {1: {'slave-id': 5, 'model': 'L0306'},
+                                         2: {'slave-id': 5, 'model': 'L0306'},
+                                         3: {'slave-id': 6, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert list(Devices[MODBUS_SLAVE]) == ['1', '3']
+    assert len(Devices[DEVICE_INFO]) == 2
+    assert "Modbus device '2' of bus 'RTU1' has the same slave-id 5 as the device '1' of bus 'RTU1'" in caplog.text
+
+
+def tcp_bus(host, port, devices):
+    return {'type': 'MODBUSTCP', 'hostname': host, 'port': port, 'devices': devices}
+
+
+def test_modbus_slave_id_collision_on_tcp_server(l0306, caplog):
+    """ More buses may connect to one server, the slave-id must differ on the same host and port """
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'TCP1': tcp_bus('localhost', 502, {1: {'slave-id': 1, 'model': 'L0306'}}),
+        'TCP2': tcp_bus('LocalHost', 502, {2: {'slave-id': 1, 'model': 'L0306'},
+                                           3: {'slave-id': 2, 'model': 'L0306'}}),
+        'TCP3': tcp_bus('localhost', 503, {4: {'slave-id': 1, 'model': 'L0306'}}),
+        'TCP4': tcp_bus('10.0.0.1', 502, {5: {'slave-id': 1, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert list(Devices[TCPBUS]) == ['TCP1', 'TCP2', 'TCP3', 'TCP4']
+    assert list(Devices[MODBUS_SLAVE]) == ['1', '3', '4', '5']
+    assert "Modbus device '2' of bus 'TCP2' has the same slave-id 1 as the device '1' of bus 'TCP1'" in caplog.text
+
+
+def test_modbus_slave_id_is_reserved_only_by_a_created_device(l0306, caplog):
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {1: {'slave-id': 1, 'model': 'unknown'},
+                                         2: {'slave-id': 2, 'model': 'L0306', 'enabled': False},
+                                         3: {'slave-id': 1, 'model': 'L0306'},
+                                         4: {'slave-id': 2, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert list(Devices[MODBUS_SLAVE]) == ['3', '4']
+    assert 'has the same slave-id' not in caplog.text
+
+
+def test_modbus_invalid_retries_skips_the_bus(caplog):
+    create({'BUS': {'type': 'MODBUSTCP', 'retries': -1}})
+    assert 'BUS' not in Devices[TCPBUS]
+    assert "Error in config of bus 'BUS'" in caplog.text
+
+
+def test_hw_dict(tmp_path, caplog):
+    (tmp_path / 'xS51.yaml').write_text('type: xS51\n')
+    (tmp_path / 'my.yaml.yaml').write_text('type: my\n')
+    (tmp_path / 'broken.yaml').write_text('type: [\n')
+    (tmp_path / 'list.yaml').write_text('- a\n')
+    (tmp_path / 'empty.yaml').write_text('')
+    (tmp_path / 'notes.txt').write_text('type: notes\n')
+    hw = config.HWDict(dir_paths=[str(tmp_path)])                 # no trailing slash
+    assert hw.definitions == {'xS51': {'type': 'xS51'}, 'my.yaml': {'type': 'my'}}
+    assert "Cannot load definition file" in caplog.text
+    assert "does not contain a mapping" in caplog.text
+
+
+@pytest.mark.parametrize('name', ['alias.yaml', 'alias.yml', 'aliases'])
+def test_load_aliases_any_extension(tmp_path, name):
+    path = tmp_path / name
+    path.write_text('version: "2.0"\naliases:\n  kitchen: {devtype: di, circuit: "1_01"}\n')
+    config.load_aliases(str(path))
+    assert list(Devices.aliases.initial_dict) == ['kitchen']
+
+
+@pytest.mark.parametrize('text', [None, '', 'aliases: [\n', '- a\n'])
+def test_load_aliases_invalid_file(tmp_path, text):
+    path = tmp_path / 'alias.yaml'
+    if text is not None:
+        path.write_text(text)
+    config.load_aliases(str(path))
+    assert Devices.aliases.initial_dict == {}
+
+
+class FakeTransport:
+    """ The base transport of AsyncSmartTransport, the results of open() and send_and_receive() are given """
+
+    def __init__(self, open_errors=(), responses=()):
+        self.open_errors = list(open_errors)
+        self.responses = list(responses)
+        self.opened = False
+        self.opens = 0
+        self.requests = 0
+
+    def is_open(self):
+        return self.opened
+
+    async def open(self):
+        self.opens += 1
+        error = self.open_errors.pop(0) if self.open_errors else None
+        if error is not None:
+            raise error
+        self.opened = True
+
+    async def close(self):
+        self.opened = False
+
+    async def send_and_receive(self, unit_id, pdu):
+        self.requests += 1
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
+def smart_transport(base, retries=1):
+    return AsyncSmartTransport(base, wait_between_requests=0.0, wait_after_connect=0.0,
+                               retry_on_device_busy=True, retry_on_device_failure=False,
+                               **config.retry_strategies(0.1, 0.1, retries))
+
+
+async def test_unavailable_unit_fails_fast():
+    """ The default retries of tmodbus locked the bus up to 60 s for each request """
+    base = FakeTransport(open_errors=[ModbusConnectionError('refused')] * 10)
+    start = time.monotonic()
+    with pytest.raises(RequestRetryFailedError):
+        await smart_transport(base).send_and_receive(1, 'pdu')
+    assert time.monotonic() - start < 1
+    assert (base.opens, base.requests) == (2, 0)              # one reconnect for each of two attempts
+
+
+async def test_lost_connection_is_reconnected():
+    base = FakeTransport(responses=[ModbusConnectionError('reset'), 'response'])
+    base.opened = True
+    assert await smart_transport(base).send_and_receive(1, 'pdu') == 'response'
+    assert (base.opens, base.requests) == (1, 2)
+
+
+@pytest.mark.parametrize('error', [CRCError('noise', response_bytes=b'\x01'), TimeoutError('no response')])
+async def test_other_errors_are_not_retried(error):
+    base = FakeTransport(responses=[error, 'response'])
+    base.opened = True
+    with pytest.raises(type(error)):
+        await smart_transport(base).send_and_receive(1, 'pdu')
+    assert base.requests == 1
+
+
+@pytest.mark.parametrize('retries, requests', [(0, 1), (1, 2), (3, 4)])
+async def test_retries_of_busy_unit_are_configured(retries, requests):
+    base = FakeTransport(responses=[ServerDeviceBusyError(0x03)] * 5)
+    base.opened = True
+    with pytest.raises(RequestRetryFailedError):
+        await smart_transport(base, retries).send_and_receive(1, 'pdu')
+    assert base.requests == requests
+
+
+@pytest.mark.parametrize('bus_data, retries', [({}, 1), ({'retries': 0}, 0), ({'retries': 3}, 3)])
+def test_bus_retries(bus_data, retries):
+    assert config.bus_retries(bus_data) == retries
+
+
+@pytest.mark.parametrize('value', [-1, 1.5, '2', True, None])
+def test_bus_retries_invalid(value):
+    with pytest.raises(ValueError, match='retries'):
+        config.bus_retries({'retries': value})
+
+
+class SlowTransport(FakeTransport):
+    """ A unit which does not respond, the request waits for the timeout of the transport """
+    def __init__(self):
+        super().__init__()
+        self.opened = True
+
+    async def send_and_receive(self, unit_id, pdu):
+        self.requests += 1
+        await asyncio.sleep(10)
+
+
+def bus_transport(base, probe_timeout=0.05, retries=1):
+    from evok.modbus.transport import BusTransport
+    return BusTransport(base, wait_between_requests=0.0, wait_after_connect=0.0, retry_on_device_busy=True,
+                        retry_on_device_failure=False, probe_timeout=probe_timeout,
+                        **config.retry_strategies(0.1, 0.1, retries))
+
+
+async def test_failing_unit_is_probed_by_one_short_request():
+    """ #210: every scan of a missing unit locked the bus for (retries + 1) * timeout """
+    base = SlowTransport()
+    transport = bus_transport(base)
+    transport.set_failing(1, True)
+    start = time.monotonic()
+    with pytest.raises(TimeoutError, match=r'No response to the probe after 0\.05 seconds'):
+        await transport.send_and_receive(1, 'pdu')
+    assert time.monotonic() - start < 0.5
+    assert base.requests == 1                                  # no retry
+
+
+async def test_probe_waits_for_the_bus():
+    """ The probe timeout starts after the lock, a request of another unit does not make it fail """
+    base = FakeTransport(responses=['other', 'probe'])
+    base.opened = True
+    transport = bus_transport(base, probe_timeout=0.05)
+    transport.set_failing(2, True)
+    send = base.send_and_receive
+
+    async def slow_other(unit_id, pdu):
+        if unit_id == 1:
+            await asyncio.sleep(0.1)                           # longer than the probe timeout
+        return await send(unit_id, pdu)
+    base.send_and_receive = slow_other
+    assert await asyncio.gather(transport.send_and_receive(1, 'pdu'), transport.send_and_receive(2, 'pdu')) == \
+        ['other', 'probe']
+
+
+async def test_recovered_unit_uses_the_retries_again():
+    base = FakeTransport(responses=[ServerDeviceBusyError(6), 'response'])
+    base.opened = True
+    transport = bus_transport(base)
+    transport.set_failing(1, True)
+    transport.set_failing(1, False)
+    assert await transport.send_and_receive(1, 'pdu') == 'response'
+    assert base.requests == 2
+
+
+@pytest.mark.parametrize('bus, expected', [
+    ({'type': 'MODBUSRTU', 'port': '/dev/null'}, 0.1),
+    ({'type': 'MODBUSRTU', 'port': '/dev/null', 'timeout': 0.05}, 0.05),     # not longer than the timeout
+    ({'type': 'MODBUSRTU', 'port': '/dev/null', 'probe_timeout': 0.3}, 0.3),
+    ({'type': 'MODBUSTCP'}, 0.5),                                             # a gateway on the network
+    ({'type': 'MODBUSTCP', 'timeout': 2, 'probe_timeout': 1}, 1.0),
+])
+def test_probe_timeout(bus, expected):
+    create({'BUS': bus})
+    bus_device = (Devices[SERIALBUS] if bus['type'] == 'MODBUSRTU' else Devices[TCPBUS])['BUS']
+    assert bus_device.bus_driver.probe_timeout == expected
+    assert bus_device.full()['probe_timeout'] == expected
+
+
+@pytest.mark.parametrize('value', [0, -1, 'fast', True])
+def test_probe_timeout_invalid(caplog, value):
+    create({'BUS': {'type': 'MODBUSRTU', 'port': '/dev/null', 'probe_timeout': value}})
+    assert 'BUS' not in Devices[SERIALBUS]
+    assert 'probe_timeout must be a positive number' in caplog.text
+
+
+async def test_single_request_is_sent_once():
+    """ A write after which the unit restarts was retried, the retry restarted the unit again """
+    base = SlowTransport()
+    transport = bus_transport(base)
+    start = time.monotonic()
+    with transport.single_request(1), pytest.raises(TimeoutError):
+        await transport.send_and_receive(1, 'pdu')
+    assert base.requests == 1 and time.monotonic() - start < 0.5
+    assert 1 not in transport._single_units                 # the next requests have the retries again
+
+
+def test_serial_ports_of_a_unit(l0306, tmp_path, caplog):
+    """ The unit holds the serial buses of the ports it serves, also of a bus created after it; a port
+        of no bus is skipped, e.g. a port used by another program
+    """
+    link = tmp_path / 'ttyNS0'
+    link.symlink_to('/dev/null')
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'TCP': tcp_bus('localhost', 502, {'local': {'slave-id': 1, 'model': 'L0306',
+                                                     'serial_ports': [str(link), '/dev/ttyNS9']},
+                                           'other': {'slave-id': 2, 'model': 'L0306', 'serial_ports': None}}),
+        'RTU1': modbus_bus('/dev/null', {'ext': {'slave-id': 1, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    local, other = Devices[MODBUS_SLAVE]['local'].client, Devices[MODBUS_SLAVE]['other'].client
+    assert local.serial_buses == [Devices[SERIALBUS]['RTU1'].bus_driver]
+    assert other.serial_buses == []                     # an empty option
+    assert 'ttyNS9' not in caplog.text
+
+
+def test_serial_ports_of_a_unit_of_a_serial_bus(l0306, caplog):
+    """ A unit of a serial bus holding another one could wait for it while it holds its bus """
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'RTU1': modbus_bus('/dev/null', {'ext1': {'slave-id': 1, 'model': 'L0306', 'serial_ports': ['/dev/zero']}}),
+        'RTU2': modbus_bus('/dev/zero', {'ext2': {'slave-id': 1, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert list(Devices[MODBUS_SLAVE]) == ['ext2']
+    assert 'serial_ports is an option of a device of a MODBUSTCP bus' in caplog.text
+
+
+@pytest.mark.parametrize('ports', ['/dev/ttyNS0', [1], {'port': '/dev/ttyNS0'}])
+def test_invalid_serial_ports(l0306, caplog, ports):
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'TCP': tcp_bus('localhost', 502, {'local': {'slave-id': 1, 'model': 'L0306', 'serial_ports': ports}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert 'local' not in Devices[MODBUS_SLAVE]
+    assert 'serial_ports must be a list of the serial ports served by the device' in caplog.text
+
+
+def test_serial_ports_of_a_bus_with_a_numeric_name(l0306):
+    """ Devices has the bus under str(2), the unit has its transport """
+    config.create_devices(SimpleNamespace(get_comm_channels=lambda: {
+        'TCP': tcp_bus('localhost', 502, {'local': {'slave-id': 1, 'model': 'L0306', 'serial_ports': ['/dev/null']}}),
+        2: modbus_bus('/dev/null', {'ext': {'slave-id': 1, 'model': 'L0306'}}),
+    }), SimpleNamespace(definitions={'L0306': l0306}))
+    assert Devices[MODBUS_SLAVE]['local'].client.serial_buses == [Devices[SERIALBUS]['2'].bus_driver]

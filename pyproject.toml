@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "evok"
-version = "2.5.8"
+version = "3.1.0"
 authors = [
   { name="Martin Triska", email="triska@unipi.technology" },
   { name="Miroslav Ondra", email="bokula@unipi.technology" },
@@ -12,29 +12,72 @@ authors = [
 ]
 description = "Web service bridge for Unipi PLCs"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
 dependencies = [
-    'pymodbus@git+https://github.com/martyy665/pymodbus@fix-tid-overflow',
-    'pyserial == 3.5',
-    'tornado == 6.3.3',
+    'tmodbus[async-serial] == 0.6.2',
+    'tenacity >= 8.2.0, != 8.4.0',    # retry strategies of tmodbus
+    'tornado == 6.5.10',
+    'tornado-jsonrpc2 == 0.5',
     'jsonschema == 2.6.0',
-    'importlib_metadata == 7.1.0',
-    'asyncowfs@git+https://github.com/UniPiTechnology/asyncowfs'
-#    'asyncowfs@file:///home/unipi/packages/evok-internal/asyncowfs'
+    'pyyaml == 6.0.1',
+    'aiomqtt >= 2.3',
 ]
 
 [tool.setuptools]
-packages = ["evok"]
+package-dir = {"" = "src"}
+
+# all packages of src, also evok.modbus; packages = ["evok"] did not include the subpackages
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["evok*"]
 
 [project.scripts]
-evok = "evok.evok:main"
+evok = "evok.evok:run"
 
 [project.urls]
-"Homepage" = "https://github.com/pypa/sampleproject"
-"Bug Tracker" = "https://github.com/pypa/sampleproject/issues"
+"Homepage" = "https://github.com/UnipiTechnology/evok"
+"Documentation" = "https://evok.readthedocs.io/"
+"Bug Tracker" = "https://github.com/UnipiTechnology/evok/issues"
+
+[project.optional-dependencies]
+test = ['pytest', 'pytest-asyncio']
+
+# dependencies for docs build, build with `uv run --group docs mkdocs serve`
+[dependency-groups]
+docs = [
+    'mkdocs == 1.6.1',
+    'markdown-include == 0.8.1',
+    'mkdocs-material == 9.5.50',
+    'pymdown-extensions == 10.3.1',
+    'pygments == 2.17.2',
+    'neoteroi-mkdocs == 1.2.0',
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# the integration harness has its own project and environment, see tests/integration/README.md
+addopts = "--ignore=tests/integration"
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 120               # as .flake8
+target-version = "py312"
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, bugbear, the async and the blind exceptions, the style and the modernization;
+# the default rules of ruff change between its versions
+select = [
+    "E", "F", "W", "I", "UP", "B", "RUF", "ASYNC", "BLE", "SIM", "C4", "S110", "EXE", "TRY401", "PGH004",
+    "PLC0206", "PIE790", "PLR1730",
+]
+ignore = ["SIM102", "RUF012", "B023", "ASYNC109"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["evok"]

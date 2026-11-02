@@ -1,0 +1,141 @@
+# Security
+
+The APIs of Evok can read and set all inputs and outputs of the controller. By default they listen only on
+the local interface `127.0.0.1`, the applications on the controller (e.g. Node-RED) use them without
+authentication, the other devices of the network cannot connect to them.
+
+## Access from the network
+
+To use the APIs from the network, set the [address](configs/evok_configuration.md#api-settings) of the interface
+and a `token`, without it anybody in the network controls the IOs:
+
+```yaml
+apis:
+  address:                  # all interfaces
+  token: 3f8c...e21a        # e.g. made by: openssl rand -hex 32
+```
+
+Keep the token secret, it gives the full access to the APIs, and restrict the access to `config.yaml`
+(e.g. `chmod 600 /etc/evok/config.yaml`).
+
+### Sending the token
+
+All APIs require the token except `/version` and the preflight `OPTIONS` of a browser. A request without
+the token or with a wrong one gets the status `401` with the headers `WWW-Authenticate: Bearer realm="evok"` and
+`WWW-Authenticate: Basic realm="evok"` and the body
+`{"success": false, "errors": {"Unauthorized": "Missing or invalid token"}}`.
+
+| Client                          | How                                                                       |
+|---------------------------------|---------------------------------------------------------------------------|
+| REST, JSON, Bulk, RPC           | header `Authorization: Bearer <token>`                                    |
+| clients with Basic auth only    | Basic authentication with any user name and the token as the password     |
+| WebSocket                       | the header as above, or `ws://<host>:8080/ws?token=<token>` from a browser |
+
+The token in the URL is accepted only by the WebSocket, a browser cannot set a header of a WebSocket.
+The other APIs refuse it, the URL is kept in the logs of proxies and in the history of browsers.
+
+### Read-only token
+
+A client which only reads the IOs, e.g. a visualisation or a logger, can get a second token which cannot change
+anything:
+
+```yaml
+apis:
+  token: 3f8c...e21a        # reading and changes
+  read_token: 9b07...4c5d   # only reading
+```
+
+It is sent the same way as the `token`. A request which would change a device gets `403` with
+`{"success": false, "errors": {"ReadOnlyAccess": "The token allows only reading"}}`:
+
+| API       | Allowed with `read_token`                                       | Refused                                         |
+|-----------|-----------------------------------------------------------------|-------------------------------------------------|
+| REST, JSON | `GET` of devices and their properties, `/rest/all`, `/json/all` | `POST`                                          |
+| Bulk      | `group_queries`                                                 | a request with an assignment, also its queries  |
+| WebSocket | `all`, `full`, `filter` and the events                          | `set`, an error reply, the connection stays     |
+| RPC       | `*_get`, `*_get_value`, `owbus_list`                            | the other methods, the error `-32001`           |
+| Log       | `/log`                                                          |                                                 |
+
+`read_token` requires `token`, Evok does not start with only the `read_token`.
+
+```bash
+curl -H "Authorization: Bearer <token>" http://192.168.1.10:8080/rest/all
+curl -u any:<token> http://192.168.1.10:8080/rest/all
+```
+
+```python
+import requests
+
+headers = {"Authorization": "Bearer <token>"}
+print(requests.get("http://192.168.1.10:8080/json/do/1_01", headers=headers).json())
+```
+
+## MQTT
+
+The [MQTT](./apis/mqtt.md) API does not use the token, the access is controlled by the broker. Set `username`
+and `password` of a user of the broker with an ACL for the topics of the prefix, use TLS for a broker
+on the network (`tls`, `ca_file`). A client which can publish to `<prefix>/+/+/set` controls the devices,
+`read_only: true` disables the commands. Evok logs a warning at the start if it accepts the commands without
+a user of the broker.
+
+## Web applications
+
+A web page on another address than the API (e.g. a dashboard served by Node-RED on port 1880) cannot use
+the API from a browser by default, Evok sends no CORS headers and refuses its WebSocket by `403`.
+This protects the IOs from every other web page opened in a browser in your network. Add the origins
+of your applications to `allowed_origins`:
+
+```yaml
+apis:
+  allowed_origins: ["http://192.168.1.10:1880"]
+```
+
+A WebSocket from a client which is not a browser (Node-RED nodes, Python) sends no origin, it is not checked.
+An origin without the scheme, as Node-RED may send it, is compared with the host of the request as `host:port`,
+without the default port of a scheme.
+
+### Behind a reverse proxy
+
+A WebSocket from a browser through a reverse proxy, e.g. nginx, is accepted when the proxy passes the host
+of the request in `Host` or in `X-Forwarded-Host` (its first value), otherwise the origin of the page does not
+match the host and the connection is refused:
+
+```nginx
+location /ws {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+}
+```
+
+`proxy_set_header Host $host:$server_port` of the nginx of evok-web works too, the default port of the scheme
+(`80` for http, `443` for https) is the same as an origin without a port.
+
+Evok sees the proxy as the client of all requests, e.g. `127.0.0.1` in the log of a request without the token.
+The proxy passes the address of the client in `X-Forwarded-For` or `X-Real-IP`; Evok uses them only for
+the requests from the proxies of `trusted_downstream`, any other client could forge them:
+
+```yaml
+apis:
+  trusted_downstream: ["127.0.0.1"]
+```
+
+```nginx
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $remote_addr;   # not $proxy_add_x_forwarded_for, a client could forge it
+```
+
+The addresses of `X-Forwarded-For` are read from its end, the trusted proxies are skipped and the first other
+address is the client.
+
+## Limits
+
+The body of a request can have at most 1 MB, a message of a WebSocket client at most 64 kB, a larger one
+is refused before it is processed.
+
+## Encryption
+
+Evok does not encrypt the communication, the token is sent as plain text. Outside of a trusted network use
+a reverse proxy with TLS, e.g. nginx with a certificate, in front of Evok listening on `127.0.0.1`.
