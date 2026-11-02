@@ -188,5 +188,24 @@ WebSocket send DO 1.01 to HIGH
 WebSocket connection closed
 ```
 
+### Node-RED
+
+The nodes `websocket in` and `websocket out` share one client config node. Its URL must begin with
+`ws://` (or `wss://`): with another scheme, e.g. `http://`, Node-RED treats the config node as a server
+and never connects to Evok. With Node-RED on the controller use `ws://127.0.0.1:8080/ws`.
+
+The package
+[@unipitechnology/node-red-contrib-unipi-evok](https://github.com/UnipiTechnology/node-red-contrib-unipi-evok)
+adds the nodes `unipi input v3` and `unipi output v3`, which filter the received events by the device and
+the circuit and build the commands. A minimal flow shows the state of DO 1.01 in a debug node and switches
+it by two inject nodes:
+
+```json title="Flow"
+[{"id":"f6f2187d.f17ca8","type":"tab","label":"Flow 1","disabled":false,"info":""},{"id":"63c73b21cf141ec1","type":"websocket in","z":"f6f2187d.f17ca8","server":"","client":"a5816cadf9fadfc3","x":320,"y":500,"wires":[["f8797146eb445745"]]},{"id":"1fa70a98c26f663d","type":"websocket out","z":"f6f2187d.f17ca8","server":"","client":"a5816cadf9fadfc3","x":720,"y":600,"wires":[]},{"id":"2ab9d28f8d2580bb","type":"inject","z":"f6f2187d.f17ca8","name":"DO 1.01 - High","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":"","topic":"","payload":"1","payloadType":"num","x":300,"y":580,"wires":[["d1eb07a242573789"]]},{"id":"332cfa0214d8e6ff","type":"inject","z":"f6f2187d.f17ca8","name":"DO 1.01 - Low","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":"","topic":"","payload":"0","payloadType":"num","x":290,"y":620,"wires":[["d1eb07a242573789"]]},{"id":"adc4db639f25af50","type":"debug","z":"f6f2187d.f17ca8","name":"DO 1.01 - State","active":true,"tosidebar":true,"console":false,"tostatus":true,"complete":"payload","targetType":"msg","statusVal":"payload.value","statusType":"msg","x":720,"y":500,"wires":[]},{"id":"f8797146eb445745","type":"unipi-input-v3","z":"f6f2187d.f17ca8","name":"DO 1.01","alias":"","devices":"do","circuits":"1.01","x":540,"y":500,"wires":[["adc4db639f25af50"]]},{"id":"d1eb07a242573789","type":"unipi-output-v3","z":"f6f2187d.f17ca8","name":"DO 1.01","cmd":"set","alias":"","devices":"do","circuits":"1.01","enableFil":"1","x":500,"y":600,"wires":[["1fa70a98c26f663d"]]},{"id":"a5816cadf9fadfc3","type":"websocket-client","path":"ws://127.0.0.1:8080/ws","tls":"","wholemsg":"false","hb":"0","subprotocol":"","headers":[]},{"id":"ace7c022b041d7ce","type":"global-config","env":[],"modules":{"@unipitechnology/node-red-contrib-unipi-evok":"0.0.8"}}]
+```
+
+The flow receives a message only when a device changes, an inject node with the payload `{"cmd": "all"}`
+wired to `websocket out` requests the state of all devices at once, see [Commands](#commands).
+
 !!! tip
     You can learn more about the circuit parameter [here](../circuit.md)
