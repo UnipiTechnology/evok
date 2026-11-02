@@ -40,6 +40,10 @@ apis:
   # allowed_origins: ["http://192.168.1.10:1880"]
   # ^ web applications on other addresses which use the API from a browser (CORS and WebSocket)
 
+  trusted_downstream: ["127.0.0.1"]
+  # ^ the addresses of the reverse proxies, e.g. the nginx of evok-web, whose X-Forwarded-For / X-Real-IP
+  # ^ give the address of the client in the log of Evok, e.g. of a request without the token
+
   rpc:
     enabled: true
     # ^ JSON-RPC API at /rpc, enabled if this section is missing

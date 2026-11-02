@@ -75,7 +75,7 @@ Following commands will work only via SSH, executed on the unit itself. If you w
 
 ### Node-RED
 
-Follow the documentation how to install and use Node-RED with Evok on the page [Node-RED for Unipi].
+Follow the documentation how to install and use Node-RED with Evok in the [Websocket docs] or on on the page [Node-RED for Unipi].
 
 [NEURON]:https://www.unipi.technology/products/unipi-neuron-3?categoryId=2
 [PATRON]:https://www.unipi.technology/products/unipi-patron-374
@@ -84,3 +84,4 @@ Follow the documentation how to install and use Node-RED with Evok on the page [
 [Extension modules]:https://www.unipi.technology/products?category=32
 [Unipi technology]:https://www.unipi.technology/
 [Node-RED for Unipi]:https://kb.unipi.technology/en:sw:03-3rd-party:nodered:installation-unipi
+[Websocket docs]:./apis/websocket.md

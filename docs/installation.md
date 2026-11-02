@@ -10,7 +10,7 @@ This step varies by the platform used, either [Unipi images](#pre-built-unipi-os
 
 ### Pre-built Unipi OS images
 
-The latest images for Unipi controllers, including those with Evok pre-installed, can be downloaded from the [Unipi Technology Knowledge Base](https://kb.unipi.technology/os-images).
+The latest images for Unipi controllers can be downloaded from the [Unipi Technology Knowledge Base](https://kb.unipi.technology/os-images).
 
 All necessary APT Unipi repositories are already preconfigured in the OS images. Therefore, all that's required is to login to the controller via SSH. The default username for our images is "unipi" and the default password is "unipi.technology".
 
