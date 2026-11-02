@@ -24,6 +24,9 @@ plugins:
   - neoteroi.mkdocsoad:
       use_pymdownx: true
 
+hooks:
+  - hooks/oad-redirects.py
+
 markdown_extensions:
   - markdown_include.include:
       base_path: docs
