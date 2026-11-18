@@ -28,6 +28,11 @@ modbus_register_blocks:
       count       : 8
       scan_divider: 50
 
+    # ULED / 5s
+    - start_reg   : 27
+      count       : 1
+      scan_divider: 250
+
     # Configuration / 5s
     - start_reg   : 1008
       count       : 17
@@ -83,6 +88,12 @@ modbus_features:
           range: [0, 20]
       val_reg     : 2
       mode_reg    : 1017
+
+    # User LEDs
+    - type        : LED
+      count       : 3
+      val_coil    : 9
+      val_reg     : 27
 
     # Master Watchdog (MWD) & configuration
     - type        : WD
